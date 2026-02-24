@@ -1,0 +1,69 @@
+{% extends "base_minimal.html" %}
+{% block title %}FCE Exam Trainer — Home{% endblock %}
+{% block content %}
+<div class="home-page">
+  <h1 class="home-title">FCE Exam Trainer</h1>
+  <p class="home-subtitle">Choose a paper to practice</p>
+
+  <div class="home-account">
+    {% if user_id %}
+      <p class="home-account-connected">
+        Connected as <strong>{{ user_email or user_name or 'Google account' }}</strong>
+        <a href="{{ url_for('logout') }}" class="home-account-disconnect">Disconnect</a>
+      </p>
+      {% if has_attempts %}
+      <section class="stats-section home-stats">
+        <h2>Your statistics (Use of English)</h2>
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>Part</th>
+              <th>Right</th>
+              <th>Wrong</th>
+              <th>Attempts</th>
+              <th>%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in user_stats %}
+            <tr>
+              <td>Part {{ s.part }}</td>
+              <td>{{ s.total_correct }}</td>
+              <td>{{ s.total_wrong }}</td>
+              <td>{{ s.attempts }}</td>
+              <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+      {% else %}
+      <p class="home-stats-empty">No attempts yet. Your stats will appear here after you check answers in Use of English.</p>
+      {% endif %}
+    {% elif google_available %}
+      <p class="home-account-connect">
+        <a href="{{ url_for('google.login') }}" class="btn btn-google">Connect Google account</a>
+        <span class="home-account-hint">Connect to see your statistics across devices.</span>
+      </p>
+    {% else %}
+      <p class="home-account-hint">Google sign-in is not configured. Add <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code> to your <code>.env</code> file (see <code>.env.example</code>) to connect your account and see your statistics here.</p>
+    {% endif %}
+  </div>
+
+  <div class="home-sections">
+    <a href="{{ url_for('use_of_english') }}" class="home-section-card home-section-use">
+      <span class="home-section-icon" aria-hidden="true">📖</span>
+      <h2 class="home-section-title">Use of English and Reading</h2>
+      <p class="home-section-desc">Parts 1–7: multiple-choice cloze, open cloze, word formation, key word transformations, multiple choice, gapped text, multiple matching.</p>
+      <span class="home-section-cta">Start practice →</span>
+    </a>
+
+    <a href="{{ url_for('writing') }}" class="home-section-card home-section-writing">
+      <span class="home-section-icon" aria-hidden="true">✎</span>
+      <h2 class="home-section-title">Writing</h2>
+      <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks and get feedback.</p>
+      <span class="home-section-cta">Go to Writing →</span>
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FCE Exam Trainer</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=2" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    (function() {
+      if (localStorage.getItem('darkMode') === '1') document.documentElement.classList.add('dark-mode');
+    })();
+  </script>
+</head>
+<body data-current-part="{{ current_part }}">
+  <header class="header">
+    <div class="header-inner">
+      <a href="{{ url_for('home') }}" class="logo logo-link">
+        <span class="logo-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" width="32" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M16 2 L28 8 L28 20 Q28 32 16 38 Q4 32 4 20 L4 8 Z" />
+            <path d="M16 10 L16 28 M10 16 L22 16" stroke-linecap="round" />
+          </svg>
+        </span>
+        <span class="logo-text"><strong>CAMBRIDGE</strong><br />English</span>
+      </a>
+      <div class="header-center">
+        <span class="test-taker-label">Test taker ID</span>
+        <span class="timer-display" id="timer">75:00</span>
+        <button type="button" class="timer-btn" id="timer-toggle" title="Start/Pause">▶</button>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="dark-mode-btn" id="dark-mode-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+          <span class="dark-mode-icon sun">☀</span>
+          <span class="dark-mode-icon moon">🌙</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="task-card">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Exam navigation">
+    <div class="bottom-nav-row parts-row">
+      {% for p in range(1, 8) %}
+      <a href="{{ url_for('use_of_english') }}?part={{ p }}" class="part-seg {{ 'done' if parts_done[p - 1] else '' }} {{ 'active' if current_part == p else '' }}" data-part="{{ p }}" data-total="{{ part_counts[p - 1] }}">
+        <span class="part-seg-label">Part {{ p }}</span>
+        {% if current_part == p %}
+        <span class="part-seg-tasks part-seg-tasks-active" data-part="{{ p }}">
+          {% for t in range(1, part_counts[p - 1] + 1) %}<span class="part-seg-task-num" data-task="{{ t }}">{{ t }}</span>{% endfor %}
+        </span>
+        <span class="part-seg-all-done" aria-hidden="true" style="display: none;">✓</span>
+        {% else %}
+        <span class="part-seg-summary">1-{{ part_counts[p - 1] }}</span>
+        {% if parts_done[p - 1] %}<span class="part-seg-check" aria-hidden="true">✓</span>{% endif %}
+        {% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    <div class="bottom-nav-row controls-row">
+      <div class="nav-arrows">
+        <a href="{{ url_for('use_of_english') }}?part={{ current_part - 1 if current_part > 1 else 7 }}" class="nav-arrow" id="nav-prev" title="Previous part">←</a>
+        <a href="{{ url_for('use_of_english') }}?part={{ current_part + 1 if current_part < 7 else 1 }}" class="nav-arrow" id="nav-next" title="Next part">→</a>
+      </div>
+      <a href="#" class="btn-submit" id="btn-submit-link"><span class="btn-submit-icon">✓</span> Submit</a>
+    </div>
+  </nav>
+
+  <script>
+  (function() {
+    var total = 75 * 60;
+    var sec = total;
+    var interval = null;
+    var el = document.getElementById('timer');
+    var btn = document.getElementById('timer-toggle');
+    function fmt(s) {
+      var m = Math.floor(s / 60);
+      var z = s % 60;
+      return m + ':' + (z < 10 ? '0' : '') + z;
+    }
+    function tick() {
+      sec--;
+      if (el) el.textContent = fmt(sec);
+      if (sec <= 0 && interval) {
+        clearInterval(interval);
+        interval = null;
+        if (btn) btn.textContent = '▶';
+      }
+    }
+    if (el) el.textContent = fmt(sec);
+    if (btn) btn.addEventListener('click', function() {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+        btn.textContent = '▶';
+      } else {
+        if (sec <= 0) sec = total;
+        interval = setInterval(tick, 1000);
+        btn.textContent = '⏸';
+      }
+      tick();
+    });
+    // Dark mode toggle (top right button)
+    (function() {
+      var btn = document.getElementById('dark-mode-btn');
+      if (btn) btn.addEventListener('click', function() {
+        var root = document.documentElement;
+        root.classList.toggle('dark-mode');
+        localStorage.setItem('darkMode', root.classList.contains('dark-mode') ? '1' : '0');
+      });
+    })();
+    // Submit link: submit the visible main task form (the one with input name="part") if any
+    var submitLink = document.getElementById('btn-submit-link');
+    if (submitLink) submitLink.addEventListener('click', function(e) {
+      var partInput = document.querySelector('.task-card input[name="part"]');
+      var form = partInput && partInput.closest('form');
+      if (form) { form.submit(); e.preventDefault(); }
+    });
+
+    // Part nav: when clicking another part, submit current form first so answers are saved and part is marked done
+    (function() {
+      var currentPart = document.body && document.body.getAttribute('data-current-part');
+      if (!currentPart) return;
+      var partLinks = document.querySelectorAll('.part-seg[data-part]');
+      for (var i = 0; i < partLinks.length; i++) {
+        partLinks[i].addEventListener('click', function(e) {
+          var targetPart = this.getAttribute('data-part');
+          if (targetPart === currentPart) return;
+          // Use the main task form (has input name="part"), not Generate Part 2/4 forms
+          var partInput = document.querySelector('.task-card input[name="part"]');
+          var form = partInput && partInput.closest('form');
+          if (!form) {
+            window.location.href = this.getAttribute('href') || ('?part=' + targetPart);
+            e.preventDefault();
+            return;
+          }
+          e.preventDefault();
+          var input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = 'switch_to_part';
+          input.value = targetPart;
+          form.appendChild(input);
+          form.submit();
+        });
+      }
+    })();
+
+    // Part nav: emphasize task numbers when the corresponding field is filled
+    (function() {
+      var body = document.body;
+      var currentPart = body && body.getAttribute('data-current-part');
+      if (!currentPart) return;
+      var partInput = document.querySelector('.task-card input[name="part"]');
+      var form = partInput && partInput.closest('form');
+      if (!form) return;
+      var partSeg = document.querySelector('.part-seg[data-part="' + currentPart + '"]');
+      if (!partSeg) return;
+
+      function isTaskFilled(name) {
+        var els = form.querySelectorAll('[name="' + name + '"]');
+        if (!els.length) return false;
+        for (var j = 0; j < els.length; j++) {
+          var el = els[j];
+          var tag = (el.tagName || '').toLowerCase();
+          var type = (el.type || '').toLowerCase();
+          if (type === 'radio' || type === 'checkbox') {
+            if (el.checked) return true;
+          } else {
+            if ((el.value || '').trim() !== '') return true;
+          }
+        }
+        return false;
+      }
+
+      function updateTaskHighlight() {
+        var seen = {};
+        var filledCount = 0;
+        var totalTasks = parseInt(partSeg.getAttribute('data-total') || '0', 10);
+        var inputs = form.querySelectorAll('input, select');
+        for (var i = 0; i < inputs.length; i++) {
+          var name = inputs[i].getAttribute('name') || '';
+          var m = name.match(/^p(\d+)_(\d+)$/);
+          if (!m || m[1] !== currentPart || seen[name]) continue;
+          seen[name] = true;
+          var taskIndex = parseInt(m[2], 10) + 1;
+          var filled = isTaskFilled(name);
+          if (filled) filledCount++;
+          var numEl = partSeg.querySelector('.part-seg-task-num[data-task="' + taskIndex + '"]');
+          if (numEl) {
+            if (filled) numEl.classList.add('filled');
+            else numEl.classList.remove('filled');
+          }
+        }
+        var tasksEl = partSeg.querySelector('.part-seg-tasks');
+        var allDoneEl = partSeg.querySelector('.part-seg-all-done');
+        if (tasksEl && allDoneEl && totalTasks > 0) {
+          if (filledCount >= totalTasks) {
+            tasksEl.style.display = 'none';
+            allDoneEl.style.display = 'inline';
+          } else {
+            tasksEl.style.display = 'inline-flex';
+            allDoneEl.style.display = 'none';
+          }
+        }
+      }
+
+      form.addEventListener('input', updateTaskHighlight);
+      form.addEventListener('change', updateTaskHighlight);
+      updateTaskHighlight();
+    })();
+  })();
+
+  // Part 3: draggable resizer between text (left) and stem words (right) — position saved in localStorage
+  (function() {
+    var layout = document.getElementById('part3-layout');
+    var resizer = document.getElementById('part3-resizer');
+    if (!layout || !resizer) return;
+    var minPct = 25, maxPct = 75;
+    var STORAGE_KEY = 'fce_part3_left_pct';
+    function setPct(pct, save) {
+      pct = Math.max(minPct, Math.min(maxPct, pct));
+      layout.style.setProperty('--part3-left-pct', pct + '%');
+      if (save !== false) {
+        try { localStorage.setItem(STORAGE_KEY, String(pct)); } catch (e) {}
+      }
+    }
+    function restoreSaved() {
+      try {
+        var saved = localStorage.getItem(STORAGE_KEY);
+        if (saved != null && saved !== '') {
+          var n = parseFloat(String(saved).trim(), 10);
+          if (!isNaN(n) && n >= minPct && n <= maxPct) {
+            setPct(n, false);
+          }
+        }
+      } catch (e) {}
+    }
+    restoreSaved();
+    requestAnimationFrame(restoreSaved);
+    resizer.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      function move(e) {
+        var r = layout.getBoundingClientRect();
+        var pct = ((e.clientX - r.left) / r.width) * 100;
+        setPct(pct);
+      }
+      function stop() {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', stop);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        var current = layout.style.getPropertyValue('--part3-left-pct');
+        if (current) {
+          var n = parseFloat(current, 10);
+          if (!isNaN(n)) try { localStorage.setItem(STORAGE_KEY, String(n)); } catch (err) {}
+        }
+      }
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', stop);
+    });
+  })();
+  // Part 5: draggable resizer between text and questions (position saved in localStorage)
+  (function() {
+    var layout = document.getElementById('part5-layout');
+    var resizer = document.getElementById('part5-resizer');
+    if (!layout || !resizer) return;
+    var minPct = 25, maxPct = 75;
+    var STORAGE_KEY = 'fce_part5_left_pct';
+    function setPct(pct, save) {
+      pct = Math.max(minPct, Math.min(maxPct, pct));
+      layout.style.setProperty('--part5-left-pct', pct + '%');
+      if (save !== false) {
+        try { localStorage.setItem(STORAGE_KEY, String(pct)); } catch (e) {}
+      }
+    }
+    function restoreSaved() {
+      try {
+        var saved = localStorage.getItem(STORAGE_KEY);
+        if (saved != null && saved !== '') {
+          var n = parseFloat(String(saved).trim(), 10);
+          if (!isNaN(n) && n >= minPct && n <= maxPct) {
+            setPct(n, false);
+          }
+        }
+      } catch (e) {}
+    }
+    restoreSaved();
+    requestAnimationFrame(restoreSaved);
+    resizer.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      function move(e) {
+        var r = layout.getBoundingClientRect();
+        var pct = ((e.clientX - r.left) / r.width) * 100;
+        setPct(pct);
+      }
+      function stop() {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', stop);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        var current = layout.style.getPropertyValue('--part5-left-pct');
+        if (current) {
+          var n = parseFloat(current, 10);
+          if (!isNaN(n)) try { localStorage.setItem(STORAGE_KEY, String(n)); } catch (err) {}
+        }
+      }
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', stop);
+    });
+  })();
+  // Part 6: draggable resizer between text and sentences (position saved in localStorage)
+  (function() {
+    var layout = document.getElementById('part6-layout');
+    var resizer = document.getElementById('part6-resizer');
+    if (!layout || !resizer) return;
+    var minPct = 25, maxPct = 75;
+    var STORAGE_KEY = 'fce_part6_left_pct';
+    function setPct(pct, save) {
+      pct = Math.max(minPct, Math.min(maxPct, pct));
+      layout.style.setProperty('--part6-left-pct', pct + '%');
+      if (save !== false) {
+        try { localStorage.setItem(STORAGE_KEY, String(pct)); } catch (e) {}
+      }
+    }
+    function restoreSaved() {
+      try {
+        var saved = localStorage.getItem(STORAGE_KEY);
+        if (saved != null && saved !== '') {
+          var n = parseFloat(String(saved).trim(), 10);
+          if (!isNaN(n) && n >= minPct && n <= maxPct) {
+            setPct(n, false);
+          }
+        }
+      } catch (e) {}
+    }
+    restoreSaved();
+    requestAnimationFrame(restoreSaved);
+    resizer.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      function move(e) {
+        var r = layout.getBoundingClientRect();
+        var pct = ((e.clientX - r.left) / r.width) * 100;
+        setPct(pct);
+      }
+      function stop() {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', stop);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        var current = layout.style.getPropertyValue('--part6-left-pct');
+        if (current) {
+          var n = parseFloat(current, 10);
+          if (!isNaN(n)) try { localStorage.setItem(STORAGE_KEY, String(n)); } catch (err) {}
+        }
+      }
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', stop);
+    });
+  })();
+  // Part 7: draggable resizer between sections text and questions (position saved in localStorage)
+  (function() {
+    var layout = document.getElementById('part7-layout');
+    var resizer = document.getElementById('part7-resizer');
+    if (!layout || !resizer) return;
+    var minPct = 25, maxPct = 75;
+    var STORAGE_KEY = 'fce_part7_left_pct';
+    function setPct(pct, save) {
+      pct = Math.max(minPct, Math.min(maxPct, pct));
+      layout.style.setProperty('--part7-left-pct', pct + '%');
+      if (save !== false) {
+        try { localStorage.setItem(STORAGE_KEY, String(pct)); } catch (e) {}
+      }
+    }
+    function restoreSaved() {
+      try {
+        var saved = localStorage.getItem(STORAGE_KEY);
+        if (saved != null && saved !== '') {
+          var n = parseFloat(String(saved).trim(), 10);
+          if (!isNaN(n) && n >= minPct && n <= maxPct) {
+            setPct(n, false);
+          }
+        }
+      } catch (e) {}
+    }
+    restoreSaved();
+    requestAnimationFrame(restoreSaved);
+    resizer.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      function move(e) {
+        var r = layout.getBoundingClientRect();
+        var pct = ((e.clientX - r.left) / r.width) * 100;
+        setPct(pct);
+      }
+      function stop() {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', stop);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        var current = layout.style.getPropertyValue('--part7-left-pct');
+        if (current) {
+          var n = parseFloat(current, 10);
+          if (!isNaN(n)) try { localStorage.setItem(STORAGE_KEY, String(n)); } catch (err) {}
+        }
+      }
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', stop);
+    });
+  })();
+  // Part 6: drag sentence from right into gap on left
+  (function() {
+    var letters = ['A','B','C','D','E','F','G'];
+    var drops = document.querySelectorAll('.part6-gap-drop[data-droppable="true"]');
+    var drags = document.querySelectorAll('.part6-sentence-drag');
+    if (!drops.length || !drags.length) return;
+    function getUsedIndices() {
+      var used = {};
+      drops.forEach(function(drop) {
+        var inp = drop.querySelector('input[name^="p6_"]');
+        if (inp && inp.value !== '') used[inp.value] = true;
+      });
+      return used;
+    }
+    function updateSentencesVisibility() {
+      var used = getUsedIndices();
+      drags.forEach(function(el) {
+        var idx = el.getAttribute('data-sentence-index');
+        if (used[idx]) {
+          el.classList.add('part6-sentence-used');
+        } else {
+          el.classList.remove('part6-sentence-used');
+        }
+      });
+    }
+    function setGapValue(drop, idx) {
+      var gapIndex = drop.getAttribute('data-gap-index');
+      var input = drop.querySelector('input[name="p6_' + gapIndex + '"]');
+      var label = drop.querySelector('.part6-gap-label');
+      if (!input || !label) return;
+      if (idx === '' || idx === null || idx === undefined) {
+        input.value = '';
+        label.textContent = '—';
+        drop.classList.remove('part6-gap-has-value');
+      } else {
+        input.value = idx;
+        label.textContent = letters[parseInt(idx, 10)] || '—';
+        drop.classList.add('part6-gap-has-value');
+      }
+      updateSentencesVisibility();
+    }
+    function clearGap(drop) {
+      setGapValue(drop, '');
+    }
+    drags.forEach(function(el) {
+      el.addEventListener('dragstart', function(e) {
+        e.dataTransfer.setData('text/plain', el.getAttribute('data-sentence-index'));
+        e.dataTransfer.effectAllowed = 'move';
+        el.classList.add('part6-dragging');
+      });
+      el.addEventListener('dragend', function() { el.classList.remove('part6-dragging'); });
+    });
+    drops.forEach(function(drop) {
+      if (drop.querySelector('input[name^="p6_"]').value !== '') {
+        drop.classList.add('part6-gap-has-value');
+      }
+      drop.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        drop.classList.add('part6-drop-over');
+      });
+      drop.addEventListener('dragleave', function() { drop.classList.remove('part6-drop-over'); });
+      drop.addEventListener('drop', function(e) {
+        e.preventDefault();
+        drop.classList.remove('part6-drop-over');
+        var idx = e.dataTransfer.getData('text/plain');
+        if (idx === '') return;
+        var gapIndex = drop.getAttribute('data-gap-index');
+        var input = drop.querySelector('input[name="p6_' + gapIndex + '"]');
+        var label = drop.querySelector('.part6-gap-label');
+        if (!input || !label) return;
+        drops.forEach(function(d) {
+          var inp = d.querySelector('input[name^="p6_"]');
+          if (inp && inp !== input && inp.value === idx) {
+            setGapValue(d, '');
+          }
+        });
+        setGapValue(drop, idx);
+      });
+      drop.querySelector('.part6-gap-clear') && drop.querySelector('.part6-gap-clear').addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        clearGap(drop);
+      });
+      drop.addEventListener('dblclick', function(e) {
+        if (e.target.classList.contains('part6-gap-clear')) return;
+        clearGap(drop);
+      });
+    });
+    updateSentencesVisibility();
+  })();
+  </script>
+</body>
+</html>

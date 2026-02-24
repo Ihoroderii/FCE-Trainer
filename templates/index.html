@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="part-stats-box">
+  {% if current_part_stats and current_part_stats.total_questions > 0 %}
+    <span class="part-stats-pill part-stats-correct">{{ current_part_stats.total_correct }} right</span>
+    <span class="part-stats-pill part-stats-wrong">{{ current_part_stats.total_wrong }} wrong</span>
+    <span class="part-stats-pill part-stats-pct">{% if current_part_stats.percent is not none %}{{ current_part_stats.percent }}%{% else %}—{% endif %}</span>
+    <span class="part-stats-meta">{{ current_part_stats.attempts }} attempt{{ 's' if current_part_stats.attempts != 1 else '' }}</span>
+    {% if current_part_stats.last_attempt_at_display %}
+      <span class="part-stats-meta part-stats-time">Last practiced: {{ current_part_stats.last_attempt_at_display }}</span>
+    {% endif %}
+  {% else %}
+    <span class="part-stats-meta">No attempts yet for this part.</span>
+  {% endif %}
+</div>
+
+{% if current_part == 1 %}
+  <section class="part-section active">
+    <h2>Part 1 — Multiple-choice cloze</h2>
+    <p class="instruction">Fill the 8 gaps in the text by choosing A, B, C or D. <strong>1 mark per question.</strong></p>
+    {% if part1_generated is not none and part1_generated > 0 %}
+      <div class="feedback success">Generated new multiple-choice cloze at {{ part1_level.upper() }} level.</div>
+    {% endif %}
+    <div class="part2-generate-row">
+      <span class="part2-generate-label">Generate Part 1 (multiple-choice cloze):</span>
+      <form method="post" action="" class="part2-generate-form">
+        <input type="hidden" name="action" value="generate_part1" />
+        <input type="hidden" name="level" value="b2" />
+        <button type="submit" class="btn btn-generate btn-generate-b2">Generate B2</button>
+      </form>
+      <form method="post" action="" class="part2-generate-form">
+        <input type="hidden" name="action" value="generate_part1" />
+        <input type="hidden" name="level" value="b2plus" />
+        <button type="submit" class="btn btn-generate btn-generate-b2plus">Generate B2+</button>
+      </form>
+    </div>
+    {% if part1_error %}
+      <div class="feedback error">{{ part1_error }}</div>
+    {% else %}
+      <form method="post" action="">
+        <input type="hidden" name="part" value="1" />
+        <div class="exercise cloze-text">
+          {{ part1_html|safe }}
+        </div>
+        <div class="actions">
+          <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
+          <a href="{{ url_for('use_of_english', part=1, next=1) }}" class="btn btn-next">Next text</a>
+        </div>
+      </form>
+    {% endif %}
+    {% if check_result and check_result.part == 1 %}
+      <div class="feedback score">Score: {{ check_result.score }} / {{ check_result.total }} (1 mark each)</div>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if current_part == 2 %}
+  <section class="part-section active">
+    <h2>Part 2 — Open cloze</h2>
+    <p class="instruction">Fill the 8 gaps with <strong>exactly one word</strong> each. <strong>1 mark per question.</strong></p>
+    {% if part2_generated is not none and part2_generated > 0 %}
+      <div class="feedback success">Generated new open cloze at {{ part2_level.upper() }} level.</div>
+    {% endif %}
+    <div class="part2-generate-row">
+      <span class="part2-generate-label">Generate Part 2 (open cloze):</span>
+      <form method="post" action="" class="part2-generate-form">
+        <input type="hidden" name="action" value="generate_part2" />
+        <input type="hidden" name="level" value="b2" />
+        <button type="submit" class="btn btn-generate btn-generate-b2">Generate B2</button>
+      </form>
+      <form method="post" action="" class="part2-generate-form">
+        <input type="hidden" name="action" value="generate_part2" />
+        <input type="hidden" name="level" value="b2plus" />
+        <button type="submit" class="btn btn-generate btn-generate-b2plus">Generate B2+</button>
+      </form>
+    </div>
+    {% if part2_error %}
+      <div class="feedback error">{{ part2_error }}</div>
+    {% else %}
+    <form method="post" action="">
+      <input type="hidden" name="part" value="2" />
+      <div class="exercise cloze-text">
+        {{ part2_html|safe }}
+      </div>
+      <div class="actions">
+        <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
+        <a href="{{ url_for('use_of_english', part=2, next=1) }}" class="btn btn-next">Next text</a>
+      </div>
+    </form>
+    {% endif %}
+    {% if check_result and check_result.part == 2 %}
+      <div class="feedback score">Score: {{ check_result.score }} / {{ check_result.total }} (1 mark each)</div>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if current_part == 3 %}
+  <section class="part-section active">
+    <h2>Part 3 — Word formation</h2>
+    <p class="instruction">A short text (150–200 words) with 8 gaps. At the end of each line with a gap there is a <strong>stem word in CAPITALS</strong>. Change its form to fit the sentence — e.g. add a prefix (happy → unhappy), suffix (danger → dangerous), or change to plural. <strong>Spelling counts:</strong> an incorrectly spelled word gets zero marks even if the form is right. <strong>1 mark per question.</strong></p>
+    <p class="instruction-tip"><strong>Tip:</strong> Check if the word needs to be negative or plural. If the text says &ldquo;It was totally ____&rdquo; and the stem is POSSIBLE, the context may require <em>impossible</em>.</p>
+    <details class="part3-suffixes-help">
+      <summary>Common suffixes in this part (click to expand)</summary>
+      <ul class="part3-suffix-list">
+        <li><strong>Nouns:</strong> -tion/-sion (complete → completion), -ment (develop → development), -ness (happy → happiness), -ity (reliable → reliability), -ence/-ance (depend → dependence)</li>
+        <li><strong>Adjectives:</strong> -ful (care → careful), -less (hope → hopeless), -able/-ible (rely → reliable), -ous (danger → dangerous), -ive (produce → productive)</li>
+        <li><strong>Adverbs:</strong> -ly (quick → quickly, gracious → graciously)</li>
+        <li><strong>Negative:</strong> un-, in-, im-, ir-, il- (e.g. possible → impossible, responsible → irresponsible)</li>
+      </ul>
+    </details>
+    {% if part3_generated is not none and part3_generated > 0 %}
+      <div class="feedback success">Generated new word-formation text at {{ part3_level.upper() }} level.</div>
+    {% endif %}
+    <div class="part2-generate-row">
+      <span class="part2-generate-label">Generate Part 3 (word formation, 150–200 words):</span>
+      <form method="post" action="" class="part2-generate-form">
+        <input type="hidden" name="action" value="generate_part3" />
+        <input type="hidden" name="level" value="b2" />
+        <button type="submit" class="btn btn-generate btn-generate-b2">Generate B2</button>
+      </form>
+      <form method="post" action="" class="part2-generate-form">
+        <input type="hidden" name="action" value="generate_part3" />
+        <input type="hidden" name="level" value="b2plus" />
+        <button type="submit" class="btn btn-generate btn-generate-b2plus">Generate B2+</button>
+      </form>
+    </div>
+    {% if part3_error %}
+      <div class="feedback error">{{ part3_error }}</div>
+    {% else %}
+    <form method="post" action="">
+      <input type="hidden" name="part" value="3" />
+      {{ part3_html|safe }}
+      <div class="actions">
+        <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
+        <a href="{{ url_for('use_of_english', part=3, next=1) }}" class="btn btn-next">Next text</a>
+      </div>
+    </form>
+    {% endif %}
+    {% if check_result and check_result.part == 3 %}
+      <div class="feedback score">Score: {{ check_result.score }} / {{ check_result.total }} (1 mark each)</div>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if current_part == 4 %}
+  <section class="part-section active">
+    <h2>Part 4 — Key word transformation</h2>
+    <p class="instruction">Complete the second sentence so it has the same meaning as the first. Use the given word. Write <strong>3–5 words</strong> in the gap (sometimes the key word alone, correctly transformed, is enough when it carries the full meaning). <strong>Up to 2 marks per question.</strong></p>
+    {% if part4_generated is not none and part4_generated > 0 %}
+      <div class="feedback success">Generated {{ part4_generated }} new task{{ 's' if part4_generated != 1 else '' }} at {{ part4_level.upper() }} level. This is your new set.</div>
+    {% endif %}
+    <div class="part4-db-only-row">
+      <span class="part4-db-only-label">Practice from database only:</span>
+      {% if part4_db_only %}
+        <span class="part4-db-only-status part4-db-only-on">ON</span>
+        <a href="{{ url_for('use_of_english', part=4, part4_db_only=0) }}" class="btn btn-part4-toggle">Turn off</a>
+      {% else %}
+        <span class="part4-db-only-status">OFF</span>
+        <a href="{{ url_for('use_of_english', part=4, part4_db_only=1) }}" class="btn btn-part4-toggle">Turn on</a>
+      {% endif %}
+    </div>
+    {% if part4_error %}
+      <div class="feedback error">{{ part4_error }}</div>
+    {% else %}
+      <div class="part4-generate-row">
+        <span class="part4-generate-label">Generate Use of English (Part 4):</span>
+        <form method="post" action="" class="part4-generate-form">
+          <input type="hidden" name="action" value="generate_part4" />
+          <input type="hidden" name="level" value="b2" />
+          <button type="submit" class="btn btn-generate btn-generate-b2">Generate B2 level</button>
+        </form>
+        <form method="post" action="" class="part4-generate-form">
+          <input type="hidden" name="action" value="generate_part4" />
+          <input type="hidden" name="level" value="b2plus" />
+          <button type="submit" class="btn btn-generate btn-generate-b2plus">Generate B2+ level</button>
+        </form>
+      </div>
+      <form method="post" action="">
+        <input type="hidden" name="part" value="4" />
+        <div class="exercise">
+          {{ part4_html|safe }}
+        </div>
+        <div class="actions">
+          <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
+          <a href="{{ url_for('use_of_english', part=4, next=1) }}" class="btn btn-next">Next set</a>
+        </div>
+      </form>
+    {% endif %}
+    {% if check_result and check_result.part == 4 %}
+      <div class="feedback score">Score: {{ check_result.score }} / {{ check_result.total }} (up to 2 marks per question)</div>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if current_part == 5 %}
+  <section class="part-section active">
+    <h2>Part 5 — Multiple choice</h2>
+    <p class="instruction">Read the text and answer the 6 questions. Choose A, B, C or D. <strong>2 marks per question.</strong></p>
+    {% if part5_error %}
+      <div class="feedback error">{{ part5_error }}</div>
+    {% else %}
+      <form method="post" action="">
+        <input type="hidden" name="part" value="5" />
+        <div class="part5-layout" id="part5-layout">
+          <div class="part5-text-col reading-text">{{ part5_text|safe }}</div>
+          <div class="part5-resizer" id="part5-resizer" title="Drag to resize"></div>
+          <div class="part5-questions-col exercise">{{ part5_html|safe }}</div>
+        </div>
+        <div class="actions">
+          <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
+          <a href="{{ url_for('use_of_english', part=5, next=1) }}" class="btn btn-next">Next text</a>
+        </div>
+      </form>
+    {% endif %}
+    {% if check_result and check_result.part == 5 %}
+      <div class="feedback score">Score: {{ check_result.score }} / {{ check_result.total }} (2 marks each)</div>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if current_part == 6 %}
+  <section class="part-section active">
+    <h2>Part 6 — Gapped text</h2>
+    <p class="instruction">Choose the correct sentence (A–G) for each of the 6 gaps. One sentence does not fit. <strong>2 marks per question.</strong></p>
+    {% if part6_error %}
+      <div class="feedback error">{{ part6_error }}</div>
+    {% else %}
+      <form method="post" action="">
+        <input type="hidden" name="part" value="6" />
+        <div class="part6-layout" id="part6-layout">
+          <div class="part6-text-col exercise reading-text">{{ part6_text|safe }}</div>
+          <div class="part6-resizer" id="part6-resizer" title="Drag to resize"></div>
+          <div class="part6-questions-col">{{ part6_questions|safe }}</div>
+        </div>
+        <div class="actions">
+          <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
+          <a href="{{ url_for('use_of_english', part=6, next=1) }}" class="btn btn-next">Next text</a>
+        </div>
+      </form>
+    {% endif %}
+    {% if check_result and check_result.part == 6 %}
+      <div class="feedback score">Score: {{ check_result.score }} / {{ check_result.total }} (2 marks each)</div>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% if current_part == 7 %}
+  <section class="part-section active">
+    <h2>Part 7 — Multiple matching</h2>
+    <p class="instruction">Match the 10 statements to the correct section (A, B, C, D…). Total text 600–700 words in 4–6 sections. <strong>1 mark per question.</strong></p>
+    {% if part7_error %}
+      <div class="feedback error">{{ part7_error }}</div>
+    {% else %}
+    <form method="post" action="">
+      <input type="hidden" name="part" value="7" />
+      <div class="part7-layout" id="part7-layout">
+        {{ part7_text|safe }}
+        <div class="part7-resizer" id="part7-resizer" title="Drag to resize"></div>
+        <div class="part7-questions-col">{{ part7_questions|safe }}</div>
+      </div>
+      <div class="actions">
+        <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
+        <a href="{{ url_for('use_of_english', part=7, next=1) }}" class="btn btn-next">Next set</a>
+      </div>
+    </form>
+    {% endif %}
+    {% if check_result and check_result.part == 7 %}
+      <div class="feedback score">Score: {{ check_result.score }} / {{ check_result.total }} (1 mark each)</div>
+    {% endif %}
+  </section>
+{% endif %}
+
+{% endblock %}
