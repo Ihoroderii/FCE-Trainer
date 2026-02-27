@@ -1,10 +1,11 @@
 """
-FCE Exam Trainer — Python only. Server-rendered HTML (Jinja2), no JavaScript files.
-All logic and data in Python; timer is a small inline script in the template.
+FCE Exam Trainer — Server-rendered HTML (Jinja2), minimal JS for UX.
 """
+import contextlib
 import difflib
 import html
 import json
+import logging
 import os
 import random
 import re
@@ -16,6 +17,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, redirect, render_template, request, session, url_for
 from openai import OpenAI
+from tenacity import retry, stop_after_attempt, wait_exponential
+from flask_wtf.csrf import CSRFProtect
 
 # Server-side cache for check_result so we don't blow the session cookie (4KB limit)
 # Key: token from URL; value: check_result dict. One-time read then removed.
@@ -24,9 +27,27 @@ _CHECK_RESULT_CACHE_MAX = 20
 
 load_dotenv()
 
+# Logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("fce_trainer")
+
 app = Flask(__name__, template_folder="templates", static_folder="static", static_url_path="")
-app.secret_key = os.environ.get("SECRET_KEY", "fce-trainer-secret-change-in-production")
+_secret = (os.environ.get("SECRET_KEY") or "").strip()
+if not _secret:
+    if os.environ.get("FLASK_ENV") == "production":
+        raise ValueError(
+            "SECRET_KEY must be set in production. "
+            "Generate one: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    _secret = "dev-secret-change-in-production"
+    logger.warning("SECRET_KEY not set; using dev default. Set SECRET_KEY in production.")
+app.secret_key = _secret
 app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Use secure cookie when running over HTTPS (set in production)
+if os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes"):
+    app.config["SESSION_COOKIE_SECURE"] = True
+CSRFProtect(app)
 
 # Google OAuth (optional: set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env)
 app.config["GOOGLE_OAUTH_CLIENT_ID"] = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
@@ -36,12 +57,28 @@ PORT = int(os.environ.get("PORT", 3000))
 DB_PATH = Path(__file__).parent / "fce_trainer.db"
 LAST_N_SHOWS = 100
 TASKS_PER_SET = 5
-PART4_TASKS_PER_SET = 6  # Part 4: 6 key word transformation questions per set
+PART4_TASKS_PER_SET = 6
 LETTERS = ["A", "B", "C", "D"]
+MAX_EXPLANATION_LEN = 400
+MAX_WORD_FAMILY_LEN = 200
+PARTS_RANGE = range(1, 8)
+PART_QUESTION_COUNTS = {1: 8, 2: 8, 3: 8, 4: 6, 5: 6, 6: 6, 7: 10}
 
 openai_api_key = os.environ.get("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
-openai_model = os.environ.get("OPENAI_MODEL", "gpt-5.2")
+openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def _openai_chat_create(messages, temperature=0.7, model=None):
+    """Call OpenAI chat completions with retries. Raises if client not configured."""
+    if not openai_client:
+        raise ValueError("OpenAI client not configured")
+    return openai_client.chat.completions.create(
+        model=model or openai_model,
+        messages=messages,
+        temperature=temperature,
+    )
 
 # Google OAuth blueprint (optional)
 if app.config["GOOGLE_OAUTH_CLIENT_ID"] and app.config["GOOGLE_OAUTH_CLIENT_SECRET"]:
@@ -61,16 +98,24 @@ def get_db():
     return conn
 
 
+@contextlib.contextmanager
+def db_connection():
+    """Context manager for DB connections; ensures close on exception."""
+    conn = get_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 def _get_excluded_ids(shows_table: str):
     """Return list of task_ids from the last LAST_N_SHOWS in shows_table."""
-    conn = get_db()
-    cur = conn.execute(
-        f"SELECT DISTINCT task_id FROM {shows_table} ORDER BY id DESC LIMIT ?",
-        (LAST_N_SHOWS,),
-    )
-    ids = [r["task_id"] for r in cur.fetchall()]
-    conn.close()
-    return ids
+    with db_connection() as conn:
+        cur = conn.execute(
+            f"SELECT DISTINCT task_id FROM {shows_table} ORDER BY id DESC LIMIT ?",
+            (LAST_N_SHOWS,),
+        )
+        return [r["task_id"] for r in cur.fetchall()]
 
 
 def _pick_one_task_id(tasks_table: str, shows_table: str, exclude_current=None):
@@ -78,8 +123,7 @@ def _pick_one_task_id(tasks_table: str, shows_table: str, exclude_current=None):
     excluded = list(_get_excluded_ids(shows_table))
     if exclude_current is not None and exclude_current not in excluded:
         excluded.append(exclude_current)
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         if excluded:
             ph = ",".join("?" * len(excluded))
             cur = conn.execute(
@@ -90,26 +134,21 @@ def _pick_one_task_id(tasks_table: str, shows_table: str, exclude_current=None):
             cur = conn.execute(f"SELECT id FROM {tasks_table} ORDER BY RANDOM() LIMIT 1")
         row = cur.fetchone()
         return row["id"] if row else None
-    finally:
-        conn.close()
 
 
 def _record_show(shows_table: str, task_id: int):
     """Record that a task was shown."""
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute(
             f"INSERT INTO {shows_table} (task_id, shown_at) VALUES (?, datetime('now'))",
             (task_id,),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def init_db():
-    conn = get_db()
-    conn.executescript("""
+    with db_connection() as conn:
+        conn.executescript("""
         CREATE TABLE IF NOT EXISTS uoe_tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sentence1 TEXT NOT NULL,
@@ -227,41 +266,34 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
     """)
-    conn.commit()
-    conn.close()
+        conn.commit()
 
 
 def _ensure_uoe_grammar_topic_column():
     """Add grammar_topic column to uoe_tasks if missing (for Part 4 grammar/construction tracking)."""
-    conn = get_db()
-    cur = conn.execute("PRAGMA table_info(uoe_tasks)")
-    cols = [r["name"] for r in cur.fetchall()]
-    conn.close()
-    if "grammar_topic" in cols:
-        return
-    conn = get_db()
-    conn.execute("ALTER TABLE uoe_tasks ADD COLUMN grammar_topic TEXT")
-    conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.execute("PRAGMA table_info(uoe_tasks)")
+        cols = [r["name"] for r in cur.fetchall()]
+        if "grammar_topic" in cols:
+            return
+        conn.execute("ALTER TABLE uoe_tasks ADD COLUMN grammar_topic TEXT")
+        conn.commit()
 
 
 def _ensure_check_history_user_id():
     """Add user_id column to check_history if missing (for per-account stats)."""
-    conn = get_db()
-    cur = conn.execute("PRAGMA table_info(check_history)")
-    cols = [r["name"] for r in cur.fetchall()]
-    conn.close()
-    if "user_id" in cols:
-        return
-    conn = get_db()
-    conn.execute("ALTER TABLE check_history ADD COLUMN user_id INTEGER REFERENCES users(id)")
-    conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.execute("PRAGMA table_info(check_history)")
+        cols = [r["name"] for r in cur.fetchall()]
+        if "user_id" in cols:
+            return
+        conn.execute("ALTER TABLE check_history ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        conn.commit()
 
 
 def seed_db():
     from data import UOE_SEED_TASKS, PART_1_DATA, PART_2_DATA, PART_3_DATA, PART_5_DATA, PART_6_DATA, PART_7_DATA
-    conn = get_db()
+    conn = get_db()  # long transaction, keep open
     cur = conn.execute("SELECT COUNT(*) as n FROM uoe_tasks")
     if cur.fetchone()["n"] == 0:
         for t in UOE_SEED_TASKS:
@@ -321,65 +353,108 @@ def seed_db():
 
 
 def get_excluded_task_ids():
-    conn = get_db()
-    cur = conn.execute(
-        "SELECT DISTINCT task_id FROM uoe_task_shows ORDER BY id DESC LIMIT ?", (LAST_N_SHOWS,)
-    )
-    ids = [r["task_id"] for r in cur.fetchall()]
-    conn.close()
-    return ids
+    return _get_excluded_ids("uoe_task_shows")
 
 
-def get_part1_excluded_ids():
-    return _get_excluded_ids("part1_task_shows")
+# --- Generic task-by-id loaders (per-part column config) ---
+_PART_DB_SCHEMA = {
+    1: {"table": "part1_tasks", "shows": "part1_task_shows",
+        "select": "SELECT id, text, gaps_json, source FROM part1_tasks WHERE id = ?",
+        "parse": lambda row: {"id": row["id"], "text": row["text"], "gaps": json.loads(row["gaps_json"])}},
+    3: {"table": "part3_tasks", "shows": "part3_task_shows",
+        "select": "SELECT id, items_json, source FROM part3_tasks WHERE id = ?",
+        "parse": lambda row: _parse_part3_row(row)},
+    2: {"table": "part2_tasks", "shows": "part2_task_shows",
+        "select": "SELECT id, text, answers_json FROM part2_tasks WHERE id = ?",
+        "parse": lambda row: {"id": row["id"], "text": row["text"], "answers": json.loads(row["answers_json"])}},
+    5: {"table": "part5_tasks", "shows": "part5_task_shows",
+        "select": "SELECT id, title, text, questions_json FROM part5_tasks WHERE id = ?",
+        "parse": lambda row: {"id": row["id"], "title": row["title"], "text": row["text"], "questions": json.loads(row["questions_json"])}},
+    6: {"table": "part6_tasks", "shows": "part6_task_shows",
+        "select": "SELECT id, paragraphs_json, sentences_json, answers_json FROM part6_tasks WHERE id = ?",
+        "parse": lambda row: {"id": row["id"], "paragraphs": json.loads(row["paragraphs_json"]), "sentences": json.loads(row["sentences_json"]), "answers": json.loads(row["answers_json"])}},
+    7: {"table": "part7_tasks", "shows": "part7_task_shows",
+        "select": "SELECT id, sections_json, questions_json FROM part7_tasks WHERE id = ?",
+        "parse": lambda row: {"id": row["id"], "sections": json.loads(row["sections_json"]), "questions": json.loads(row["questions_json"])}},
+}
 
 
-def pick_one_part1_task_id():
-    return _pick_one_task_id("part1_tasks", "part1_task_shows")
-
-
-def get_part1_task_by_id(task_id):
-    conn = get_db()
-    cur = conn.execute("SELECT id, text, gaps_json, source FROM part1_tasks WHERE id = ?", (task_id,))
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return None
-    return {
-        "id": row["id"],
-        "text": row["text"],
-        "gaps": json.loads(row["gaps_json"]),
-    }
-
-
-def record_part1_show(task_id):
-    _record_show("part1_task_shows", task_id)
-
-
-def get_part3_excluded_ids():
-    return _get_excluded_ids("part3_task_shows")
-
-
-def pick_one_part3_task_id(exclude_current=None):
-    return _pick_one_task_id("part3_tasks", "part3_task_shows", exclude_current)
-
-
-def get_part3_task_by_id(task_id):
-    conn = get_db()
-    cur = conn.execute("SELECT id, items_json, source FROM part3_tasks WHERE id = ?", (task_id,))
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return None
+def _parse_part3_row(row):
     data = json.loads(row["items_json"])
-    # New format: {"text": "...", "stems": [...], "answers": [...]}; old format: list of 8 items
     if isinstance(data, dict) and "text" in data:
         return {"id": row["id"], "text": data["text"], "stems": data.get("stems", []), "answers": data.get("answers", []), "source": row["source"]}
     return {"id": row["id"], "items": data, "source": row["source"]}
 
 
-def record_part3_show(task_id):
-    _record_show("part3_task_shows", task_id)
+def get_task_by_id_for_part(part, task_id):
+    """Generic loader: fetch a single task by id for any part with a schema entry."""
+    schema = _PART_DB_SCHEMA.get(part)
+    if not schema or not task_id:
+        return None
+    with db_connection() as conn:
+        cur = conn.execute(schema["select"], (task_id,))
+        row = cur.fetchone()
+    if not row:
+        return None
+    return schema["parse"](row)
+
+
+def record_show_for_part(part, task_id):
+    schema = _PART_DB_SCHEMA.get(part)
+    if schema:
+        _record_show(schema["shows"], task_id)
+
+
+def _generic_get_or_create(part, generate_fn, exclude_task_id=None):
+    """Generic get-or-create for any part. Picks from DB, generates if needed, records show.
+    Returns (item, task_id) or (None, None)."""
+    schema = _PART_DB_SCHEMA.get(part)
+    if not schema:
+        return (None, None)
+    task_id = pick_task_id_for_part(part, exclude_current=exclude_task_id)
+    if task_id is None and openai_client and generate_fn:
+        item = generate_fn()
+        if item:
+            with db_connection() as conn:
+                cur = conn.execute(f"SELECT id FROM {schema['table']} ORDER BY id DESC LIMIT 1")
+                row = cur.fetchone()
+            if row:
+                record_show_for_part(part, row["id"])
+                return (item, row["id"])
+            return (item, None)
+    if task_id is None:
+        with db_connection() as conn:
+            if exclude_task_id is not None:
+                cur = conn.execute(f"SELECT id FROM {schema['table']} WHERE id != ? ORDER BY RANDOM() LIMIT 1", (exclude_task_id,))
+            else:
+                cur = conn.execute(f"SELECT id FROM {schema['table']} ORDER BY RANDOM() LIMIT 1")
+            row = cur.fetchone()
+            task_id = row["id"] if row else None
+    if task_id is None:
+        return (None, None)
+    record_show_for_part(part, task_id)
+    return (get_task_by_id_for_part(part, task_id), task_id)
+
+
+def pick_task_id_for_part(part, exclude_current=None):
+    schema = _PART_DB_SCHEMA.get(part)
+    if not schema:
+        return None
+    return _pick_one_task_id(schema["table"], schema["shows"], exclude_current)
+
+
+# Backward-compatible aliases used throughout the codebase
+def get_part1_task_by_id(tid):
+    return get_task_by_id_for_part(1, tid)
+
+def get_part3_task_by_id(tid):
+    return get_task_by_id_for_part(3, tid)
+
+def record_part1_show(tid):
+    record_show_for_part(1, tid)
+
+def record_part3_show(tid):
+    record_show_for_part(3, tid)
 
 
 # Wide variety of topics for Part 1
@@ -840,6 +915,9 @@ PART3_TOPICS = [
     "greetings around the world",
 ]
 
+# Part 5 (reading: long text + 6 MC questions): same idea — one random topic per generated text (550–650 words).
+PART5_TOPICS = list(PART3_TOPICS)
+
 
 def generate_part1_with_openai(level="b2"):
     """Generate one Part 1 (multiple-choice cloze) task via OpenAI and save to DB. Topic is chosen at random. level='b2' or 'b2plus'."""
@@ -867,11 +945,7 @@ Return ONLY a valid JSON object with keys "text" and "gaps". No other text. Exam
 {{"text": "Some text with (1)_____ and (2)_____ ...", "gaps": [{{"options": ["a","b","c","d"], "correct": 0}}, ...]}}"""
 
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.8,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.8)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -890,38 +964,23 @@ Return ONLY a valid JSON object with keys "text" and "gaps". No other text. Exam
             if correct not in (0, 1, 2, 3):
                 correct = 0
             normalized.append({"options": [str(o).strip() for o in opts], "correct": correct})
-        conn = get_db()
-        cur = conn.execute(
-            "INSERT INTO part1_tasks (text, gaps_json, source) VALUES (?, ?, ?)",
-            (text, json.dumps(normalized), "openai"),
-        )
-        tid = cur.lastrowid
-        conn.commit()
-        conn.close()
+        with db_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO part1_tasks (text, gaps_json, source) VALUES (?, ?, ?)",
+                (text, json.dumps(normalized), "openai"),
+            )
+            tid = cur.lastrowid
+            conn.commit()
         return get_part1_task_by_id(tid)
     except Exception as e:
-        print("OpenAI Part 1 error:", e)
+        logger.exception("OpenAI Part 1 error")
         return None
 
 
 def get_or_create_part1_task():
     """Get one Part 1 task (exclude last 100 shown). If none available, generate via OpenAI. Record show."""
-    task_id = pick_one_part1_task_id()
-    if task_id is None and openai_client:
-        task = generate_part1_with_openai()
-        if task:
-            record_part1_show(task["id"])
-            return task
-    if task_id is None:
-        conn = get_db()
-        cur = conn.execute("SELECT id FROM part1_tasks ORDER BY RANDOM() LIMIT 1")
-        row = cur.fetchone()
-        conn.close()
-        task_id = row["id"] if row else None
-    if task_id is None:
-        return None
-    record_part1_show(task_id)
-    return get_part1_task_by_id(task_id)
+    item, tid = _generic_get_or_create(1, generate_part1_with_openai)
+    return item
 
 
 def generate_part3_with_openai(level="b2"):
@@ -947,6 +1006,7 @@ Requirements:
 - Each gap must be written as (1)_____, (2)_____, (3)_____, (4)_____, (5)_____, (6)_____, (7)_____, (8)_____ in order.
 - At the end of the sentence or clause that contains each gap, put the STEM WORD in CAPITAL LETTERS (e.g. "...has been delayed. COMPLETE" or "...looked at him. SUSPECT"). So the reader sees the stem word in capitals after each gap.
 - The stem word is the base form; the student must change it (prefix, suffix, plural, etc.) to fit the gap.
+- IMPORTANT: In real FCE Part 3, the correct answer is almost always a DIFFERENT form from the stem (different word class or with prefix/suffix). Only very rarely (about 1 in 20 gaps) may the answer be the stem word unchanged (e.g. DANGER → danger). So for this task: at most ONE gap in the entire 8-gap passage may have the correct answer identical to the stem word (no transformation). All other gaps MUST require a clear word formation change (e.g. COMPLETE → completion, SUSPECT → suspiciously). Prefer having all 8 gaps require a transformation.
 
 Return ONLY a valid JSON object with these exact keys:
 - "text": the full passage (150-200 words) with (1)_____ through (8)_____ and each stem word in CAPITALS at the end of its sentence/clause. Example fragment: "The (1)_____ of the centre has been delayed. COMPLETE She looked at him (2)_____ when he told the joke. SUSPECT"
@@ -955,89 +1015,62 @@ Return ONLY a valid JSON object with these exact keys:
 
 No other text or markdown."""
 
-    try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-        )
-        content = (comp.choices[0].message.content or "").strip()
-        m = re.search(r"\{[\s\S]*\}", content)
-        if not m:
-            return None
-        data = json.loads(m.group(0))
-        text = (data.get("text") or "").strip()
-        stems = data.get("stems")
-        answers = data.get("answers")
-        if not text or not isinstance(stems, list) or len(stems) != 8 or not isinstance(answers, list) or len(answers) != 8:
-            return None
-        for i in range(1, 9):
-            if f"({i})_____" not in text:
-                return None
-        payload = {"text": text, "stems": [str(s).strip().upper() for s in stems], "answers": [str(a).strip() for a in answers]}
-        conn = get_db()
-        cur = conn.execute(
-            "INSERT INTO part3_tasks (items_json, source) VALUES (?, ?)",
-            (json.dumps(payload), "openai"),
-        )
-        tid = cur.lastrowid
-        conn.commit()
-        conn.close()
-        return get_part3_task_by_id(tid)
-    except Exception as e:
-        print("OpenAI Part 3 error:", e)
-        return None
+    max_unchanged = 1  # At most 1 gap per task where answer == stem (no transformation); target ~1 in 20 overall
+    for attempt in range(3):
+        try:
+            comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
+            content = (comp.choices[0].message.content or "").strip()
+            m = re.search(r"\{[\s\S]*\}", content)
+            if not m:
+                continue
+            data = json.loads(m.group(0))
+            text = (data.get("text") or "").strip()
+            stems = data.get("stems")
+            answers = data.get("answers")
+            if not text or not isinstance(stems, list) or len(stems) != 8 or not isinstance(answers, list) or len(answers) != 8:
+                continue
+            for i in range(1, 9):
+                if f"({i})_____" not in text:
+                    break
+            else:
+                stems_upper = [str(s).strip().upper() for s in stems]
+                answers_str = [str(a).strip() for a in answers]
+                # Reject if more than max_unchanged gaps have answer == stem (no transformation)
+                unchanged_count = sum(
+                    1 for i in range(8)
+                    if i < len(answers_str) and i < len(stems_upper)
+                    and answers_str[i].upper() == stems_upper[i]
+                )
+                if unchanged_count > max_unchanged:
+                    continue
+                payload = {"text": text, "stems": stems_upper, "answers": answers_str}
+                with db_connection() as conn:
+                    cur = conn.execute(
+                        "INSERT INTO part3_tasks (items_json, source) VALUES (?, ?)",
+                        (json.dumps(payload), "openai"),
+                    )
+                    tid = cur.lastrowid
+                    conn.commit()
+                return get_part3_task_by_id(tid)
+        except Exception as e:
+            if attempt == 2:
+                logger.exception("OpenAI Part 3 error")
+            continue
+    return None
 
 
 def get_or_create_part3_item(exclude_task_id=None):
-    """Get one Part 3 task. If none available, generate via OpenAI. Returns (item, task_id) or (None, None)."""
-    task_id = pick_one_part3_task_id(exclude_current=exclude_task_id)
-    if task_id is None and openai_client:
-        task = generate_part3_with_openai()
-        if task:
-            conn = get_db()
-            cur = conn.execute("SELECT id FROM part3_tasks ORDER BY id DESC LIMIT 1")
-            row = cur.fetchone()
-            conn.close()
-            if row:
-                record_part3_show(row["id"])
-                return (task, row["id"])
-            return (task, None)
-    if task_id is None:
-        conn = get_db()
-        cur = conn.execute("SELECT id FROM part3_tasks ORDER BY RANDOM() LIMIT 1")
-        row = cur.fetchone()
-        conn.close()
-        task_id = row["id"] if row else None
-    if task_id is None:
-        return (None, None)
-    record_part3_show(task_id)
-    return (get_part3_task_by_id(task_id), task_id)
+    return _generic_get_or_create(3, generate_part3_with_openai, exclude_task_id)
 
 
-def get_part2_excluded_ids():
-    return _get_excluded_ids("part2_task_shows")
+def get_part2_task_by_id(tid):
+    return get_task_by_id_for_part(2, tid)
 
+def record_part2_show(tid):
+    record_show_for_part(2, tid)
 
 def pick_one_part2_task_id(exclude_current=None):
-    return _pick_one_task_id("part2_tasks", "part2_task_shows", exclude_current)
-
-
-def get_part2_task_by_id(task_id):
-    conn = get_db()
-    cur = conn.execute("SELECT id, text, answers_json FROM part2_tasks WHERE id = ?", (task_id,))
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return None
-    return {
-        "text": row["text"],
-        "answers": json.loads(row["answers_json"]),
-    }
-
-
-def record_part2_show(task_id):
-    _record_show("part2_task_shows", task_id)
+    return pick_task_id_for_part(2, exclude_current)
 
 
 def _generate_part2_with_openai(level="b2"):
@@ -1090,11 +1123,7 @@ Return ONLY a valid JSON object with these exact keys:
 No other text or markdown."""
 
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -1108,84 +1137,52 @@ No other text or markdown."""
             if f"({i})_____" not in text:
                 return None
         answers_clean = [str(a).strip() for a in answers]
-        conn = get_db()
-        cur = conn.execute(
-            "INSERT INTO part2_tasks (text, answers_json, source) VALUES (?, ?, ?)",
-            (text, json.dumps(answers_clean), "openai"),
-        )
-        tid = cur.lastrowid
-        conn.commit()
-        conn.close()
+        with db_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO part2_tasks (text, answers_json, source) VALUES (?, ?, ?)",
+                (text, json.dumps(answers_clean), "openai"),
+            )
+            tid = cur.lastrowid
+            conn.commit()
         return get_part2_task_by_id(tid)
     except Exception as e:
-        print("OpenAI Part 2 error:", e)
+        logger.exception("OpenAI Part 2 error")
         return None
 
 
 def get_or_create_part2_item(exclude_task_id=None):
     """Get one Part 2 task. If none available, generate via OpenAI. Returns (item, task_id) or (None, None)."""
-    task_id = pick_one_part2_task_id(exclude_current=exclude_task_id)
-    if task_id is None and openai_client:
-        item = _generate_part2_with_openai()
-        if item:
-            conn = get_db()
-            cur = conn.execute("SELECT id FROM part2_tasks ORDER BY id DESC LIMIT 1")
-            row = cur.fetchone()
-            conn.close()
-            if row:
-                record_part2_show(row["id"])
-                return (item, row["id"])
-            return (item, None)
-    if task_id is None:
-        conn = get_db()
-        if exclude_task_id is not None:
-            cur = conn.execute("SELECT id FROM part2_tasks WHERE id != ? ORDER BY RANDOM() LIMIT 1", (exclude_task_id,))
-        else:
-            cur = conn.execute("SELECT id FROM part2_tasks ORDER BY RANDOM() LIMIT 1")
-        row = cur.fetchone()
-        conn.close()
-        task_id = row["id"] if row else None
-    if task_id is None:
-        return (None, None)
-    record_part2_show(task_id)
-    return (get_part2_task_by_id(task_id), task_id)
+    return _generic_get_or_create(2, _generate_part2_with_openai, exclude_task_id)
 
 
-def get_part5_excluded_ids():
-    return _get_excluded_ids("part5_task_shows")
+def get_part5_task_by_id(tid):
+    return get_task_by_id_for_part(5, tid)
 
+def record_part5_show(tid):
+    record_show_for_part(5, tid)
 
 def pick_one_part5_task_id(exclude_current=None):
-    return _pick_one_task_id("part5_tasks", "part5_task_shows", exclude_current)
-
-
-def get_part5_task_by_id(task_id):
-    conn = get_db()
-    cur = conn.execute("SELECT id, title, text, questions_json FROM part5_tasks WHERE id = ?", (task_id,))
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return None
-    return {
-        "title": row["title"],
-        "text": row["text"],
-        "questions": json.loads(row["questions_json"]),
-    }
-
-
-def record_part5_show(task_id):
-    _record_show("part5_task_shows", task_id)
+    return pick_task_id_for_part(5, exclude_current)
 
 
 def _generate_part5_with_openai():
-    """Generate one Part 5 (reading: long text + 6 MC questions) via OpenAI. B2, 550-650 words, 6 questions in order."""
+    """Generate one Part 5 (reading: long text + 6 MC questions) via OpenAI. B2, 550-650 words, 6 questions in order. Topic chosen at random for variety."""
     if not openai_client:
         return None
-    prompt = """You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 5 task.
+    topic = random.choice(PART5_TOPICS)
+    prompt = f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 5 task.
+
+The text MUST be clearly about this topic: "{topic}". Write a single continuous text (e.g. magazine article, report, or extract from a modern novel) that is obviously on this theme. Use a specific angle or situation so the text feels fresh and varied.
 
 Part 5 consists of:
-1. A single continuous text (e.g. magazine article, report, or extract from a modern novel). Length: between 550 and 650 words. Upper-Intermediate (B2) level. The text should test understanding of the writer's opinion, attitude, purpose, tone, and implied meaning—not just surface facts.
+1. A single continuous text. Length: between 550 and 650 words. Upper-Intermediate (B2) level. The text should test understanding of the writer's opinion, attitude, purpose, tone, and implied meaning—not just surface facts.
 2. Exactly 6 multiple-choice questions. Each question has four options (A, B, C, D). Questions must follow the chronological order of the text: question 1 relates to the beginning, question 6 may relate to the end or the text as a whole. Each correct answer is worth 2 marks.
+
+QUESTION QUALITY REQUIREMENTS:
+- Mix question types: include at least one of each: (a) detail/fact comprehension, (b) writer's opinion/attitude, (c) implied meaning/inference, (d) purpose of a phrase or paragraph.
+- Distractors must be plausible: each wrong option should seem reasonable at first glance but be clearly wrong when the relevant passage is read carefully. Avoid obviously absurd options.
+- Vary the position of the correct answer: do NOT always put it in the same slot. Distribute correct answers across A, B, C, D roughly evenly.
+- Questions should use paraphrase, not copy text verbatim.
 
 Return ONLY a valid JSON object with these exact keys:
 - "title": a short title for the text (e.g. "The benefits of learning music")
@@ -1193,16 +1190,12 @@ Return ONLY a valid JSON object with these exact keys:
 - "questions": an array of exactly 6 objects. Each object has: "q" (the question text), "options" (array of exactly 4 strings, in order A then B then C then D), "correct" (integer 0, 1, 2, or 3—the index of the correct option).
 
 Example shape:
-{"title": "...", "text": "<p>...</p><p>...</p>", "questions": [{"q": "...", "options": ["A text", "B text", "C text", "D text"], "correct": 1}, ...]}
+{{"title": "...", "text": "<p>...</p><p>...</p>", "questions": [{{"q": "...", "options": ["A text", "B text", "C text", "D text"], "correct": 1}}, ...]}}
 
 No other text or markdown."""
 
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -1230,88 +1223,50 @@ No other text or markdown."""
                 "options": [str(o).strip() for o in opts],
                 "correct": correct,
             })
-        conn = get_db()
-        cur = conn.execute(
-            "INSERT INTO part5_tasks (title, text, questions_json, source) VALUES (?, ?, ?, ?)",
-            (title, text, json.dumps(normalized), "openai"),
-        )
-        tid = cur.lastrowid
-        conn.commit()
-        conn.close()
+        with db_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO part5_tasks (title, text, questions_json, source) VALUES (?, ?, ?, ?)",
+                (title, text, json.dumps(normalized), "openai"),
+            )
+            tid = cur.lastrowid
+            conn.commit()
         return get_part5_task_by_id(tid)
     except Exception as e:
-        print("OpenAI Part 5 error:", e)
+        logger.exception("OpenAI Part 5 error")
         return None
 
 
 def get_or_create_part5_item(exclude_task_id=None):
-    """Get one Part 5 task (exclude last 100 shown, and optionally exclude_task_id). If none available, generate via OpenAI. Record show. Returns (item, task_id) or (None, None)."""
-    task_id = pick_one_part5_task_id(exclude_current=exclude_task_id)
-    if task_id is None and openai_client:
-        item = _generate_part5_with_openai()
-        if item:
-            conn = get_db()
-            cur = conn.execute("SELECT id FROM part5_tasks ORDER BY id DESC LIMIT 1")
-            row = cur.fetchone()
-            conn.close()
-            if row:
-                record_part5_show(row["id"])
-                return (item, row["id"])
-            return (item, None)
-    if task_id is None:
-        # Fallback: pick any task that is not the one we're excluding (so "Next" gives a different one)
-        conn = get_db()
-        if exclude_task_id is not None:
-            cur = conn.execute("SELECT id FROM part5_tasks WHERE id != ? ORDER BY RANDOM() LIMIT 1", (exclude_task_id,))
-        else:
-            cur = conn.execute("SELECT id FROM part5_tasks ORDER BY RANDOM() LIMIT 1")
-        row = cur.fetchone()
-        conn.close()
-        task_id = row["id"] if row else None
-    if task_id is None:
-        return (None, None)
-    record_part5_show(task_id)
-    return (get_part5_task_by_id(task_id), task_id)
+    return _generic_get_or_create(5, _generate_part5_with_openai, exclude_task_id)
 
 
-def get_part6_excluded_ids():
-    return _get_excluded_ids("part6_task_shows")
+def get_part6_task_by_id(tid):
+    return get_task_by_id_for_part(6, tid)
 
+def record_part6_show(tid):
+    record_show_for_part(6, tid)
 
 def pick_one_part6_task_id(exclude_current=None):
-    return _pick_one_task_id("part6_tasks", "part6_task_shows", exclude_current)
-
-
-def get_part6_task_by_id(task_id):
-    conn = get_db()
-    cur = conn.execute(
-        "SELECT id, paragraphs_json, sentences_json, answers_json FROM part6_tasks WHERE id = ?",
-        (task_id,),
-    )
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return None
-    return {
-        "paragraphs": json.loads(row["paragraphs_json"]),
-        "sentences": json.loads(row["sentences_json"]),
-        "answers": json.loads(row["answers_json"]),
-    }
-
-
-def record_part6_show(task_id):
-    _record_show("part6_task_shows", task_id)
+    return pick_task_id_for_part(6, exclude_current)
 
 
 def _generate_part6_with_openai():
     """Generate one Part 6 (gapped text: 500-600 words, 6 gaps, 7 sentences A-G). Returns item dict or None."""
     if not openai_client:
         return None
-    prompt = """You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 6 (gapped text) task.
+    topic = random.choice(PART5_TOPICS)
+    prompt = f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 6 (gapped text) task.
+
+The text MUST be about this topic: "{topic}". Use a specific angle to make the text engaging and varied.
 
 Part 6 consists of:
 - A single continuous text of 500-600 words (B2 level). The text must contain exactly 6 numbered gaps where a sentence has been removed. Use the exact placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 in order where each gap appears (each on its own line/segment).
 - 7 sentences labeled A–G. Exactly 6 of these fit into the gaps (one per gap); one sentence is a distractor and does not fit any gap.
+
+COHERENCE REQUIREMENTS:
+- Each removed sentence should connect logically to what comes before and after the gap. Use cohesive devices (pronouns referring to earlier nouns, linking words like "however", "as a result", time references) so that the correct placement is deterministic.
+- The distractor sentence must be on-topic and plausible but should NOT fit any gap when read in context (e.g. it introduces a concept not mentioned nearby, or its pronouns don't match).
+- Gaps should be spread throughout the text, not clustered together.
 
 Return ONLY a valid JSON object with these exact keys:
 - "paragraphs": an array of strings. Each string is either a paragraph (or part of the text) or exactly "GAP1", "GAP2", "GAP3", "GAP4", "GAP5", "GAP6" where that gap appears. The gaps can be in any order but must appear as separate elements. Example: ["First paragraph text.", "GAP1", "More text.", "GAP2", ...]
@@ -1321,11 +1276,7 @@ Return ONLY a valid JSON object with these exact keys:
 No other text or markdown."""
 
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -1347,99 +1298,60 @@ No other text or markdown."""
         sentences_clean = [str(s).strip() for s in sentences]
         paragraphs_clean = [str(p).strip() for p in paragraphs]
         answers_clean = [int(a) for a in answers]
-        conn = get_db()
-        cur = conn.execute(
-            "INSERT INTO part6_tasks (paragraphs_json, sentences_json, answers_json, source) VALUES (?, ?, ?, ?)",
-            (json.dumps(paragraphs_clean), json.dumps(sentences_clean), json.dumps(answers_clean), "openai"),
-        )
-        tid = cur.lastrowid
-        conn.commit()
-        conn.close()
+        with db_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO part6_tasks (paragraphs_json, sentences_json, answers_json, source) VALUES (?, ?, ?, ?)",
+                (json.dumps(paragraphs_clean), json.dumps(sentences_clean), json.dumps(answers_clean), "openai"),
+            )
+            tid = cur.lastrowid
+            conn.commit()
         return get_part6_task_by_id(tid)
     except Exception as e:
-        print("OpenAI Part 6 error:", e)
+        logger.exception("OpenAI Part 6 error")
         return None
 
 
 def get_or_create_part6_item(exclude_task_id=None):
-    """Get one Part 6 task. Returns (item, task_id) or (None, None)."""
-    task_id = pick_one_part6_task_id(exclude_current=exclude_task_id)
-    if task_id is None and openai_client:
-        item = _generate_part6_with_openai()
-        if item:
-            conn = get_db()
-            cur = conn.execute("SELECT id FROM part6_tasks ORDER BY id DESC LIMIT 1")
-            row = cur.fetchone()
-            conn.close()
-            if row:
-                record_part6_show(row["id"])
-                return (item, row["id"])
-            return (item, None)
-    if task_id is None:
-        conn = get_db()
-        if exclude_task_id is not None:
-            cur = conn.execute("SELECT id FROM part6_tasks WHERE id != ? ORDER BY RANDOM() LIMIT 1", (exclude_task_id,))
-        else:
-            cur = conn.execute("SELECT id FROM part6_tasks ORDER BY RANDOM() LIMIT 1")
-        row = cur.fetchone()
-        conn.close()
-        task_id = row["id"] if row else None
-    if task_id is None:
-        return (None, None)
-    record_part6_show(task_id)
-    return (get_part6_task_by_id(task_id), task_id)
+    return _generic_get_or_create(6, _generate_part6_with_openai, exclude_task_id)
 
 
-def get_part7_excluded_ids():
-    return _get_excluded_ids("part7_task_shows")
+def get_part7_task_by_id(tid):
+    return get_task_by_id_for_part(7, tid)
 
+def record_part7_show(tid):
+    record_show_for_part(7, tid)
 
 def pick_one_part7_task_id(exclude_current=None):
-    return _pick_one_task_id("part7_tasks", "part7_task_shows", exclude_current)
-
-
-def get_part7_task_by_id(task_id):
-    conn = get_db()
-    cur = conn.execute(
-        "SELECT id, sections_json, questions_json FROM part7_tasks WHERE id = ?",
-        (task_id,),
-    )
-    row = cur.fetchone()
-    conn.close()
-    if not row:
-        return None
-    return {
-        "sections": json.loads(row["sections_json"]),
-        "questions": json.loads(row["questions_json"]),
-    }
-
-
-def record_part7_show(task_id):
-    _record_show("part7_task_shows", task_id)
+    return pick_task_id_for_part(7, exclude_current)
 
 
 def _generate_part7_with_openai():
     """Generate one Part 7 (multiple matching): 600-700 words total in 4-6 sections (A-F), 10 statements to match. 1 mark each."""
     if not openai_client:
         return None
-    prompt = """You are an FCE (B2 First) Reading exam expert. Generate exactly ONE Part 7 (Multiple matching) task.
+    topic = random.choice(PART5_TOPICS)
+    prompt = f"""You are an FCE (B2 First) Reading exam expert. Generate exactly ONE Part 7 (Multiple matching) task.
+
+The text MUST be about this topic: "{topic}". Use a specific angle to make the text engaging and varied.
 
 Part 7 consists of:
 - Either ONE long text divided into 4-6 sections (labeled A, B, C, D, and optionally E, F) OR 4-5 short separate texts. Total length 600-700 words (B2 level).
-- 10 statements that the candidate must match to the correct section. Use paraphrasing: do not copy phrases from the text; rephrase (e.g. "financial struggle" in the question might appear as "barely having enough money for rent" in the text). Each correct match = 1 mark.
+- 10 statements that the candidate must match to the correct section. Each correct match = 1 mark.
+
+QUALITY REQUIREMENTS:
+- Use paraphrasing throughout: do NOT copy phrases from the text into statements. Rephrase ideas (e.g. "financial struggle" in the question might appear as "barely having enough money for rent" in the text).
+- Each section should be matched by at least one question. Distribute matches across sections (some sections may have 2–3 matches, but no section should have 0).
+- Vary difficulty: include some straightforward matches and some that require careful inference or distinguishing between similar ideas in different sections.
+- Each statement must unambiguously match exactly one section. Avoid statements that could reasonably apply to multiple sections.
 
 Return ONLY a valid JSON object with these exact keys:
 - "sections": an array of 4 to 6 objects. Each object has "id" (letter "A", "B", "C", "D", "E", or "F"), "title" (short section title), "text" (the section body text). The combined word count of all section "text" must be between 600 and 700 words.
-- "questions": an array of exactly 10 objects. Each has "text" (the statement to match, one sentence) and "correct" (the section id, e.g. "A", "B"). Each section should be matched by at least one question; distribute matches across sections. Use paraphrasing in statements so answers are not obvious from word-for-word matching.
+- "questions": an array of exactly 10 objects. Each has "text" (the statement to match, one sentence) and "correct" (the section id, e.g. "A", "B").
 
 No other text or markdown."""
 
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -1475,47 +1387,21 @@ No other text or markdown."""
             if not text or correct not in section_ids:
                 return None
             questions_clean.append({"text": text, "correct": correct})
-        conn = get_db()
-        cur = conn.execute(
-            "INSERT INTO part7_tasks (sections_json, questions_json, source) VALUES (?, ?, ?)",
-            (json.dumps(sections_clean), json.dumps(questions_clean), "openai"),
-        )
-        tid = cur.lastrowid
-        conn.commit()
-        conn.close()
+        with db_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO part7_tasks (sections_json, questions_json, source) VALUES (?, ?, ?)",
+                (json.dumps(sections_clean), json.dumps(questions_clean), "openai"),
+            )
+            tid = cur.lastrowid
+            conn.commit()
         return get_part7_task_by_id(tid)
     except Exception as e:
-        print("OpenAI Part 7 error:", e)
+        logger.exception("OpenAI Part 7 error")
         return None
 
 
 def get_or_create_part7_item(exclude_task_id=None):
-    """Get one Part 7 task. If none available, generate via OpenAI. Returns (item, task_id) or (None, None)."""
-    task_id = pick_one_part7_task_id(exclude_current=exclude_task_id)
-    if task_id is None and openai_client:
-        item = _generate_part7_with_openai()
-        if item:
-            conn = get_db()
-            cur = conn.execute("SELECT id FROM part7_tasks ORDER BY id DESC LIMIT 1")
-            row = cur.fetchone()
-            conn.close()
-            if row:
-                record_part7_show(row["id"])
-                return (item, row["id"])
-            return (item, None)
-    if task_id is None:
-        conn = get_db()
-        if exclude_task_id is not None:
-            cur = conn.execute("SELECT id FROM part7_tasks WHERE id != ? ORDER BY RANDOM() LIMIT 1", (exclude_task_id,))
-        else:
-            cur = conn.execute("SELECT id FROM part7_tasks ORDER BY RANDOM() LIMIT 1")
-        row = cur.fetchone()
-        conn.close()
-        task_id = row["id"] if row else None
-    if task_id is None:
-        return (None, None)
-    record_part7_show(task_id)
-    return (get_part7_task_by_id(task_id), task_id)
+    return _generic_get_or_create(7, _generate_part7_with_openai, exclude_task_id)
 
 
 def fetch_explanations_part1(item, details):
@@ -1554,11 +1440,7 @@ Keep each explanation clear and educational. Return ONLY a JSON array of exactly
 Gaps:
 """ + "\n".join(lines)
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.3)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\[[\s\S]*?\]", content)
         if not m:
@@ -1568,7 +1450,7 @@ Gaps:
             return [str(arr[i]).strip() for i in range(8)]
         return []
     except Exception as e:
-        print("OpenAI explanations Part 1 error:", e)
+        logger.exception("OpenAI explanations Part 1 error")
         return []
 
 
@@ -1600,11 +1482,7 @@ Keep each explanation clear and educational. Return ONLY a JSON array of exactly
 Gaps:
 """ + "\n".join(lines)
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.3)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\[[\s\S]*?\]", content)
         if not m:
@@ -1614,7 +1492,7 @@ Gaps:
             return [str(arr[i]).strip() for i in range(8)]
         return []
     except Exception as e:
-        print("OpenAI explanations Part 2 error:", e)
+        logger.exception("OpenAI explanations Part 2 error")
         return []
 
 
@@ -1664,11 +1542,7 @@ Return ONLY a valid JSON array of exactly 8 objects. Each object has two keys: "
 Gaps:
 """ + "\n".join(lines)
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.3)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\[[\s\S]*?\]", content)
         if not m:
@@ -1680,12 +1554,12 @@ Gaps:
         for i in range(8):
             el = arr[i] if isinstance(arr[i], dict) else {}
             result.append({
-                "explanation": str(el.get("explanation") or "").strip()[:400],
-                "word_family": str(el.get("word_family") or "").strip()[:200],
+                "explanation": str(el.get("explanation") or "").strip()[:MAX_EXPLANATION_LEN],
+                "word_family": str(el.get("word_family") or "").strip()[:MAX_WORD_FAMILY_LEN],
             })
         return result
     except Exception as e:
-        print("OpenAI explanations Part 3 error:", e)
+        logger.exception("OpenAI explanations Part 3 error")
         return []
 
 
@@ -1711,11 +1585,7 @@ Keep each explanation clear and educational. Return ONLY a JSON array of strings
 Items:
 """ + "\n".join(lines)
     try:
-        comp = openai_client.chat.completions.create(
-            model=openai_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-        )
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.3)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\[[\s\S]*?\]", content)
         if not m:
@@ -1725,7 +1595,141 @@ Items:
             return [str(arr[i]).strip() for i in range(len(tasks))]
         return []
     except Exception as e:
-        print("OpenAI explanations Part 4 error:", e)
+        logger.exception("OpenAI explanations Part 4 error")
+        return []
+
+
+def fetch_explanations_part5(item, details):
+    """Ask OpenAI to explain each Part 5 MC question. Returns list of 6 strings."""
+    if not openai_client or not item or not item.get("questions") or len(details) < 6:
+        return []
+    text_snippet = (item.get("text") or "")[:3000]
+    lines = []
+    for i, q in enumerate(item["questions"]):
+        correct_idx = q.get("correct", 0)
+        opts = q.get("options", [])
+        correct_letter = LETTERS[correct_idx] if correct_idx < len(LETTERS) else "?"
+        correct_text = opts[correct_idx] if correct_idx < len(opts) else ""
+        user_idx = details[i].get("user_val", -1)
+        user_letter = LETTERS[user_idx] if 0 <= user_idx < len(LETTERS) else "—"
+        user_text = opts[user_idx] if 0 <= user_idx < len(opts) else "(no answer)"
+        lines.append(f"Q{i+1}: {q.get('q')}. Correct: {correct_letter}) {correct_text}. Student chose: {user_letter}) {user_text}.")
+    prompt = """You are an FCE (B2 First) English teacher. For a Part 5 (reading comprehension, multiple choice) task, you will see the passage and for each question: the question text, correct answer, and student's answer.
+
+PASSAGE (for context):
+---
+""" + text_snippet + """
+
+---
+For each question, write ONE short explanation (1-2 sentences):
+1) Why the correct answer is right, referring to specific parts of the text.
+2) If the student was wrong, briefly why their choice doesn't fit.
+
+Return ONLY a JSON array of exactly 6 strings (one per question). No other text.
+
+Questions:
+""" + "\n".join(lines)
+    try:
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.3)
+        content = (comp.choices[0].message.content or "").strip()
+        m = re.search(r"\[[\s\S]*?\]", content)
+        if not m:
+            return []
+        arr = json.loads(m.group(0))
+        if isinstance(arr, list) and len(arr) >= 6:
+            return [str(arr[i]).strip() for i in range(6)]
+        return []
+    except Exception as e:
+        logger.exception("OpenAI explanations Part 5 error")
+        return []
+
+
+def fetch_explanations_part6(item, details):
+    """Ask OpenAI to explain each Part 6 gap. Returns list of 6 strings."""
+    if not openai_client or not item or not item.get("answers") or len(details) < 6:
+        return []
+    letters_g = ["A", "B", "C", "D", "E", "F", "G"]
+    sentences = item.get("sentences", [])
+    answers = item.get("answers", [])
+    paragraphs_text = " ".join(p for p in item.get("paragraphs", []) if not p.startswith("GAP"))[:3000]
+    lines = []
+    for i in range(6):
+        correct_idx = answers[i] if i < len(answers) else -1
+        correct_letter = letters_g[correct_idx] if 0 <= correct_idx < len(letters_g) else "?"
+        correct_sentence = sentences[correct_idx] if 0 <= correct_idx < len(sentences) else ""
+        user_idx = details[i].get("user_val", -1)
+        try:
+            user_idx = int(user_idx)
+        except (TypeError, ValueError):
+            user_idx = -1
+        user_letter = letters_g[user_idx] if 0 <= user_idx < len(letters_g) else "—"
+        user_sentence = sentences[user_idx] if 0 <= user_idx < len(sentences) else "(no answer)"
+        lines.append(f"Gap {i+1}: Correct: {correct_letter}) {correct_sentence}. Student chose: {user_letter}) {user_sentence}.")
+    prompt = """You are an FCE (B2 First) English teacher. For a Part 6 (gapped text) task, you will see the text and for each gap: which sentence correctly fills it and what the student chose.
+
+TEXT (for context):
+---
+""" + paragraphs_text + """
+
+---
+For each gap, write ONE short explanation (1-2 sentences):
+1) Why the correct sentence fits (coherence, linking words, pronouns, logical flow).
+2) If the student was wrong, briefly why their sentence doesn't fit there.
+
+Return ONLY a JSON array of exactly 6 strings. No other text.
+
+Gaps:
+""" + "\n".join(lines)
+    try:
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.3)
+        content = (comp.choices[0].message.content or "").strip()
+        m = re.search(r"\[[\s\S]*?\]", content)
+        if not m:
+            return []
+        arr = json.loads(m.group(0))
+        if isinstance(arr, list) and len(arr) >= 6:
+            return [str(arr[i]).strip() for i in range(6)]
+        return []
+    except Exception as e:
+        logger.exception("OpenAI explanations Part 6 error")
+        return []
+
+
+def fetch_explanations_part7(item, details):
+    """Ask OpenAI to explain each Part 7 matching. Returns list of 10 strings."""
+    if not openai_client or not item or not item.get("questions") or len(details) < 10:
+        return []
+    sections = item.get("sections", [])
+    sections_text = " | ".join(f"{s.get('id')}: {s.get('title', '')}" for s in sections)[:1000]
+    lines = []
+    for i, q in enumerate(item["questions"]):
+        correct_section = q.get("correct", "?")
+        user_val = details[i].get("user_val", "(no answer)")
+        lines.append(f"Statement {i+1}: '{q.get('text')}'. Correct: {correct_section}. Student chose: {user_val}.")
+    prompt = """You are an FCE (B2 First) English teacher. For a Part 7 (multiple matching) task, you will see the sections and for each statement: the correct section and what the student chose.
+
+Sections: """ + sections_text + """
+
+For each statement, write ONE short explanation (1-2 sentences):
+1) Why the correct section matches (what in that section corresponds to the statement).
+2) If the student was wrong, briefly why their chosen section doesn't match.
+
+Return ONLY a JSON array of exactly 10 strings. No other text.
+
+Statements:
+""" + "\n".join(lines)
+    try:
+        comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.3)
+        content = (comp.choices[0].message.content or "").strip()
+        m = re.search(r"\[[\s\S]*?\]", content)
+        if not m:
+            return []
+        arr = json.loads(m.group(0))
+        if isinstance(arr, list) and len(arr) >= 10:
+            return [str(arr[i]).strip() for i in range(10)]
+        return []
+    except Exception as e:
+        logger.exception("OpenAI explanations Part 7 error")
         return []
 
 
@@ -1733,93 +1737,84 @@ def pick_task_ids_from_db(count: int, recent_grammar_topics=None):
     """Pick task IDs for Part 4. Prefer tasks whose grammar_topic is NOT in recent_grammar_topics (avoid repeating same grammar)."""
     recent_grammar_topics = recent_grammar_topics or []
     excluded = get_excluded_task_ids()
-    conn = get_db()
-    # Prefer tasks with grammar_topic not in recent list; then random
-    if recent_grammar_topics and _uoe_has_grammar_topic_column(conn):
-        placeholders = ",".join("?" * len(recent_grammar_topics))
-        order = f"CASE WHEN grammar_topic IN ({placeholders}) THEN 1 ELSE 0 END, RANDOM()"
-        if excluded:
-            ph_ex = ",".join("?" * len(excluded))
-            cur = conn.execute(
-                f"SELECT id FROM uoe_tasks WHERE id NOT IN ({ph_ex}) ORDER BY {order} LIMIT ?",
-                (*excluded, *recent_grammar_topics, count * 2),
-            )
+    with db_connection() as conn:
+        if recent_grammar_topics and _uoe_has_grammar_topic_column(conn):
+            placeholders = ",".join("?" * len(recent_grammar_topics))
+            order = f"CASE WHEN grammar_topic IN ({placeholders}) THEN 1 ELSE 0 END, RANDOM()"
+            if excluded:
+                ph_ex = ",".join("?" * len(excluded))
+                cur = conn.execute(
+                    f"SELECT id FROM uoe_tasks WHERE id NOT IN ({ph_ex}) ORDER BY {order} LIMIT ?",
+                    (*excluded, *recent_grammar_topics, count * 2),
+                )
+            else:
+                cur = conn.execute(
+                    f"SELECT id FROM uoe_tasks ORDER BY {order} LIMIT ?",
+                    (*recent_grammar_topics, count * 2),
+                )
         else:
-            cur = conn.execute(
-                f"SELECT id FROM uoe_tasks ORDER BY {order} LIMIT ?",
-                (*recent_grammar_topics, count * 2),
-            )
-    else:
-        if excluded:
-            ph = ",".join("?" * len(excluded))
-            cur = conn.execute(
-                f"SELECT id FROM uoe_tasks WHERE id NOT IN ({ph}) ORDER BY RANDOM() LIMIT ?",
-                (*excluded, count * 2),
-            )
-        else:
-            cur = conn.execute("SELECT id FROM uoe_tasks ORDER BY RANDOM() LIMIT ?", (count * 2,))
-    ids = [r["id"] for r in cur.fetchall()]
-    conn.close()
+            if excluded:
+                ph = ",".join("?" * len(excluded))
+                cur = conn.execute(
+                    f"SELECT id FROM uoe_tasks WHERE id NOT IN ({ph}) ORDER BY RANDOM() LIMIT ?",
+                    (*excluded, count * 2),
+                )
+            else:
+                cur = conn.execute("SELECT id FROM uoe_tasks ORDER BY RANDOM() LIMIT ?", (count * 2,))
+        ids = [r["id"] for r in cur.fetchall()]
     return ids[: count * 2]
 
 
 def _uoe_has_grammar_topic_column(conn=None):
     if conn is None:
-        conn = get_db()
-        try:
+        with db_connection() as conn:
             cur = conn.execute("PRAGMA table_info(uoe_tasks)")
-            out = any(r["name"] == "grammar_topic" for r in cur.fetchall())
-            return out
-        finally:
-            conn.close()
+            return any(r["name"] == "grammar_topic" for r in cur.fetchall())
     cur = conn.execute("PRAGMA table_info(uoe_tasks)")
     return any(r["name"] == "grammar_topic" for r in cur.fetchall())
 
 
 def get_recent_grammar_topics(limit=20):
     """Return list of grammar_topic values from recently shown Part 4 tasks (from uoe_task_shows)."""
-    conn = get_db()
     try:
-        cur = conn.execute("PRAGMA table_info(uoe_tasks)")
-        if not any(r["name"] == "grammar_topic" for r in cur.fetchall()):
-            return []
-        cur = conn.execute("""
-            SELECT DISTINCT t.grammar_topic FROM uoe_tasks t
-            INNER JOIN uoe_task_shows s ON t.id = s.task_id
-            WHERE t.grammar_topic IS NOT NULL AND trim(t.grammar_topic) != ''
-            ORDER BY s.shown_at DESC
-            LIMIT ?
-        """, (limit,))
-        return [r["grammar_topic"].strip() for r in cur.fetchall() if r.get("grammar_topic")]
-    except Exception:
+        with db_connection() as conn:
+            cur = conn.execute("PRAGMA table_info(uoe_tasks)")
+            if not any(r["name"] == "grammar_topic" for r in cur.fetchall()):
+                return []
+            cur = conn.execute("""
+                SELECT DISTINCT t.grammar_topic FROM uoe_tasks t
+                INNER JOIN uoe_task_shows s ON t.id = s.task_id
+                WHERE t.grammar_topic IS NOT NULL AND trim(t.grammar_topic) != ''
+                ORDER BY s.shown_at DESC
+                LIMIT ?
+            """, (limit,))
+            return [r["grammar_topic"].strip() for r in cur.fetchall() if r.get("grammar_topic")]
+    except Exception as e:
+        logger.exception("Error fetching recent grammar topics")
         return []
-    finally:
-        conn.close()
 
 
 def record_shows(task_ids):
-    conn = get_db()
-    for tid in task_ids:
-        conn.execute("INSERT INTO uoe_task_shows (task_id, shown_at) VALUES (?, datetime('now'))", (tid,))
-    conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        for tid in task_ids:
+            conn.execute("INSERT INTO uoe_task_shows (task_id, shown_at) VALUES (?, datetime('now'))", (tid,))
+        conn.commit()
 
 
 def get_tasks_by_ids(ids):
     if not ids:
         return []
-    conn = get_db()
     ph = ",".join("?" * len(ids))
-    try:
-        cur = conn.execute(
-            f"SELECT id, sentence1, keyword, sentence2, answer, grammar_topic FROM uoe_tasks WHERE id IN ({ph})", ids
-        )
-    except sqlite3.OperationalError:
-        cur = conn.execute(
-            f"SELECT id, sentence1, keyword, sentence2, answer FROM uoe_tasks WHERE id IN ({ph})", ids
-        )
-    rows = cur.fetchall()
-    conn.close()
+    with db_connection() as conn:
+        try:
+            cur = conn.execute(
+                f"SELECT id, sentence1, keyword, sentence2, answer, grammar_topic FROM uoe_tasks WHERE id IN ({ph})", ids
+            )
+        except sqlite3.OperationalError:
+            cur = conn.execute(
+                f"SELECT id, sentence1, keyword, sentence2, answer FROM uoe_tasks WHERE id IN ({ph})", ids
+            )
+        rows = cur.fetchall()
     by_id = {r["id"]: dict(r) for r in rows}
     out = [by_id[i] for i in ids if i in by_id]
     for r in out:
@@ -1856,21 +1851,19 @@ def fetch_part4_tasks(level: str = "b2plus", db_only: bool = False):
             out.append(r)
         if out:
             record_shows([r["id"] for r in out])
-        return [{"sentence1": r["sentence1"], "keyword": r["keyword"], "sentence2": r["sentence2"], "answer": r["answer"]} for r in out] if out else None
+        return [{"id": r["id"], "sentence1": r["sentence1"], "keyword": r["keyword"], "sentence2": r["sentence2"], "answer": r["answer"]} for r in out] if out else None
     record_shows([t["id"] for t in tasks])
-    return [{"sentence1": t["sentence1"], "keyword": t["keyword"], "sentence2": t["sentence2"], "answer": t["answer"]} for t in tasks]
+    return [{"id": t["id"], "sentence1": t["sentence1"], "keyword": t["keyword"], "sentence2": t["sentence2"], "answer": t["answer"]} for t in tasks]
 
 
 def _uoe_task_exists(sentence1: str, keyword: str) -> bool:
     """Check if a Part 4 task with the same sentence1 and keyword already exists (uniqueness)."""
-    conn = get_db()
-    cur = conn.execute(
-        "SELECT 1 FROM uoe_tasks WHERE sentence1 = ? AND keyword = ? LIMIT 1",
-        (sentence1.strip(), keyword.strip().upper()),
-    )
-    exists = cur.fetchone() is not None
-    conn.close()
-    return exists
+    with db_connection() as conn:
+        cur = conn.execute(
+            "SELECT 1 FROM uoe_tasks WHERE sentence1 = ? AND keyword = ? LIMIT 1",
+            (sentence1.strip(), keyword.strip().upper()),
+        )
+        return cur.fetchone() is not None
 
 
 def _generate_tasks_with_openai(count: int, level: str = "b2plus", recent_grammar_topics=None):
@@ -1907,16 +1900,13 @@ Return ONLY a valid JSON array of objects with keys: sentence1, keyword, sentenc
             break
         prompt = prompt_template.format(count=need)
         try:
-            comp = openai_client.chat.completions.create(
-                model=openai_model, messages=[{"role": "user", "content": prompt}], temperature=0.8
-            )
+            comp = _openai_chat_create([{"role": "user", "content": prompt}], temperature=0.8)
             content = (comp.choices[0].message.content or "").strip()
             m = re.search(r"\[[\s\S]*\]", content)
             arr = json.loads(m.group(0)) if m else []
             if not isinstance(arr, list):
                 continue
-            conn = get_db()
-            try:
+            with db_connection() as conn:
                 for item in arr[:need]:
                     s1 = (item.get("sentence1") or "").strip()
                     kw = (item.get("keyword") or "").strip().upper()
@@ -1928,16 +1918,15 @@ Return ONLY a valid JSON array of objects with keys: sentence1, keyword, sentenc
                     if not all([s1, kw, s2, ans]):
                         continue
                     if not _answer_uses_keyword(ans, kw):
-                        continue  # reject: answer must contain the key word
+                        continue
                     if not _part4_answer_length_ok(ans):
-                        continue  # reject: answer must be 3–5 words
+                        continue
                     if _part4_sentence2_same_as_sentence1(s1, s2, ans):
-                        continue  # reject: sentence2 must not be the same as sentence1 with a gap
+                        continue
                     if _part4_similar_to_existing(s1, s2, ans, exclude_ids=[x["id"] for x in result]):
-                        continue  # reject: too similar to existing task in DB
+                        continue
                     if _uoe_task_exists(s1, kw):
                         continue
-                    # Reject if we already have this grammar topic in this batch (max one per topic per set)
                     if grammar_topic and grammar_topic.lower() in topics_used_in_batch:
                         continue
                     cur = conn.execute(
@@ -1949,10 +1938,8 @@ Return ONLY a valid JSON array of objects with keys: sentence1, keyword, sentenc
                     if grammar_topic:
                         topics_used_in_batch.add(grammar_topic.lower())
                 conn.commit()
-            finally:
-                conn.close()
         except Exception as e:
-            print("OpenAI error:", e)
+            logger.exception("OpenAI Part 4 batch error")
             break
     return result
 
@@ -1992,12 +1979,11 @@ def _part4_similar_to_existing(sentence1: str, sentence2: str, answer: str, excl
     Uses normalized text and SequenceMatcher ratio >= 0.88 to catch near-duplicates and same grammar structure."""
     if not sentence1 or not sentence2 or "_____" not in sentence2:
         return False
-    conn = get_db()
-    cur = conn.execute(
-        "SELECT id, sentence1, sentence2, answer FROM uoe_tasks ORDER BY id DESC LIMIT 500"
-    )
-    rows = cur.fetchall()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.execute(
+            "SELECT id, sentence1, sentence2, answer FROM uoe_tasks ORDER BY id DESC LIMIT 500"
+        )
+        rows = cur.fetchall()
     exclude_ids = set(exclude_ids or [])
     n1_new = _norm(sentence1)
     recon_new = _norm(sentence2.replace("_____", (answer or "").strip()))
@@ -2065,7 +2051,7 @@ def build_part1_html(item, check_result=None):
             if check_result and check_result.get("details") and gap_i < len(check_result["details"]):
                 d = check_result["details"][gap_i]
                 cls = " result-correct" if d.get("correct") else " result-wrong"
-            out.append(f'<span class="gap-inline{cls}"><select name="p1_{gap_i}"><option value="">—</option>{opts}</select></span>')
+            out.append(f'<span class="gap-inline{cls}"><select name="p1_{gap_i}" aria-label="Gap {gap_i + 1}"><option value="">—</option>{opts}</select></span>')
             gap_i += 1
         else:
             out.append(_e(p))
@@ -2114,7 +2100,7 @@ def build_part2_html(item, check_result=None):
             if check_result and check_result.get("details") and gap_i < len(check_result["details"]):
                 d = check_result["details"][gap_i]
                 cls = " result-correct" if d.get("correct") else " result-wrong"
-            out.append(f'<span class="gap-inline{cls}"><input type="text" name="p2_{gap_i}" value="{_e(val)}" placeholder="{gap_i + 1}" /></span>')
+            out.append(f'<span class="gap-inline{cls}"><input type="text" name="p2_{gap_i}" value="{_e(val)}" placeholder="{gap_i + 1}" aria-label="Gap {gap_i + 1}" /></span>')
             gap_i += 1
         else:
             out.append(_e(p))
@@ -2177,7 +2163,7 @@ def build_part3_html(task_or_items, check_result=None):
                 val = check_result["details"][i].get("user_val", "")
                 cls = " result-correct" if check_result["details"][i].get("correct") else " result-wrong"
             out.append(_e(parts[i]))
-            out.append(f'<span class="gap-inline part3-gap{cls}"><input type="text" name="p3_{i}" value="{_e(val)}" placeholder="{i + 1}" autocomplete="off" /></span>')
+            out.append(f'<span class="gap-inline part3-gap{cls}"><input type="text" name="p3_{i}" value="{_e(val)}" placeholder="{i + 1}" autocomplete="off" aria-label="Gap {i + 1}" /></span>')
         out.append(_e(parts[8]))
         left_html = "".join(out)
         if check_result and check_result.get("details"):
@@ -2211,7 +2197,7 @@ def build_part3_html(task_or_items, check_result=None):
         return (
             '<div class="part3-layout" id="part3-layout">'
             '<div class="part3-text-col reading-text exercise cloze-text">' + left_html + '</div>'
-            '<div class="part3-resizer" id="part3-resizer" title="Drag to resize"></div>'
+            '<div class="part3-resizer split-resizer" id="part3-resizer" title="Drag to resize"></div>'
             '<div class="part3-stems-col exercise">' + right_html + '</div>'
             '</div>'
         )
@@ -2233,9 +2219,9 @@ def build_part3_html(task_or_items, check_result=None):
         sent_without_stem = re.sub(r"\s+" + re.escape(key) + r"\s*$", "", sent).strip() if key else sent
         segs_clean = sent_without_stem.split("_____", 1)
         if len(segs_clean) == 2:
-            out.append(f'<span class="part3-sentence">{_e(segs_clean[0])}<span class="gap-inline part3-gap{cls}"><input type="text" name="p3_{i}" value="{_e(val)}" placeholder="{i + 1}" autocomplete="off" /></span>{_e(segs_clean[1])}</span> ')
+            out.append(f'<span class="part3-sentence">{_e(segs_clean[0])}<span class="gap-inline part3-gap{cls}"><input type="text" name="p3_{i}" value="{_e(val)}" placeholder="{i + 1}" autocomplete="off" aria-label="Gap {i + 1}" /></span>{_e(segs_clean[1])}</span> ')
         else:
-            out.append(f'<span class="gap-inline part3-gap{cls}"><input type="text" name="p3_{i}" value="{_e(val)}" placeholder="{i + 1}" autocomplete="off" /></span> ')
+            out.append(f'<span class="gap-inline part3-gap{cls}"><input type="text" name="p3_{i}" value="{_e(val)}" placeholder="{i + 1}" autocomplete="off" aria-label="Gap {i + 1}" /></span> ')
         if check_result and check_result.get("details") and i < len(check_result["details"]) and not check_result["details"][i].get("correct"):
             out.append(f'<span class="correct-answer-hint">(Correct: {_e(check_result["details"][i].get("expected"))})</span> ')
         stems_right.append(f'<div class="part3-stem-row"><span class="part3-stem-num">{i + 1}.</span> <strong class="part3-stem-word">{_e(key)}</strong></div>')
@@ -2269,7 +2255,7 @@ def build_part3_html(task_or_items, check_result=None):
     return (
         '<div class="part3-layout" id="part3-layout">'
         '<div class="part3-text-col reading-text exercise cloze-text">' + left_html + '</div>'
-        '<div class="part3-resizer" id="part3-resizer" title="Drag to resize"></div>'
+        '<div class="part3-resizer split-resizer" id="part3-resizer" title="Drag to resize"></div>'
         '<div class="part3-stems-col exercise">' + right_html + '</div>'
         '</div>'
     )
@@ -2299,7 +2285,7 @@ def build_part4_html(tasks, check_result=None):
             f'<p class="uoe-sentence1"><strong>{i + 1}.</strong> {_e(t.get("sentence1"))}</p>'
             f'<p class="uoe-keyword">Use <strong>{_e(t.get("keyword"))}</strong></p>'
             f'<p class="uoe-sentence2">{s2}</p>'
-            f'<div class="gap-line"><input type="text" name="p4_{i}" value="{_e(val)}" placeholder="3–5 words" /></div>'
+            f'<div class="gap-line"><input type="text" name="p4_{i}" value="{_e(val)}" placeholder="3–5 words" aria-label="Question {i + 1} answer" /></div>'
         )
         if attempted and not detail.get("correct"):
             out.append(f'<p class="correct-answer-hint">Correct: {_e(detail.get("expected"))}</p>')
@@ -2329,13 +2315,26 @@ def build_part5_html(item, check_result=None):
         selected_val = detail.get("user_val") if detail is not None else None
         opts = "".join(
             f'<label class="part5-option">'
-            f'<input type="radio" name="p5_{i}" value="{j}"{" checked" if selected_val == j else ""} /> '
+            f'<input type="radio" name="p5_{i}" value="{j}"{" checked" if selected_val == j else ""}'
+            f' aria-label="Question {i+1} option {LETTERS[j]}" /> '
             f'<span class="part5-option-letter">{LETTERS[j]}</span>) {_e(opt)}</label>'
             for j, opt in enumerate(q.get("options", []))
         )
+        correct_hint = ""
+        explanation_html = ""
+        if detail and not detail.get("correct"):
+            correct_idx = q.get("correct", 0)
+            correct_letter = LETTERS[correct_idx] if correct_idx < len(LETTERS) else "?"
+            correct_text = q.get("options", [])[correct_idx] if correct_idx < len(q.get("options", [])) else ""
+            correct_hint = f'<p class="correct-answer-hint">Correct: {correct_letter}) {_e(correct_text)}</p>'
+        if detail:
+            exp = detail.get("explanation")
+            if exp:
+                explanation_html = f'<p class="answer-explanation">{_e(exp)}</p>'
         out.append(
             f'<div class="question-block{cls}"><p>{i + 1}. {_e(q.get("q"))}</p>'
-            f'<div class="part5-choices"><span class="part5-choose-label">Choose</span><div class="part5-options">{opts}</div></div></div>'
+            f'<div class="part5-choices"><span class="part5-choose-label">Choose</span><div class="part5-options">{opts}</div></div>'
+            f'{correct_hint}{explanation_html}</div>'
         )
     return "".join(out)
 
@@ -2346,27 +2345,42 @@ def build_part6_text(item, check_result=None):
         return "<p>No data.</p>"
     letters_g = ["A", "B", "C", "D", "E", "F", "G"]
     sentences = item.get("sentences", [])
+    answers = item.get("answers", [])
     out = []
     gap_i = 0
     for para in item.get("paragraphs", []):
         if para.startswith("GAP"):
             user_val = None
+            detail = None
             if check_result and check_result.get("details") and gap_i < len(check_result["details"]):
-                user_val = check_result["details"][gap_i].get("user_val")
+                detail = check_result["details"][gap_i]
+                user_val = detail.get("user_val")
             cls = ""
-            if check_result and check_result.get("details") and gap_i < len(check_result["details"]):
-                cls = " result-correct" if check_result["details"][gap_i].get("correct") else " result-wrong"
+            if detail:
+                cls = " result-correct" if detail.get("correct") else " result-wrong"
             try:
                 sel_idx = int(user_val) if user_val is not None else -1
             except (TypeError, ValueError):
                 sel_idx = -1
             letter = letters_g[sel_idx] if 0 <= sel_idx < len(letters_g) else "—"
             val_attr = str(sel_idx) if 0 <= sel_idx < len(letters_g) else ""
+            correct_hint = ""
+            explanation_html = ""
+            if detail and not detail.get("correct"):
+                correct_idx = answers[gap_i] if gap_i < len(answers) else -1
+                correct_letter = letters_g[correct_idx] if 0 <= correct_idx < len(letters_g) else "?"
+                correct_sentence = sentences[correct_idx][:80] if 0 <= correct_idx < len(sentences) else ""
+                correct_hint = f'<p class="correct-answer-hint">Correct: {correct_letter}) {_e(correct_sentence)}…</p>'
+            if detail:
+                exp = detail.get("explanation")
+                if exp:
+                    explanation_html = f'<p class="answer-explanation">{_e(exp)}</p>'
             out.append(
                 f'<div class="part6-gap-drop{cls}" data-gap-index="{gap_i}" data-droppable="true">'
                 f'<span class="part6-gap-label">{letter}</span>'
                 f'<button type="button" class="part6-gap-clear" title="Clear gap" aria-label="Clear gap">×</button>'
-                f'<input type="hidden" name="p6_{gap_i}" value="{val_attr}">'
+                f'<input type="hidden" name="p6_{gap_i}" value="{val_attr}" aria-label="Gap {gap_i + 1}">'
+                f'{correct_hint}{explanation_html}'
                 f'</div>'
             )
             gap_i += 1
@@ -2413,28 +2427,42 @@ def build_part7_questions(item, check_result=None):
     ids = [s["id"] for s in sections]
     out = ['<div class="part7-questions"><div class="part7-sentences">']
     for i, q in enumerate(questions):
+        detail = None
         selected_val = None
         if check_result and check_result.get("details") and i < len(check_result["details"]):
-            selected_val = check_result["details"][i].get("user_val")
+            detail = check_result["details"][i]
+            selected_val = detail.get("user_val")
         dash_checked = " checked" if (selected_val is None or selected_val == "") else ""
-        opts = '<label class="part7-letter"><input type="radio" name="p7_{}" value=""{}><span>—</span></label>'.format(i, dash_checked)
+        opts = '<label class="part7-letter"><input type="radio" name="p7_{}" value=""{} aria-label="Question {} no answer"><span>—</span></label>'.format(i, dash_checked, i + 1)
         opts += "".join(
-            f'<label class="part7-letter"><input type="radio" name="p7_{i}" value="{_e(sid)}"{" checked" if selected_val == sid else ""}><span>{_e(sid)}</span></label>'
+            f'<label class="part7-letter"><input type="radio" name="p7_{i}" value="{_e(sid)}"{" checked" if selected_val == sid else ""}'
+            f' aria-label="Question {i+1} section {_e(sid)}"><span>{_e(sid)}</span></label>'
             for sid in ids
         )
         cls = ""
-        if check_result and check_result.get("details") and i < len(check_result["details"]):
-            cls = " result-correct" if check_result["details"][i].get("correct") else " result-wrong"
+        if detail:
+            cls = " result-correct" if detail.get("correct") else " result-wrong"
+        correct_hint = ""
+        explanation_html = ""
+        if detail and not detail.get("correct"):
+            correct_section = q.get("correct", "?")
+            correct_hint = f'<p class="correct-answer-hint">Correct: {_e(correct_section)}</p>'
+        if detail:
+            exp = detail.get("explanation")
+            if exp:
+                explanation_html = f'<p class="answer-explanation">{_e(exp)}</p>'
         out.append(
             f'<div class="question-block{cls}"><p>{i + 1}. {_e(q.get("text"))}</p>'
-            f'<div class="part7-choose"><span class="part7-choose-label">Choose</span><div class="part7-letters">{opts}</div></div></div>'
+            f'<div class="part7-choose"><span class="part7-choose-label">Choose</span><div class="part7-letters">{opts}</div></div>'
+            f'{correct_hint}{explanation_html}</div>'
         )
     out.append("</div></div>")
     return "".join(out)
 
 
 def check_part1(data, form):
-    item = session.get("part1_task")
+    task_id = session.get("part1_task_id")
+    item = get_part1_task_by_id(task_id) if task_id else session.get("part1_task")
     if not item or not item.get("gaps"):
         return None
     details = []
@@ -2517,15 +2545,18 @@ def check_part3(data, form):
     for i, data in enumerate(explanations_data):
         if i < len(result["details"]):
             if data.get("explanation"):
-                result["details"][i]["explanation"] = (str(data["explanation"])[:400]).strip()
+                result["details"][i]["explanation"] = str(data["explanation"])[:MAX_EXPLANATION_LEN].strip()
             if data.get("word_family"):
-                result["details"][i]["word_family"] = (str(data["word_family"])[:200]).strip()
+                result["details"][i]["word_family"] = str(data["word_family"])[:MAX_WORD_FAMILY_LEN].strip()
     return result
 
 
 def check_part4(data, form):
-    raw = session.get("part4_tasks")
-    tasks = list(raw) if isinstance(raw, list) else []
+    if session.get("part4_task_ids"):
+        tasks = get_tasks_by_ids(session["part4_task_ids"])
+    else:
+        raw = session.get("part4_tasks")
+        tasks = list(raw) if isinstance(raw, list) else []
     if not tasks:
         return None
     details = []
@@ -2569,7 +2600,12 @@ def check_part5(data, form):
         if correct:
             score += 1
         details.append({"correct": correct, "user_val": user_int})
-    return {"part": 5, "score": score, "total": len(item["questions"]), "details": details}
+    result = {"part": 5, "score": score, "total": len(item["questions"]), "details": details}
+    explanations = fetch_explanations_part5(item, details)
+    for i, exp in enumerate(explanations):
+        if i < len(result["details"]) and exp:
+            result["details"][i]["explanation"] = str(exp)[:MAX_EXPLANATION_LEN].strip()
+    return result
 
 
 def check_part6(data, form):
@@ -2589,7 +2625,12 @@ def check_part6(data, form):
         if correct:
             score += 1
         details.append({"correct": correct, "user_val": user_int})
-    return {"part": 6, "score": score, "total": 6, "details": details}
+    result = {"part": 6, "score": score, "total": 6, "details": details}
+    explanations = fetch_explanations_part6(item, details)
+    for i, exp in enumerate(explanations):
+        if i < len(result["details"]) and exp:
+            result["details"][i]["explanation"] = str(exp)[:MAX_EXPLANATION_LEN].strip()
+    return result
 
 
 def check_part7(data, form):
@@ -2609,7 +2650,12 @@ def check_part7(data, form):
         if correct:
             score += 1
         details.append({"correct": correct, "user_val": user_val})
-    return {"part": 7, "score": score, "total": len(item["questions"]), "details": details}
+    result = {"part": 7, "score": score, "total": len(item["questions"]), "details": details}
+    explanations = fetch_explanations_part7(item, details)
+    for i, exp in enumerate(explanations):
+        if i < len(result["details"]) and exp:
+            result["details"][i]["explanation"] = str(exp)[:MAX_EXPLANATION_LEN].strip()
+    return result
 
 
 def _record_check_result(result):
@@ -2617,16 +2663,15 @@ def _record_check_result(result):
     part = result.get("part")
     score = result.get("score", 0)
     total = result.get("total", 0)
-    if part not in range(1, 8) or total <= 0:
+    if part not in PARTS_RANGE or total <= 0:
         return
     user_id = session.get("user_id")
-    conn = get_db()
-    conn.execute(
-        "INSERT INTO check_history (part, score, total, user_id, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
-        (part, score, total, user_id),
-    )
-    conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        conn.execute(
+            "INSERT INTO check_history (part, score, total, user_id, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
+            (part, score, total, user_id),
+        )
+        conn.commit()
 
 
 def get_part_stats(user_id=None):
@@ -2634,21 +2679,20 @@ def get_part_stats(user_id=None):
     If user_id is None, uses session user_id (so stats are for current user or anonymous)."""
     if user_id is None:
         user_id = session.get("user_id")
-    conn = get_db()
-    if user_id is None:
-        cur = conn.execute(
-            "SELECT part, SUM(score) AS total_correct, SUM(total) AS total_questions, COUNT(*) AS attempts, MAX(created_at) AS last_attempt_at FROM check_history WHERE user_id IS NULL GROUP BY part"
-        )
-    else:
-        cur = conn.execute(
-            "SELECT part, SUM(score) AS total_correct, SUM(total) AS total_questions, COUNT(*) AS attempts, MAX(created_at) AS last_attempt_at FROM check_history WHERE user_id = ? GROUP BY part",
-            (user_id,),
-        )
-    rows = cur.fetchall()
-    conn.close()
+    with db_connection() as conn:
+        if user_id is None:
+            cur = conn.execute(
+                "SELECT part, SUM(score) AS total_correct, SUM(total) AS total_questions, COUNT(*) AS attempts, MAX(created_at) AS last_attempt_at FROM check_history WHERE user_id IS NULL GROUP BY part"
+            )
+        else:
+            cur = conn.execute(
+                "SELECT part, SUM(score) AS total_correct, SUM(total) AS total_questions, COUNT(*) AS attempts, MAX(created_at) AS last_attempt_at FROM check_history WHERE user_id = ? GROUP BY part",
+                (user_id,),
+            )
+        rows = cur.fetchall()
     stats_by_part = {r["part"]: r for r in rows}
     out = []
-    for part in range(1, 8):
+    for part in PARTS_RANGE:
         row = stats_by_part.get(part)
         if not row or not row["total_questions"]:
             out.append({"part": part, "total_correct": 0, "total_wrong": 0, "total_questions": 0, "attempts": 0, "percent": None, "last_attempt_at": None, "last_attempt_at_display": None})
@@ -2657,11 +2701,11 @@ def get_part_stats(user_id=None):
             total_questions = row["total_questions"] or 0
             total_wrong = total_questions - total_correct
             percent = round(100 * total_correct / total_questions, 1) if total_questions else None
-            raw_at = row["last_attempt_at"] if row.get("last_attempt_at") else None
+            raw_at = row["last_attempt_at"] if row["last_attempt_at"] else None
             try:
                 dt = datetime.strptime(raw_at[:19], "%Y-%m-%d %H:%M:%S") if raw_at and len(raw_at) >= 19 else None
                 last_display = dt.strftime("%d %b %Y, %H:%M") if dt else None
-            except Exception:
+            except (ValueError, TypeError):
                 last_display = raw_at[:16] if raw_at else None
             out.append({
                 "part": part,
@@ -2678,21 +2722,18 @@ def get_part_stats(user_id=None):
 
 def _find_or_create_user(google_id, email=None, name=None):
     """Get user id by google_id, or create user and return id."""
-    conn = get_db()
-    cur = conn.execute("SELECT id FROM users WHERE google_id = ?", (google_id,))
-    row = cur.fetchone()
-    if row:
-        conn.close()
-        return row["id"]
-    conn.execute(
-        "INSERT INTO users (google_id, email, name) VALUES (?, ?, ?)",
-        (google_id, email or "", name or ""),
-    )
-    cur = conn.execute("SELECT last_insert_rowid() AS id")
-    uid = cur.fetchone()["id"]
-    conn.commit()
-    conn.close()
-    return uid
+    with db_connection() as conn:
+        cur = conn.execute("SELECT id FROM users WHERE google_id = ?", (google_id,))
+        row = cur.fetchone()
+        if row:
+            return row["id"]
+        cur = conn.execute(
+            "INSERT INTO users (google_id, email, name) VALUES (?, ?, ?)",
+            (google_id, email or "", name or ""),
+        )
+        uid = cur.lastrowid
+        conn.commit()
+        return uid
 
 
 CHECKERS = {
@@ -2726,6 +2767,12 @@ def _ensure_part_task(part, exclude_task_id=None):
             session[key] = tid
     tid = session.get(key)
     return (get_by_id(tid) if tid else None, tid)
+
+
+@app.route("/health")
+def health():
+    """Health check for monitoring / load balancers."""
+    return {"status": "ok"}, 200
 
 
 @app.route("/")
@@ -2769,8 +2816,8 @@ def login_callback():
                     session["user_id"] = uid
                     session["user_email"] = email
                     session["user_name"] = name
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("OAuth callback error")
     return redirect(url_for("home"))
 
 
@@ -2781,116 +2828,219 @@ def logout():
     return redirect(url_for("home"))
 
 
+_GENERATE_CONFIG = {
+    1: {"fn": lambda level: generate_part1_with_openai(level=level), "session_key": "part1_task_id", "default_level": "b2", "extra_cleanup": ["part1_task"]},
+    2: {"fn": lambda level: _generate_part2_with_openai(level=level), "session_key": "part2_task_id", "default_level": "b2"},
+    3: {"fn": lambda level: generate_part3_with_openai(level=level), "session_key": "part3_task_id", "default_level": "b2"},
+    5: {"fn": lambda level: _generate_part5_with_openai(), "session_key": "part5_task_id", "default_level": "b2"},
+    6: {"fn": lambda level: _generate_part6_with_openai(), "session_key": "part6_task_id", "default_level": "b2"},
+    7: {"fn": lambda level: _generate_part7_with_openai(), "session_key": "part7_task_id", "default_level": "b2"},
+}
+
+_PART_ERROR_MSGS = {
+    1: "No tasks available. Set OPENAI_API_KEY to generate new tasks (database is seeded with 2 sample tasks).",
+    2: "No Part 2 tasks in database. Set OPENAI_API_KEY to generate new open cloze texts.",
+    3: "No Part 3 tasks available. Set OPENAI_API_KEY to generate new word-formation texts (150-200 words, 8 gaps).",
+    5: "No Part 5 tasks in database. Set OPENAI_API_KEY to generate new texts and questions.",
+    6: "No Part 6 tasks in database. Set OPENAI_API_KEY to generate new gapped texts.",
+    7: "No Part 7 tasks in database. Set OPENAI_API_KEY to generate new multiple-matching texts (600-700 words, 10 questions).",
+}
+
+
+def _handle_generate_action(action):
+    """Handle generate_partN POST actions. Returns redirect Response or None."""
+    for part_num, cfg in _GENERATE_CONFIG.items():
+        if action != f"generate_part{part_num}":
+            continue
+        default_level = cfg["default_level"]
+        level = (request.form.get("level") or default_level).strip().lower()
+        if level not in ("b2", "b2plus"):
+            level = default_level
+        if part_num == 4:
+            return None
+        item = cfg["fn"](level)
+        if item and item.get("id"):
+            session[cfg["session_key"]] = item["id"]
+            for key in cfg.get("extra_cleanup", []):
+                session.pop(key, None)
+            session.pop("check_result", None)
+            params = {"part": part_num, f"part{part_num}_generated": 1}
+            if part_num in (1, 2, 3):
+                params[f"part{part_num}_level"] = level
+            return redirect(url_for("use_of_english", **params))
+        return redirect(url_for("use_of_english", part=part_num))
+    if action == "generate_part4":
+        level = (request.form.get("level") or "b2plus").strip().lower()
+        if level not in ("b2", "b2plus"):
+            level = "b2plus"
+        generated = _generate_tasks_with_openai(
+            PART4_TASKS_PER_SET,
+            level=level,
+            recent_grammar_topics=get_recent_grammar_topics(15),
+        )
+        if generated:
+            session["part4_task_ids"] = [t["id"] for t in generated]
+            session.pop("part4_tasks", None)
+            session.pop("check_result", None)
+        return redirect(url_for("use_of_english", part=4, part4_generated=len(generated) if generated else 0, part4_level=level))
+    return None
+
+
+def _handle_check_action(form):
+    """Handle answer checking POST. Returns redirect Response."""
+    part = form.get("part", type=int)
+    switch_to_part = form.get("switch_to_part", type=int)
+    if part not in PARTS_RANGE:
+        return redirect(url_for("use_of_english", part=1))
+    if switch_to_part in PARTS_RANGE:
+        return redirect(url_for("use_of_english", part=switch_to_part))
+    checker = CHECKERS.get(part)
+    if not checker:
+        return redirect(url_for("use_of_english", part=part))
+    result = checker(None, form)
+    if result:
+        _record_check_result(result)
+        part_checked = result.get("part")
+        if part_checked and part_checked in PARTS_RANGE:
+            parts_checked = session.get("parts_checked") or []
+            if part_checked not in parts_checked:
+                session["parts_checked"] = parts_checked + [part_checked]
+        if len(_CHECK_RESULT_CACHE) >= _CHECK_RESULT_CACHE_MAX:
+            _CHECK_RESULT_CACHE.pop(next(iter(_CHECK_RESULT_CACHE)))
+        token = uuid.uuid4().hex
+        _CHECK_RESULT_CACHE[token] = result
+        return redirect(url_for("use_of_english", part=part, check_result_token=token))
+    return redirect(url_for("use_of_english", part=part))
+
+
+def _handle_next(current_part):
+    """Handle ?next=1 — advance to next task for current_part."""
+    _inc_idx(current_part)
+    if current_part == 1:
+        task = get_or_create_part1_task()
+        if task and task.get("id"):
+            session["part1_task_id"] = task["id"]
+            session.pop("part1_task", None)
+    elif current_part == 4:
+        p4 = fetch_part4_tasks(level="b2plus", db_only=bool(session.get("part4_db_only")))
+        session["part4_task_ids"] = [t["id"] for t in p4] if p4 else []
+        session.pop("part4_tasks", None)
+    if current_part in _PART_TASK_CONFIG:
+        key, get_or_create, _get_by_id = _PART_TASK_CONFIG[current_part]
+        current_tid = session.get(key)
+        _, tid = get_or_create(exclude_task_id=current_tid)
+        if tid:
+            session[key] = tid
+    session.pop("check_result", None)
+    return redirect(url_for("use_of_english", part=current_part))
+
+
+def _load_part_items(current_part):
+    """Load task items for all parts (only generate/call OpenAI for current_part)."""
+    items = {}
+    # Part 1
+    if current_part == 1 and not session.get("part1_task_id") and not session.get("part1_task"):
+        task = get_or_create_part1_task()
+        if task and task.get("id"):
+            session["part1_task_id"] = task["id"]
+            session.pop("part1_task", None)
+    if session.get("part1_task_id"):
+        items[1] = get_part1_task_by_id(session["part1_task_id"])
+    elif session.get("part1_task"):
+        items[1] = session.get("part1_task")
+    # Parts 2, 3, 5, 6, 7 — generate only for current part
+    for p in (2, 3, 5, 6, 7):
+        if current_part == p:
+            item, _ = _ensure_part_task(p)
+            items[p] = item
+        else:
+            tid = session.get(f"part{p}_task_id")
+            items[p] = get_task_by_id_for_part(p, tid) if tid else None
+    # Part 4
+    if current_part == 4 and not session.get("part4_task_ids") and not session.get("part4_tasks"):
+        p4 = fetch_part4_tasks(level="b2plus", db_only=bool(session.get("part4_db_only")))
+        if p4:
+            session["part4_task_ids"] = [t["id"] for t in p4]
+            session.pop("part4_tasks", None)
+    if session.get("part4_task_ids"):
+        items[4] = get_tasks_by_ids(session["part4_task_ids"])
+    elif session.get("part4_tasks"):
+        items[4] = session.get("part4_tasks")
+    else:
+        items[4] = None
+    return items
+
+
+def _build_template_context(current_part, check_result, items):
+    """Build the full template context dict for render_template."""
+    cr = check_result if check_result and check_result.get("part") == current_part else None
+
+    errors = {}
+    for p, msg in _PART_ERROR_MSGS.items():
+        if current_part == p and not items.get(p):
+            errors[p] = msg
+    if current_part == 4 and not items.get(4):
+        errors[4] = ("No Part 4 tasks in database. Generate tasks or turn off 'Database only'."
+                      if session.get("part4_db_only")
+                      else "No tasks in database. Set OPENAI_API_KEY to generate new tasks.")
+
+    ctx = {"current_part": current_part, "check_result": check_result}
+
+    ctx["part1_html"] = build_part1_html(items.get(1), cr if current_part == 1 else None) if 1 not in errors else ""
+    ctx["part1_error"] = errors.get(1)
+    ctx["part2_html"] = build_part2_html(items.get(2), cr if current_part == 2 else None)
+    ctx["part2_error"] = errors.get(2)
+    ctx["part3_html"] = build_part3_html(items.get(3) or [], cr if current_part == 3 else None)
+    ctx["part3_error"] = errors.get(3)
+    ctx["part4_html"] = build_part4_html(items.get(4) or [], cr if current_part == 4 else None) if 4 not in errors else ""
+    ctx["part4_error"] = errors.get(4)
+    ctx["part4_db_only"] = bool(session.get("part4_db_only"))
+    ctx["part5_text"] = build_part5_text(items.get(5)) if 5 not in errors else ""
+    ctx["part5_html"] = build_part5_html(items.get(5), cr if current_part == 5 else None) if 5 not in errors else ""
+    ctx["part5_error"] = errors.get(5)
+    ctx["part6_text"] = build_part6_text(items.get(6), cr if current_part == 6 else None) if 6 not in errors else ""
+    ctx["part6_questions"] = build_part6_questions(items.get(6)) if 6 not in errors else ""
+    ctx["part6_error"] = errors.get(6)
+    ctx["part7_text"] = build_part7_text(items.get(7)) if items.get(7) else ""
+    ctx["part7_questions"] = build_part7_questions(items.get(7), cr if current_part == 7 else None) if items.get(7) else ""
+    ctx["part7_error"] = errors.get(7)
+
+    for p in (1, 2, 3, 4, 5, 6, 7):
+        ctx[f"part{p}_generated"] = request.args.get(f"part{p}_generated", type=int)
+    for p in (1, 2, 3, 4):
+        ctx[f"part{p}_level"] = request.args.get(f"part{p}_level") or ""
+
+    part_stats = get_part_stats()
+    ctx["current_part_stats"] = part_stats[current_part - 1] if part_stats else None
+    parts_checked = session.get("parts_checked") or []
+    ctx["parts_done"] = [p in parts_checked for p in PARTS_RANGE]
+    ctx["part_counts"] = [PART_QUESTION_COUNTS[p] for p in PARTS_RANGE]
+
+    return ctx
+
+
 @app.route("/use-of-english", methods=["GET", "POST"])
 def use_of_english():
     if request.method == "POST":
-        import traceback
         try:
-            if request.form.get("action") == "generate_part1":
-                level = (request.form.get("level") or "b2").strip().lower()
-                if level not in ("b2", "b2plus"):
-                    level = "b2"
-                task = generate_part1_with_openai(level=level)
-                if task:
-                    session["part1_task"] = task
-                    session.pop("check_result", None)
-                    return redirect(url_for("use_of_english", part=1, part1_generated=1, part1_level=level))
-                return redirect(url_for("use_of_english", part=1))
-            if request.form.get("action") == "generate_part4":
-                level = (request.form.get("level") or "b2plus").strip().lower()
-                if level not in ("b2", "b2plus"):
-                    level = "b2plus"
-                generated = _generate_tasks_with_openai(
-                    PART4_TASKS_PER_SET,
-                    level=level,
-                    recent_grammar_topics=get_recent_grammar_topics(15),
-                )
-                task_list = [{"sentence1": t["sentence1"], "keyword": t["keyword"], "sentence2": t["sentence2"], "answer": t["answer"]} for t in generated]
-                if task_list:
-                    session["part4_tasks"] = task_list
-                    session.pop("check_result", None)
-                return redirect(url_for("use_of_english", part=4, part4_generated=len(task_list), part4_level=level))
-            if request.form.get("action") == "generate_part2":
-                level = (request.form.get("level") or "b2").strip().lower()
-                if level not in ("b2", "b2plus"):
-                    level = "b2"
-                item = _generate_part2_with_openai(level=level)
-                if item:
-                    conn = get_db()
-                    cur = conn.execute("SELECT id FROM part2_tasks ORDER BY id DESC LIMIT 1")
-                    row = cur.fetchone()
-                    conn.close()
-                    if row:
-                        session["part2_task_id"] = row["id"]
-                        session.pop("check_result", None)
-                    return redirect(url_for("use_of_english", part=2, part2_generated=1, part2_level=level))
-            if request.form.get("action") == "generate_part3":
-                level = (request.form.get("level") or "b2").strip().lower()
-                if level not in ("b2", "b2plus"):
-                    level = "b2"
-                task = generate_part3_with_openai(level=level)
-                if task:
-                    conn = get_db()
-                    cur = conn.execute("SELECT id FROM part3_tasks ORDER BY id DESC LIMIT 1")
-                    row = cur.fetchone()
-                    conn.close()
-                    if row:
-                        session["part3_task_id"] = row["id"]
-                        session.pop("check_result", None)
-                    return redirect(url_for("use_of_english", part=3, part3_generated=1, part3_level=level))
-                return redirect(url_for("use_of_english", part=3))
-            part = request.form.get("part", type=int)
-            switch_to_part = request.form.get("switch_to_part", type=int)
-            if part not in range(1, 8):
-                return redirect(url_for("use_of_english", part=1))
-            # Switching part: redirect immediately without running the checker (no delay)
-            if switch_to_part in range(1, 8):
-                return redirect(url_for("use_of_english", part=switch_to_part))
-            checker = CHECKERS.get(part)
-            if not checker:
-                return redirect(url_for("use_of_english", part=part))
-            result = checker(None, request.form)
-            if result:
-                _record_check_result(result)
-                part_checked = result.get("part")
-                if part_checked and part_checked in range(1, 8):
-                    parts_checked = session.get("parts_checked") or []
-                    if part_checked not in parts_checked:
-                        session["parts_checked"] = parts_checked + [part_checked]
-                # Store result in server-side cache to avoid session cookie overflow (~4KB limit)
-                if len(_CHECK_RESULT_CACHE) >= _CHECK_RESULT_CACHE_MAX:
-                    _CHECK_RESULT_CACHE.pop(next(iter(_CHECK_RESULT_CACHE)))
-                token = uuid.uuid4().hex
-                _CHECK_RESULT_CACHE[token] = result
-                return redirect(url_for("use_of_english", part=part, check_result_token=token))
-            return redirect(url_for("use_of_english", part=part))
-        except Exception as e:
-            traceback.print_exc()
+            action = request.form.get("action") or ""
+            if action.startswith("generate_part"):
+                result = _handle_generate_action(action)
+                if result:
+                    return result
+            return _handle_check_action(request.form)
+        except Exception:
+            logger.exception("Error handling POST in use_of_english")
             raise
 
     current_part = request.args.get("part", type=int, default=1)
-    if current_part not in range(1, 8):
+    if current_part not in PARTS_RANGE:
         current_part = 1
-    # Part 4: toggle "database only" mode via ?part4_db_only=1 or 0
     if "part4_db_only" in request.args:
         session["part4_db_only"] = request.args.get("part4_db_only", "").strip().lower() in ("1", "true", "on", "yes")
-    next_ = request.args.get("next", type=int, default=0)
+    if request.args.get("next", type=int, default=0):
+        return _handle_next(current_part)
 
-    if next_:
-        _inc_idx(current_part)
-        if current_part == 1:
-            session["part1_task"] = get_or_create_part1_task()
-        if current_part == 4:
-            session["part4_tasks"] = fetch_part4_tasks(level="b2plus", db_only=bool(session.get("part4_db_only")))
-        if current_part in _PART_TASK_CONFIG:
-            key = _PART_TASK_CONFIG[current_part][0]
-            current_tid = session.get(key)
-            _, tid = _ensure_part_task(current_part, exclude_task_id=current_tid)
-            session[key] = tid
-        session.pop("check_result", None)
-        return redirect(url_for("use_of_english", part=current_part))
-
-    # Prefer check result from URL token (server-side cache) to avoid cookie size limit
     check_result = None
     token = request.args.get("check_result_token")
     if token and token in _CHECK_RESULT_CACHE:
@@ -2898,119 +3048,99 @@ def use_of_english():
     if check_result is None:
         check_result = session.pop("check_result", None)
 
-    # Load part data (Part 1 from DB + OpenAI, repeat once in 100)
-    if current_part == 1 and not session.get("part1_task"):
-        session["part1_task"] = get_or_create_part1_task()
-    part1_item = session.get("part1_task")
+    items = _load_part_items(current_part)
+    ctx = _build_template_context(current_part, check_result, items)
+    return render_template("index.html", **ctx)
 
-    part2_item, _ = _ensure_part_task(2)
-    part3_item, _ = _ensure_part_task(3)
-    part3_items_fallback = []
-    part5_item, _ = _ensure_part_task(5)
-    part6_item, _ = _ensure_part_task(6)
-    part7_item, _ = _ensure_part_task(7)
 
-    if current_part == 4 and not session.get("part4_tasks"):
-        session["part4_tasks"] = fetch_part4_tasks(
-            level="b2plus",
-            db_only=bool(session.get("part4_db_only")),
-        )
-    part4_tasks = session.get("part4_tasks")
-    part4_error = None
-    if current_part == 4 and not part4_tasks:
-        part4_error = "No tasks in database. Set OPENAI_API_KEY to generate new tasks." if not session.get("part4_db_only") else "No Part 4 tasks in database. Generate tasks or turn off 'Database only'."
-    part4_generated = request.args.get("part4_generated", type=int)
-    part4_level = request.args.get("part4_level") or ""
-    part4_db_only = bool(session.get("part4_db_only"))
+# --- Writing (FCE B2 First, Inspera-style: 1h 20min, 140–190 words per task) ---
+WRITING_MIN_WORDS = 140
+WRITING_MAX_WORDS = 190
+WRITING_TOTAL_MINUTES = 80  # 1 hour 20 minutes
 
-    part2_error = None
-    if current_part == 2 and not part2_item:
-        part2_error = "No Part 2 tasks in database. Set OPENAI_API_KEY to generate new open cloze texts."
-    part1_generated = request.args.get("part1_generated", type=int)
-    part1_level = request.args.get("part1_level") or ""
-    part2_generated = request.args.get("part2_generated", type=int)
-    part2_level = request.args.get("part2_level") or ""
-    part3_generated = request.args.get("part3_generated", type=int)
-    part3_level = request.args.get("part3_level") or ""
+# Sample Part 1 essay prompts (compulsory: discuss two points + one idea of your own)
+WRITING_ESSAY_PROMPTS = [
+    {
+        "question": "In your English class you have been talking about different ways of travelling. Now your teacher has asked you to write an essay.",
+        "points": [
+            "Why people like to visit other countries",
+            "Whether it is better to travel alone or with other people",
+        ],
+        "notes": "Write about 140–190 words. Write the essay using all the notes and give reasons for your point of view.",
+    },
+    {
+        "question": "In your English class you have been talking about the environment. Now your teacher has asked you to write an essay.",
+        "points": [
+            "Why many people prefer to use their car instead of public transport",
+            "How we can encourage people to use public transport more",
+        ],
+        "notes": "Write about 140–190 words. Write the essay using all the notes and give reasons for your point of view.",
+    },
+    {
+        "question": "In your English class you have been talking about where people live. Now your teacher has asked you to write an essay.",
+        "points": [
+            "Why some people prefer to live in a city",
+            "Why some people prefer to live in the countryside",
+        ],
+        "notes": "Write about 140–190 words. Write the essay using all the notes and give reasons for your point of view.",
+    },
+]
 
-    part5_error = None
-    if current_part == 5 and not part5_item:
-        part5_error = "No Part 5 tasks in database. Set OPENAI_API_KEY to generate new texts and questions."
+# Sample Part 2 tasks (choose one: article, letter/email, report, review)
+WRITING_PART2_OPTIONS = [
+    {
+        "id": "a",
+        "type": "Article",
+        "task": "You see this announcement in an international magazine.",
+        "prompt": """TRAVEL STORIES WANTED
 
-    part6_error = None
-    if current_part == 6 and not part6_item:
-        part6_error = "No Part 6 tasks in database. Set OPENAI_API_KEY to generate new gapped texts."
+We want to hear about a journey you have made. It could be a short trip or a longer adventure.
 
-    part7_error = None
-    if current_part == 7 and not part7_item:
-        part7_error = "No Part 7 tasks in database. Set OPENAI_API_KEY to generate new multiple-matching texts (600-700 words, 10 questions)."
+Write an article about your journey. Describe where you went, what you did and why you enjoyed it.
 
-    part3_error = None
-    if current_part == 3 and not (part3_item or part3_items_fallback):
-        part3_error = "No Part 3 tasks available. Set OPENAI_API_KEY to generate new word-formation texts (150-200 words, 8 gaps)."
+Write your article in 140–190 words.""",
+    },
+    {
+        "id": "b",
+        "type": "Letter / email",
+        "task": "You have received an email from your English-speaking friend, Sam, who is planning to stay in your country for a month.",
+        "prompt": """From: Sam
+Subject: Visit
 
-    part_stats = get_part_stats()
-    current_part_stats = part_stats[current_part - 1] if part_stats else None
+I'm really excited about my trip. Can you tell me what the weather will be like when I'm there? And what should I pack? Also, I'd love to try some typical food – what do you recommend?
 
-    parts_checked = session.get("parts_checked") or []
-    parts_done = [p in parts_checked for p in range(1, 8)]
-    part_counts = [8, 8, 8, 6, 6, 6, 10]
+Thanks!
+Sam
 
-    cr = check_result if check_result and check_result.get("part") == current_part else None
+Write your email in 140–190 words. You must use the following words: recommend, weather, pack.""",
+    },
+    {
+        "id": "c",
+        "type": "Report",
+        "task": "Your teacher has asked you to write a report on facilities for young people in your town or city.",
+        "prompt": """The report should mention:
+• what sports facilities exist
+• what other leisure facilities exist
+• how these could be improved
 
-    part1_error = None
-    if current_part == 1 and part1_item is None:
-        part1_error = "No tasks available. Set OPENAI_API_KEY to generate new tasks (database is seeded with 2 sample tasks)."
-    part1_html = build_part1_html(part1_item, cr if current_part == 1 else None) if not part1_error else ""
-    part2_html = build_part2_html(part2_item, cr if current_part == 2 else None)
-    part3_html = build_part3_html(part3_item or part3_items_fallback, cr if current_part == 3 else None)
-    part4_html = build_part4_html(part4_tasks or [], cr if current_part == 4 else None) if not part4_error else ""
-    part5_text = build_part5_text(part5_item) if not part5_error else ""
-    part5_html = build_part5_html(part5_item, cr if current_part == 5 else None) if not part5_error else ""
-    part6_text = build_part6_text(part6_item, cr if current_part == 6 else None) if not part6_error else ""
-    part6_questions = build_part6_questions(part6_item) if not part6_error else ""
-    part7_text = build_part7_text(part7_item) if part7_item else ""
-    part7_questions = build_part7_questions(part7_item, cr if current_part == 7 else None) if part7_item else ""
-
-    return render_template(
-        "index.html",
-        current_part=current_part,
-        part1_html=part1_html,
-        part1_error=part1_error,
-        part1_generated=part1_generated,
-        part1_level=part1_level,
-        part2_html=part2_html,
-        part2_error=part2_error,
-        part2_generated=part2_generated,
-        part2_level=part2_level,
-        part3_html=part3_html,
-        part3_error=part3_error,
-        part3_generated=part3_generated,
-        part3_level=part3_level,
-        part4_html=part4_html,
-        part4_db_only=part4_db_only,
-        part4_error=part4_error,
-        part4_generated=part4_generated,
-        part4_level=part4_level,
-        part5_text=part5_text,
-        part5_html=part5_html,
-        part5_error=part5_error,
-        part6_text=part6_text,
-        part6_questions=part6_questions,
-        part6_error=part6_error,
-        part7_text=part7_text,
-        part7_questions=part7_questions,
-        part7_error=part7_error,
-        check_result=check_result,
-        current_part_stats=current_part_stats,
-        parts_done=parts_done,
-        part_counts=part_counts,
-    )
+Write your report in 140–190 words.""",
+    },
+]
 
 
 @app.route("/writing")
 def writing():
-    return render_template("writing.html")
+    essay = random.choice(WRITING_ESSAY_PROMPTS)
+    part2_options = list(WRITING_PART2_OPTIONS)
+    random.shuffle(part2_options)  # vary order of A/B/C
+    return render_template(
+        "writing.html",
+        essay_prompt=essay,
+        part2_options=part2_options,
+        word_min=WRITING_MIN_WORDS,
+        word_max=WRITING_MAX_WORDS,
+        total_minutes=WRITING_TOTAL_MINUTES,
+    )
 
 
 if __name__ == "__main__":
@@ -3018,7 +3148,7 @@ if __name__ == "__main__":
     _ensure_uoe_grammar_topic_column()
     _ensure_check_history_user_id()
     seed_db()
-    print(f"FCE Trainer at http://localhost:{PORT}")
-    print("OpenAI:", "configured" if openai_api_key else "not set")
+    logger.info("FCE Trainer at http://localhost:%s", PORT)
+    logger.info("OpenAI: %s", "configured" if openai_api_key else "not set")
     debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
     app.run(host="0.0.0.0", port=PORT, debug=debug)
