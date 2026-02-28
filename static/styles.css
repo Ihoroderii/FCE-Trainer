@@ -1517,9 +1517,101 @@ body.minimal-layout {
 }
 
 .home-subtitle {
-  margin: 0 0 2rem;
+  margin: 0 0 1.5rem;
   font-size: 1rem;
   color: var(--ink-muted);
+}
+
+.home-mode-choice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.home-mode-card {
+  display: block;
+  padding: 1.5rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--ink);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.home-mode-card:hover {
+  border-color: var(--accent);
+  background: rgba(0, 102, 204, 0.04);
+}
+
+.home-mode-mock-disabled {
+  opacity: 0.85;
+}
+
+.home-mode-mock-disabled:hover {
+  border-color: var(--ink-muted);
+  background: transparent;
+}
+
+.home-mode-icon {
+  font-size: 1.75rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.home-mode-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.home-mode-desc {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+.home-mode-cta {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.home-mode-cta-muted {
+  color: var(--ink-muted);
+}
+
+.home-mode-card:hover .home-mode-cta:not(.home-mode-cta-muted) {
+  text-decoration: underline;
+}
+
+.home-proctor-alert {
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  background: rgba(230, 126, 34, 0.12);
+  border: 1px solid rgba(230, 126, 34, 0.4);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--ink);
+  text-align: left;
+}
+
+.home-proctor-alert code {
+  background: var(--card-bg);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.home-sections-heading {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: left;
 }
 
 .home-account {
@@ -1590,6 +1682,9 @@ body.minimal-layout {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  margin-top: 0.5rem;
+  margin-bottom: 2rem;
+  text-align: left;
 }
 
 .home-section-card {
@@ -1902,6 +1997,59 @@ body.minimal-layout {
   text-decoration: underline;
 }
 
+/* Mock exam intro page */
+.mock-exam-page {
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: left;
+  padding: 0.5rem 0 2rem;
+}
+
+.mock-exam-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.mock-exam-intro,
+.mock-exam-desc {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.btn-mock-start {
+  display: inline-block;
+  padding: 0.6rem 1.25rem;
+  margin: 0.5rem 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.btn-mock-start:hover {
+  background: var(--accent-hover);
+}
+
+.mock-exam-back {
+  margin: 1rem 0 0;
+  font-size: 0.95rem;
+}
+
+.mock-exam-back a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.mock-exam-back a:hover {
+  text-decoration: underline;
+}
+
 /* ----- Responsive ----- */
 @media (max-width: 900px) {
   .part3-layout {
@@ -2041,4 +2189,13 @@ html.dark-mode .writing-textarea {
 html.dark-mode .writing-option-btn[aria-expanded="true"] {
   background: var(--accent);
   color: #fff;
+}
+
+html.dark-mode .home-proctor-alert {
+  background: rgba(230, 126, 34, 0.15);
+  border-color: rgba(230, 126, 34, 0.35);
+}
+
+html.dark-mode .home-proctor-alert code {
+  background: #252525;
 }

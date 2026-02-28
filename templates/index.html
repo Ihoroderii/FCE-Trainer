@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% if csrf_expired %}
+<div class="feedback error" role="alert">Your session or form expired. The page was reloaded with a fresh form — please submit your answers again.</div>
+{% endif %}
 {% macro csrf_input() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endmacro %}
 {% macro generate_buttons(action_name, label, show_b2plus=true) %}
 <div class="part2-generate-row">

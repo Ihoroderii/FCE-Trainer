@@ -16,6 +16,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask, redirect, render_template, request, session, url_for
+
+try:
+    from proctor_loader import is_configured as proctor_is_configured, get_config as proctor_get_config
+except ImportError:
+    def proctor_is_configured():
+        return False
+
+    def proctor_get_config():
+        return {"enabled": False, "name": "Proctor"}
+
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 from flask_wtf.csrf import CSRFProtect
@@ -48,6 +58,25 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 if os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes"):
     app.config["SESSION_COOKIE_SECURE"] = True
 CSRFProtect(app)
+# Avoid CSRF token expiring while the user has the page open (e.g. long Part 3 session)
+app.config["WTF_CSRF_TIME_LIMIT"] = None
+
+
+@app.errorhandler(400)
+def handle_bad_request(err):
+    """On CSRF expiry (or other 400), send user back to the form with a fresh token instead of a blank 400."""
+    if request.method == "POST" and request.referrer and "/use-of-english" in request.referrer:
+        from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+        parsed = urlparse(request.referrer)
+        qs = parse_qs(parsed.query)
+        qs["csrf_expired"] = ["1"]
+        new_query = urlencode(qs, doseq=True)
+        return redirect(urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", new_query, "")))
+    part = request.form.get("part", type=int, default=0) or request.args.get("part", type=int, default=1)
+    if part not in PARTS_RANGE:
+        part = 1
+    return redirect(url_for("use_of_english", part=part, csrf_expired=1))
+
 
 # Google OAuth (optional: set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env)
 app.config["GOOGLE_OAUTH_CLIENT_ID"] = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
@@ -2785,6 +2814,7 @@ def home():
     google_available = bool(
         app.config.get("GOOGLE_OAUTH_CLIENT_ID") and app.config.get("GOOGLE_OAUTH_CLIENT_SECRET")
     )
+    proctor_configured = proctor_is_configured()
     return render_template(
         "home.html",
         user_id=user_id,
@@ -2793,7 +2823,72 @@ def home():
         user_stats=user_stats,
         has_attempts=has_attempts,
         google_available=google_available,
+        proctor_configured=proctor_configured,
     )
+
+
+@app.route("/mock-exam")
+def mock_exam():
+    """Mock exam entry: requires proctor to be configured from the proctor dir."""
+    if not proctor_is_configured():
+        return redirect(url_for("home", mode="mock", proctor_required=1))
+    proctor_config = proctor_get_config()
+    return render_template(
+        "mock_exam.html",
+        proctor_name=proctor_config.get("name", "Proctor"),
+    )
+
+
+def _call_proctor_join(backend_url, exam_code, candidate_identifier):
+    """Call proctor backend POST /api/session/join. Returns (session_id, livekit_room_name) or None (no LiveKit token/URL)."""
+    import urllib.request
+    import urllib.error
+    url = f"{backend_url}/api/session/join"
+    body = json.dumps({
+        "exam_code": exam_code,
+        "candidate_identifier": candidate_identifier or "Candidate",
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST", headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return (
+                data.get("session_id"),
+                data.get("livekit_room_name"),
+            )
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, KeyError) as e:
+        logger.warning("Proctor join failed: %s", e)
+        return None
+
+
+@app.route("/mock-exam/start", methods=["GET", "POST"])
+def mock_exam_start():
+    """Start mock exam: call proctor backend (wrk/proctor), then redirect to proctor frontend or FCE exam."""
+    if not proctor_is_configured():
+        return redirect(url_for("home", mode="mock", proctor_required=1))
+    cfg = proctor_get_config()
+    backend_url = cfg.get("backend_url")
+    frontend_url = cfg.get("frontend_url")
+    exam_code = cfg.get("exam_code", "DEMO")
+    candidate = (session.get("user_name") or session.get("user_email") or "Candidate").strip() or "Candidate"
+
+    if backend_url and frontend_url:
+        result = _call_proctor_join(backend_url, exam_code, candidate)
+        if result:
+            session_id, livekit_room_name = result
+            from urllib.parse import urlencode
+            params = urlencode({
+                "session_id": session_id,
+                "livekit_room_name": livekit_room_name or "",
+            })
+            return redirect(f"{frontend_url}/entry?{params}")
+        # Fallback: send user to proctor join page with pre-filled exam code and name
+        from urllib.parse import urlencode
+        params = urlencode({"exam_code": exam_code, "name": candidate})
+        return redirect(f"{frontend_url}/join?{params}")
+
+    session["mock_exam"] = True
+    return redirect(url_for("use_of_english", part=1))
 
 
 @app.route("/login/callback")
@@ -3050,6 +3145,7 @@ def use_of_english():
 
     items = _load_part_items(current_part)
     ctx = _build_template_context(current_part, check_result, items)
+    ctx["csrf_expired"] = request.args.get("csrf_expired")
     return render_template("index.html", **ctx)
 
 

@@ -1,0 +1,5 @@
+{
+  "enabled": false,
+  "name": "My proctor",
+  "comment": "Set enabled to true and restart the app to use Take mock exam. Add any extra options your proctor needs."
+}

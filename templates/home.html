@@ -3,7 +3,48 @@
 {% block content %}
 <div class="home-page">
   <h1 class="home-title">FCE Exam Trainer</h1>
-  <p class="home-subtitle">Choose a paper to practice</p>
+  <p class="home-subtitle">Choose a mode</p>
+
+  <div class="home-mode-choice">
+    <a href="#learning" class="home-mode-card home-mode-learning" id="home-mode-learning">
+      <span class="home-mode-icon" aria-hidden="true">📖</span>
+      <h2 class="home-mode-title">Learning mode</h2>
+      <p class="home-mode-desc">Practice at your own pace. Choose a paper and work through tasks with instant feedback.</p>
+      <span class="home-mode-cta">Practice →</span>
+    </a>
+    <a href="{% if proctor_configured %}{{ url_for('mock_exam') }}{% else %}{{ url_for('home', mode='mock', proctor_required=1) }}{% endif %}" class="home-mode-card home-mode-mock {% if not proctor_configured %}home-mode-mock-disabled{% endif %}" id="home-mode-mock">
+      <span class="home-mode-icon" aria-hidden="true">📋</span>
+      <h2 class="home-mode-title">Take mock exam</h2>
+      <p class="home-mode-desc">Timed exam with proctoring. Configure your proctor from the <code>proctor</code> directory first.</p>
+      {% if proctor_configured %}
+      <span class="home-mode-cta">Start mock exam →</span>
+      {% else %}
+      <span class="home-mode-cta home-mode-cta-muted">Configure proctor (see proctor/README.md)</span>
+      {% endif %}
+    </a>
+  </div>
+
+  {% if request.args.get('mode') == 'mock' and request.args.get('proctor_required') %}
+  <div class="home-proctor-alert" role="alert">
+    <strong>Proctor required.</strong> To take a mock exam, configure your proctor from the <code>proctor</code> directory. Copy <code>proctor/config.example.json</code> to <code>proctor/config.json</code>, set <code>"enabled": true</code>, and restart the app. See <code>proctor/README.md</code> for details.
+  </div>
+  {% endif %}
+
+  <div class="home-sections" id="learning">
+    <h2 class="home-sections-heading">Learning mode — Choose a paper</h2>
+    <a href="{{ url_for('use_of_english') }}" class="home-section-card home-section-use">
+      <span class="home-section-icon" aria-hidden="true">📖</span>
+      <h3 class="home-section-title">Use of English and Reading</h3>
+      <p class="home-section-desc">Parts 1–7: multiple-choice cloze, open cloze, word formation, key word transformations, multiple choice, gapped text, multiple matching.</p>
+      <span class="home-section-cta">Start practice →</span>
+    </a>
+    <a href="{{ url_for('writing') }}" class="home-section-card home-section-writing">
+      <span class="home-section-icon" aria-hidden="true">✎</span>
+      <h3 class="home-section-title">Writing</h3>
+      <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks (140–190 words each).</p>
+      <span class="home-section-cta">Go to Writing →</span>
+    </a>
+  </div>
 
   <div class="home-account">
     {% if user_id %}
@@ -48,22 +89,6 @@
     {% else %}
       <p class="home-account-hint">Google sign-in is not configured. Add <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code> to your <code>.env</code> file (see <code>.env.example</code>) to connect your account and see your statistics here.</p>
     {% endif %}
-  </div>
-
-  <div class="home-sections">
-    <a href="{{ url_for('use_of_english') }}" class="home-section-card home-section-use">
-      <span class="home-section-icon" aria-hidden="true">📖</span>
-      <h2 class="home-section-title">Use of English and Reading</h2>
-      <p class="home-section-desc">Parts 1–7: multiple-choice cloze, open cloze, word formation, key word transformations, multiple choice, gapped text, multiple matching.</p>
-      <span class="home-section-cta">Start practice →</span>
-    </a>
-
-    <a href="{{ url_for('writing') }}" class="home-section-card home-section-writing">
-      <span class="home-section-icon" aria-hidden="true">✎</span>
-      <h2 class="home-section-title">Writing</h2>
-      <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks and get feedback.</p>
-      <span class="home-section-cta">Go to Writing →</span>
-    </a>
   </div>
 </div>
 {% endblock %}
