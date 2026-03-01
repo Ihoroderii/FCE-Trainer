@@ -1,20 +1,14 @@
-"""
-FCE Exam Trainer — Entry point (thin shim).
-Run with: python app.py  or  python wsgi.py  or  gunicorn wsgi:app
-The application is built from the app package (create_app).
-"""
-from dotenv import load_dotenv
-load_dotenv()
+"""WSGI entry point. Use: gunicorn wsgi:app or flask run (FLASK_APP=wsgi:app)."""
+import os
 
 from app import create_app
 
 app = create_app()
 
 if __name__ == "__main__":
-    import os
+    from app.ai import openai_api_key
     import logging
     logger = logging.getLogger("fce_trainer")
-    from app.ai import openai_api_key
     port = int(os.environ.get("PORT", 3000))
     logger.info("FCE Trainer at http://localhost:%s", port)
     logger.info("OpenAI: %s", "configured" if openai_api_key else "not set")

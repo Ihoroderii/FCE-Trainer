@@ -1,4 +1,6 @@
 node_modules/
+.venv/
 .env
 *.db
 __pycache__/
+proctor/config.json
