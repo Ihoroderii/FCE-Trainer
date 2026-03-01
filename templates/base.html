@@ -19,7 +19,7 @@
 <body data-current-part="{{ current_part }}">
   <header class="header">
     <div class="header-inner">
-      <a href="{{ url_for('home') }}" class="logo logo-link">
+      <a href="{{ url_for('home.home') }}" class="logo logo-link">
         <span class="logo-icon" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" width="32" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M16 2 L28 8 L28 20 Q28 32 16 38 Q4 32 4 20 L4 8 Z" />
@@ -51,7 +51,7 @@
   <nav class="bottom-nav" aria-label="Exam navigation">
     <div class="bottom-nav-row parts-row">
       {% for p in range(1, 8) %}
-      <a href="{{ url_for('use_of_english') }}?part={{ p }}" class="part-seg {{ 'done' if parts_done[p - 1] else '' }} {{ 'active' if current_part == p else '' }}" data-part="{{ p }}" data-total="{{ part_counts[p - 1] }}">
+      <a href="{{ url_for('use_of_english.use_of_english') }}?part={{ p }}" class="part-seg {{ 'done' if parts_done[p - 1] else '' }} {{ 'active' if current_part == p else '' }}" data-part="{{ p }}" data-total="{{ part_counts[p - 1] }}">
         <span class="part-seg-label">Part {{ p }}</span>
         {% if current_part == p %}
         <span class="part-seg-tasks part-seg-tasks-active" data-part="{{ p }}">
@@ -67,8 +67,8 @@
     </div>
     <div class="bottom-nav-row controls-row">
       <div class="nav-arrows">
-        <a href="{{ url_for('use_of_english') }}?part={{ current_part - 1 if current_part > 1 else 7 }}" class="nav-arrow" id="nav-prev" title="Previous part">←</a>
-        <a href="{{ url_for('use_of_english') }}?part={{ current_part + 1 if current_part < 7 else 1 }}" class="nav-arrow" id="nav-next" title="Next part">→</a>
+        <a href="{{ url_for('use_of_english.use_of_english') }}?part={{ current_part - 1 if current_part > 1 else 7 }}" class="nav-arrow" id="nav-prev" title="Previous part">←</a>
+        <a href="{{ url_for('use_of_english.use_of_english') }}?part={{ current_part + 1 if current_part < 7 else 1 }}" class="nav-arrow" id="nav-next" title="Next part">→</a>
       </div>
       <a href="#" class="btn-submit" id="btn-submit-link"><span class="btn-submit-icon">✓</span> Submit</a>
     </div>

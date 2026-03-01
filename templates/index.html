@@ -76,7 +76,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english', part=1, next=1) }}" class="btn btn-next">Next text</a>
+          <a href="{{ url_for('use_of_english.use_of_english', part=1, next=1) }}" class="btn btn-next">Next text</a>
         </div>
       </form>
     {% endif %}
@@ -102,7 +102,7 @@
       </div>
       <div class="actions">
         <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-        <a href="{{ url_for('use_of_english', part=2, next=1) }}" class="btn btn-next">Next text</a>
+        <a href="{{ url_for('use_of_english.use_of_english', part=2, next=1) }}" class="btn btn-next">Next text</a>
       </div>
     </form>
     {% endif %}
@@ -136,7 +136,7 @@
       {{ part3_html|safe }}
       <div class="actions">
         <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-        <a href="{{ url_for('use_of_english', part=3, next=1) }}" class="btn btn-next">Next text</a>
+        <a href="{{ url_for('use_of_english.use_of_english', part=3, next=1) }}" class="btn btn-next">Next text</a>
       </div>
     </form>
     {% endif %}
@@ -154,10 +154,10 @@
       <span class="part4-db-only-label">Practice from database only:</span>
       {% if part4_db_only %}
         <span class="part4-db-only-status part4-db-only-on">ON</span>
-        <a href="{{ url_for('use_of_english', part=4, part4_db_only=0) }}" class="btn btn-part4-toggle">Turn off</a>
+        <a href="{{ url_for('use_of_english.use_of_english', part=4, part4_db_only=0) }}" class="btn btn-part4-toggle">Turn off</a>
       {% else %}
         <span class="part4-db-only-status">OFF</span>
-        <a href="{{ url_for('use_of_english', part=4, part4_db_only=1) }}" class="btn btn-part4-toggle">Turn on</a>
+        <a href="{{ url_for('use_of_english.use_of_english', part=4, part4_db_only=1) }}" class="btn btn-part4-toggle">Turn on</a>
       {% endif %}
     </div>
     {% if part4_error %}
@@ -172,7 +172,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english', part=4, next=1) }}" class="btn btn-next">Next set</a>
+          <a href="{{ url_for('use_of_english.use_of_english', part=4, next=1) }}" class="btn btn-next">Next set</a>
         </div>
       </form>
     {% endif %}
@@ -200,7 +200,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english', part=5, next=1) }}" class="btn btn-next">Next text</a>
+          <a href="{{ url_for('use_of_english.use_of_english', part=5, next=1) }}" class="btn btn-next">Next text</a>
         </div>
       </form>
     {% endif %}
@@ -228,7 +228,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english', part=6, next=1) }}" class="btn btn-next">Next text</a>
+          <a href="{{ url_for('use_of_english.use_of_english', part=6, next=1) }}" class="btn btn-next">Next text</a>
         </div>
       </form>
     {% endif %}
@@ -256,7 +256,7 @@
       </div>
       <div class="actions">
         <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-        <a href="{{ url_for('use_of_english', part=7, next=1) }}" class="btn btn-next">Next set</a>
+        <a href="{{ url_for('use_of_english.use_of_english', part=7, next=1) }}" class="btn btn-next">Next set</a>
       </div>
     </form>
     {% endif %}

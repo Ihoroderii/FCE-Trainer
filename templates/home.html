@@ -12,7 +12,7 @@
       <p class="home-mode-desc">Practice at your own pace. Choose a paper and work through tasks with instant feedback.</p>
       <span class="home-mode-cta">Practice →</span>
     </a>
-    <a href="{% if proctor_configured %}{{ url_for('mock_exam') }}{% else %}{{ url_for('home', mode='mock', proctor_required=1) }}{% endif %}" class="home-mode-card home-mode-mock {% if not proctor_configured %}home-mode-mock-disabled{% endif %}" id="home-mode-mock">
+    <a href="{% if proctor_configured %}{{ url_for('home.mock_exam') }}{% else %}{{ url_for('home.home', mode='mock', proctor_required=1) }}{% endif %}" class="home-mode-card home-mode-mock {% if not proctor_configured %}home-mode-mock-disabled{% endif %}" id="home-mode-mock">
       <span class="home-mode-icon" aria-hidden="true">📋</span>
       <h2 class="home-mode-title">Take mock exam</h2>
       <p class="home-mode-desc">Timed exam with proctoring. Configure your proctor from the <code>proctor</code> directory first.</p>
@@ -32,13 +32,13 @@
 
   <div class="home-sections" id="learning">
     <h2 class="home-sections-heading">Learning mode — Choose a paper</h2>
-    <a href="{{ url_for('use_of_english') }}" class="home-section-card home-section-use">
+    <a href="{{ url_for('use_of_english.use_of_english') }}" class="home-section-card home-section-use">
       <span class="home-section-icon" aria-hidden="true">📖</span>
       <h3 class="home-section-title">Use of English and Reading</h3>
       <p class="home-section-desc">Parts 1–7: multiple-choice cloze, open cloze, word formation, key word transformations, multiple choice, gapped text, multiple matching.</p>
       <span class="home-section-cta">Start practice →</span>
     </a>
-    <a href="{{ url_for('writing') }}" class="home-section-card home-section-writing">
+    <a href="{{ url_for('writing.writing') }}" class="home-section-card home-section-writing">
       <span class="home-section-icon" aria-hidden="true">✎</span>
       <h3 class="home-section-title">Writing</h3>
       <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks (140–190 words each).</p>
@@ -50,7 +50,7 @@
     {% if user_id %}
       <p class="home-account-connected">
         Connected as <strong>{{ user_email or user_name or 'Google account' }}</strong>
-        <a href="{{ url_for('logout') }}" class="home-account-disconnect">Disconnect</a>
+        <a href="{{ url_for('home.logout') }}" class="home-account-disconnect">Disconnect</a>
       </p>
       {% if has_attempts %}
       <section class="stats-section home-stats">

@@ -5,7 +5,7 @@
   <h1 class="mock-exam-title">Take mock exam</h1>
   <p class="mock-exam-intro">You are about to start a timed mock exam. Your proctor <strong>{{ proctor_name }}</strong> is configured.</p>
   <p class="mock-exam-desc">The exam includes Use of English and Reading (Parts 1–7). Complete all parts and submit your answers when finished.</p>
-  <p><a href="{{ url_for('mock_exam_start') }}" class="btn btn-mock-start">Start exam →</a></p>
-  <p class="mock-exam-back"><a href="{{ url_for('home') }}">← Back to home</a></p>
+  <p><a href="{{ url_for('home.mock_exam_start') }}" class="btn btn-mock-start">Start exam →</a></p>
+  <p class="mock-exam-back"><a href="{{ url_for('home.home') }}">← Back to home</a></p>
 </div>
 {% endblock %}
