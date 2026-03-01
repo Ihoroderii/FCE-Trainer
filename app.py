@@ -95,7 +95,8 @@ PART_QUESTION_COUNTS = {1: 8, 2: 8, 3: 8, 4: 6, 5: 6, 6: 6, 7: 10}
 
 openai_api_key = os.environ.get("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
-openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+#openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+openai_model = os.environ.get("OPENAI_MODEL", "gpt-5.2")
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))

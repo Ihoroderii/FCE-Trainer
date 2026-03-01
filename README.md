@@ -50,6 +50,25 @@ Open **http://localhost:3000**. All pages are rendered by the server; “Check a
 
 No `app.js`, `data.js`, or other JavaScript files. The app works like a classic server-rendered site (like a StoryAI-style project): every action is a request to the server, which returns full HTML.
 
+## Code review (GitHub Actions)
+
+On **push** and **pull_request** to `main`/`master`, the workflow in `.github/workflows/code-review.yml` runs:
+
+- **Ruff** — lint and format check (see `pyproject.toml` for rules)
+- **Bandit** — security checks on Python code
+- **App import** — ensures the app module loads
+
+To fix lint/format locally before pushing:
+
+```bash
+pip install ruff bandit
+ruff check . --fix
+ruff format .
+bandit -r . -x .venv,.git
+```
+
+To make the format check strict (fail the workflow when code is not formatted), remove `continue-on-error: true` from the "Ruff (format check)" step in the workflow. You can also tighten `[tool.ruff.lint].ignore` in `pyproject.toml` over time (e.g. enable F841, I001) and fix reported issues.
+
 ## Adding more exercises
 
 Edit **data.py**: `PART_1_DATA`, `PART_2_DATA`, `PART_3_DATA`, `PART_5_DATA`, `PART_6_DATA`, `PART_7_DATA`. Part 4 tasks are stored in the DB and can be generated via OpenAI.
