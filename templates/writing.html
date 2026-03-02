@@ -1,9 +1,68 @@
 {% extends "base_minimal.html" %}
 {% block title %}FCE Exam Trainer — Writing{% endblock %}
 {% block content %}
-<div class="writing-page">
-  <h1 class="writing-title">Writing</h1>
-  <p class="writing-intro">Writing paper practice will be available here. Essay, article, email/letter, and review tasks.</p>
-  <p><a href="{{ url_for('home') }}" class="btn btn-next">← Back to home</a></p>
+<div class="writing-page" data-word-min="{{ word_min }}" data-word-max="{{ word_max }}" data-total-minutes="{{ total_minutes }}">
+  <div class="writing-header-row">
+    <h1 class="writing-title">Writing</h1>
+    <p class="writing-intro">B2 First (FCE) — 1 hour 20 minutes. Part 1: compulsory essay. Part 2: choose one task (140–190 words each).</p>
+    <div class="writing-timer-wrap">
+      <span class="writing-timer-label" aria-hidden="true">Time</span>
+      <span class="writing-timer" id="writing-timer" aria-live="polite">1:20:00</span>
+      <button type="button" class="btn btn-writing-timer-start" id="writing-timer-start" aria-label="Start writing timer">Start</button>
+    </div>
+  </div>
+
+  <div class="writing-tabs" role="tablist" aria-label="Writing parts">
+    <button type="button" class="writing-tab writing-tab-active" role="tab" aria-selected="true" aria-controls="writing-part1-panel" id="writing-tab-1" data-part="1">Part 1 — Essay</button>
+    <button type="button" class="writing-tab" role="tab" aria-selected="false" aria-controls="writing-part2-panel" id="writing-tab-2" data-part="2">Part 2 — Choice</button>
+  </div>
+
+  <section id="writing-part1-panel" class="writing-panel writing-panel-active" role="tabpanel" aria-labelledby="writing-tab-1">
+    <h2 class="writing-part-title">Part 1 — Compulsory essay</h2>
+    <p class="writing-instruction">Write an essay (140–190 words). Discuss the two points below and add <strong>one idea of your own</strong>.</p>
+    <div class="writing-prompt-box">
+      <p class="writing-question">{{ essay_prompt.question }}</p>
+      <ul class="writing-points">
+        {% for point in essay_prompt.points %}
+        <li>{{ point }}</li>
+        {% endfor %}
+      </ul>
+      <p class="writing-notes">{{ essay_prompt.notes }}</p>
+    </div>
+    <div class="writing-editor-wrap">
+      <label for="writing-part1-text" class="writing-word-count" id="writing-part1-count" aria-live="polite">0 words ({{ word_min }}–{{ word_max }})</label>
+      <textarea id="writing-part1-text" class="writing-textarea" name="part1_text" rows="12" placeholder="Write your essay here…" aria-label="Part 1 essay"></textarea>
+    </div>
+  </section>
+
+  <section id="writing-part2-panel" class="writing-panel" role="tabpanel" aria-labelledby="writing-tab-2" hidden>
+    <h2 class="writing-part-title">Part 2 — Choose one task</h2>
+    <p class="writing-instruction">Choose <strong>one</strong> of the following (140–190 words): article, letter/email, report or review.</p>
+    <div class="writing-part2-options" role="group" aria-label="Part 2 task options">
+      {% for opt in part2_options %}
+      <div class="writing-option-card" data-option-id="{{ opt.id }}">
+        <button type="button" class="writing-option-btn" data-option-id="{{ opt.id }}" aria-expanded="false" aria-controls="writing-option-prompt-{{ opt.id }}">
+          <span class="writing-option-letter">Option {{ opt.id|upper }}</span>
+          <span class="writing-option-type">{{ opt.type }}</span>
+        </button>
+        <div id="writing-option-prompt-{{ opt.id }}" class="writing-option-prompt" hidden>
+          <div class="writing-prompt-box">
+            <p class="writing-task-intro">{{ opt.task }}</p>
+            <pre class="writing-prompt-text">{{ opt.prompt }}</pre>
+          </div>
+          <div class="writing-editor-wrap">
+            <label class="writing-word-count writing-part2-count" id="writing-part2-count-{{ opt.id }}" aria-live="polite" data-option="{{ opt.id }}">0 words ({{ word_min }}–{{ word_max }})</label>
+            <textarea class="writing-textarea writing-part2-text" name="part2_text" data-option="{{ opt.id }}" rows="12" placeholder="Write your {{ opt.type|lower }} here…" aria-label="Part 2 {{ opt.type }}"></textarea>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="writing-footer">
+    <a href="{{ url_for('home.home') }}" class="btn btn-next">← Back to home</a>
+  </div>
 </div>
+<script src="{{ url_for('static', filename='writing.js') }}?v=1"></script>
 {% endblock %}
