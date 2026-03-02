@@ -6,7 +6,8 @@ import re
 
 from flask import session
 
-from app.ai import openai_chat_create, openai_client
+from app.ai import chat_create, ai_available
+from app.ai.prompts import get_task_prompt_part7
 from app.ai.explanations import fetch_explanations_part7
 from app.config import MAX_EXPLANATION_LEN
 from app.db import _generic_get_or_create, get_part7_task_by_id, db_connection
@@ -16,36 +17,56 @@ from app.utils import e as _e
 logger = logging.getLogger("fce_trainer")
 
 
+def _extract_json_object(text):
+    """Extract first complete {...} from text, optionally inside markdown code block."""
+    text = text.strip()
+    # Strip markdown code block if present
+    code_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if code_match:
+        text = code_match.group(1).strip()
+    # Find first { and then matching } by brace count
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
+def _parse_json_relaxed(raw):
+    """Try json.loads; on failure, fix common LLM issues and retry."""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    # Remove trailing commas before ] or }
+    fixed = re.sub(r",\s*([}\]])", r"\1", raw)
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        return None
+
+
 def generate_part7_with_openai():
-    if not openai_client:
+    if not ai_available:
         return None
     topic = random.choice(PART3_TOPICS)
-    prompt = f"""You are an FCE (B2 First) Reading exam expert. Generate exactly ONE Part 7 (Multiple matching) task.
-
-The text MUST be about this topic: "{topic}". Use a specific angle to make the text engaging and varied.
-
-Part 7 consists of:
-- Either ONE long text divided into 4-6 sections (labeled A, B, C, D, and optionally E, F) OR 4-5 short separate texts. Total length 600-700 words (B2 level).
-- 10 statements that the candidate must match to the correct section. Each correct match = 1 mark.
-
-QUALITY REQUIREMENTS:
-- Use paraphrasing throughout: do NOT copy phrases from the text into statements. Rephrase ideas.
-- Each section should be matched by at least one question. Distribute matches across sections.
-- Vary difficulty: include some straightforward matches and some that require careful inference.
-- Each statement must unambiguously match exactly one section.
-
-Return ONLY a valid JSON object with these exact keys:
-- "sections": an array of 4 to 6 objects. Each object has "id" (letter "A", "B", "C", "D", "E", or "F"), "title" (short section title), "text" (the section body text). The combined word count of all section "text" must be between 600 and 700 words.
-- "questions": an array of exactly 10 objects. Each has "text" (the statement to match, one sentence) and "correct" (the section id, e.g. "A", "B").
-
-No other text or markdown."""
+    prompt = get_task_prompt_part7(topic)
     try:
-        comp = openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
+        comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
-        m = re.search(r"\{[\s\S]*\}", content)
-        if not m:
+        raw = _extract_json_object(content)
+        if not raw:
             return None
-        data = json.loads(m.group(0))
+        data = _parse_json_relaxed(raw)
+        if not data:
+            return None
         sections = data.get("sections")
         questions = data.get("questions")
         if not isinstance(sections, list) or len(sections) < 4 or len(sections) > 6:
@@ -84,7 +105,7 @@ No other text or markdown."""
 
 
 def get_or_create_part7_item(exclude_task_id=None):
-    return _generic_get_or_create(7, generate_part7_with_openai, exclude_task_id, openai_available=openai_client is not None)
+    return _generic_get_or_create(7, generate_part7_with_openai, exclude_task_id, openai_available=ai_available)
 
 
 def build_part7_text(item):

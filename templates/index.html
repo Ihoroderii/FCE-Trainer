@@ -4,19 +4,21 @@
 <div class="feedback error" role="alert">Your session or form expired. The page was reloaded with a fresh form — please submit your answers again.</div>
 {% endif %}
 {% macro csrf_input() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endmacro %}
-{% macro generate_buttons(action_name, label, show_b2plus=true) %}
+{% macro generate_buttons(action_name, label, show_b2plus=true, part_num=1) %}
 <div class="part2-generate-row">
   <span class="part2-generate-label">{{ label }}</span>
-  <form method="post" action="" class="part2-generate-form">
+  <form method="post" action="{{ url_for('use_of_english.use_of_english', part=part_num) }}" class="part2-generate-form">
     {{ csrf_input() }}
     <input type="hidden" name="action" value="{{ action_name }}" />
+    <input type="hidden" name="part" value="{{ part_num }}" />
     <input type="hidden" name="level" value="b2" />
     <button type="submit" class="btn btn-generate btn-generate-b2">Generate B2</button>
   </form>
   {% if show_b2plus %}
-  <form method="post" action="" class="part2-generate-form">
+  <form method="post" action="{{ url_for('use_of_english.use_of_english', part=part_num) }}" class="part2-generate-form">
     {{ csrf_input() }}
     <input type="hidden" name="action" value="{{ action_name }}" />
+    <input type="hidden" name="part" value="{{ part_num }}" />
     <input type="hidden" name="level" value="b2plus" />
     <button type="submit" class="btn btn-generate btn-generate-b2plus">Generate B2+</button>
   </form>
@@ -64,7 +66,7 @@
     {% if part1_generated is not none and part1_generated > 0 %}
       <div class="feedback success">Generated new multiple-choice cloze at {{ part1_level.upper() }} level.</div>
     {% endif %}
-    {{ generate_buttons("generate_part1", "Generate Part 1 (multiple-choice cloze):") }}
+    {{ generate_buttons("generate_part1", "Generate Part 1 (multiple-choice cloze):", part_num=1) }}
     {% if part1_error %}
       <div class="feedback error">{{ part1_error }}</div>
     {% else %}
@@ -76,7 +78,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english.use_of_english', part=1, next=1) }}" class="btn btn-next">Next text</a>
+          <a href="{{ url_for('use_of_english.use_of_english', part=1, next=1) }}" class="btn btn-next">Next task</a>
         </div>
       </form>
     {% endif %}
@@ -90,7 +92,7 @@
     {% if part2_generated is not none and part2_generated > 0 %}
       <div class="feedback success">Generated new open cloze at {{ part2_level.upper() }} level.</div>
     {% endif %}
-    {{ generate_buttons("generate_part2", "Generate Part 2 (open cloze):") }}
+    {{ generate_buttons("generate_part2", "Generate Part 2 (open cloze):", part_num=2) }}
     {% if part2_error %}
       <div class="feedback error">{{ part2_error }}</div>
     {% else %}
@@ -102,7 +104,7 @@
       </div>
       <div class="actions">
         <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-        <a href="{{ url_for('use_of_english.use_of_english', part=2, next=1) }}" class="btn btn-next">Next text</a>
+        <a href="{{ url_for('use_of_english.use_of_english', part=2, next=1) }}" class="btn btn-next">Next task</a>
       </div>
     </form>
     {% endif %}
@@ -126,7 +128,7 @@
     {% if part3_generated is not none and part3_generated > 0 %}
       <div class="feedback success">Generated new word-formation text at {{ part3_level.upper() }} level.</div>
     {% endif %}
-    {{ generate_buttons("generate_part3", "Generate Part 3 (word formation, 150–200 words):") }}
+    {{ generate_buttons("generate_part3", "Generate Part 3 (word formation, 150–200 words):", part_num=3) }}
     {% if part3_error %}
       <div class="feedback error">{{ part3_error }}</div>
     {% else %}
@@ -136,7 +138,7 @@
       {{ part3_html|safe }}
       <div class="actions">
         <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-        <a href="{{ url_for('use_of_english.use_of_english', part=3, next=1) }}" class="btn btn-next">Next text</a>
+        <a href="{{ url_for('use_of_english.use_of_english', part=3, next=1) }}" class="btn btn-next">Next task</a>
       </div>
     </form>
     {% endif %}
@@ -163,7 +165,7 @@
     {% if part4_error %}
       <div class="feedback error">{{ part4_error }}</div>
     {% else %}
-      {{ generate_buttons("generate_part4", "Generate Part 4 (key word transformation):") }}
+      {{ generate_buttons("generate_part4", "Generate Part 4 (key word transformation):", part_num=4) }}
       <form method="post" action="" class="task-form">
         {{ csrf_input() }}
         <input type="hidden" name="part" value="4" />
@@ -186,7 +188,7 @@
     {% if part5_generated is not none and part5_generated > 0 %}
       <div class="feedback success">Generated new reading comprehension text.</div>
     {% endif %}
-    {{ generate_buttons("generate_part5", "Generate Part 5 (multiple choice reading):", show_b2plus=false) }}
+    {{ generate_buttons("generate_part5", "Generate Part 5 (multiple choice reading):", show_b2plus=false, part_num=5) }}
     {% if part5_error %}
       <div class="feedback error">{{ part5_error }}</div>
     {% else %}
@@ -200,7 +202,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english.use_of_english', part=5, next=1) }}" class="btn btn-next">Next text</a>
+          <a href="{{ url_for('use_of_english.use_of_english', part=5, next=1) }}" class="btn btn-next">Next task</a>
         </div>
       </form>
     {% endif %}
@@ -214,7 +216,7 @@
     {% if part6_generated is not none and part6_generated > 0 %}
       <div class="feedback success">Generated new gapped text.</div>
     {% endif %}
-    {{ generate_buttons("generate_part6", "Generate Part 6 (gapped text):", show_b2plus=false) }}
+    {{ generate_buttons("generate_part6", "Generate Part 6 (gapped text):", show_b2plus=false, part_num=6) }}
     {% if part6_error %}
       <div class="feedback error">{{ part6_error }}</div>
     {% else %}
@@ -228,7 +230,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english.use_of_english', part=6, next=1) }}" class="btn btn-next">Next text</a>
+          <a href="{{ url_for('use_of_english.use_of_english', part=6, next=1) }}" class="btn btn-next">Next task</a>
         </div>
       </form>
     {% endif %}
@@ -242,7 +244,7 @@
     {% if part7_generated is not none and part7_generated > 0 %}
       <div class="feedback success">Generated new multiple matching text.</div>
     {% endif %}
-    {{ generate_buttons("generate_part7", "Generate Part 7 (multiple matching):", show_b2plus=false) }}
+    {{ generate_buttons("generate_part7", "Generate Part 7 (multiple matching):", show_b2plus=false, part_num=7) }}
     {% if part7_error %}
       <div class="feedback error">{{ part7_error }}</div>
     {% else %}

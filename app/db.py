@@ -181,6 +181,17 @@ def init_db():
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+        CREATE TABLE IF NOT EXISTS answer_explanations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            check_id INTEGER NOT NULL REFERENCES check_history(id),
+            part INTEGER NOT NULL,
+            item_index INTEGER NOT NULL,
+            user_val TEXT,
+            expected_val TEXT,
+            explanation_text TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_answer_explanations_check_id ON answer_explanations(check_id);
     """)
         conn.commit()
 

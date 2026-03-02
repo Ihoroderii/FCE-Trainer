@@ -6,7 +6,8 @@ import re
 
 from flask import session
 
-from app.ai import openai_chat_create, openai_client
+from app.ai import chat_create, ai_available
+from app.ai.prompts import get_task_prompt_part3
 from app.ai.explanations import fetch_explanations_part3
 from app.config import MAX_EXPLANATION_LEN, MAX_WORD_FAMILY_LEN
 from app.db import _generic_get_or_create, get_part3_task_by_id, db_connection
@@ -17,39 +18,14 @@ logger = logging.getLogger("fce_trainer")
 
 
 def generate_part3_with_openai(level="b2"):
-    if not openai_client:
+    if not ai_available:
         return None
-    level = (level or "b2").strip().lower()
-    if level != "b2plus":
-        level = "b2"
     topic = random.choice(PART3_TOPICS)
-    if level == "b2plus":
-        level_instruction = "Use B2+ vocabulary and grammar: slightly more complex word formation (e.g. less common suffixes, negative prefixes, or abstract nouns)."
-    else:
-        level_instruction = "Use B2-level vocabulary and grammar. Test common suffixes (-tion, -ness, -ly, -ful, -less, -able), prefixes (un-, in-, im-), and word class changes."
-    prompt = f"""You are an FCE (B2 First) Use of English exam expert. Generate exactly ONE Part 3 (Word formation) task.
-
-The text MUST be clearly about this topic: "{topic}". Write one continuous passage (150-200 words) that is obviously on this theme.
-
-{level_instruction}
-
-Requirements:
-- One continuous text (150-200 words) with exactly 8 gaps.
-- Each gap must be written as (1)_____, (2)_____, (3)_____, (4)_____, (5)_____, (6)_____, (7)_____, (8)_____ in order.
-- At the end of the sentence or clause that contains each gap, put the STEM WORD in CAPITAL LETTERS (e.g. "...has been delayed. COMPLETE" or "...looked at him. SUSPECT"). So the reader sees the stem word in capitals after each gap.
-- The stem word is the base form; the student must change it (prefix, suffix, plural, etc.) to fit the gap.
-- IMPORTANT: In real FCE Part 3, the correct answer is almost always a DIFFERENT form from the stem (different word class or with prefix/suffix). Only very rarely (about 1 in 20 gaps) may the answer be the stem word unchanged (e.g. DANGER → danger). So for this task: at most ONE gap in the entire 8-gap passage may have the correct answer identical to the stem word (no transformation). All other gaps MUST require a clear word formation change (e.g. COMPLETE → completion, SUSPECT → suspiciously). Prefer having all 8 gaps require a transformation.
-
-Return ONLY a valid JSON object with these exact keys:
-- "text": the full passage (150-200 words) with (1)_____ through (8)_____ and each stem word in CAPITALS at the end of its sentence/clause. Example fragment: "The (1)_____ of the centre has been delayed. COMPLETE She looked at him (2)_____ when he told the joke. SUSPECT"
-- "stems": array of exactly 8 strings — the stem words in order (e.g. ["COMPLETE", "SUSPECT", ...])
-- "answers": array of exactly 8 strings — the correct formed word for each gap, lowercase unless capitalised (e.g. ["completion", "suspiciously", ...])
-
-No other text or markdown."""
+    prompt = get_task_prompt_part3(topic, level)
     max_unchanged = 1
     for attempt in range(3):
         try:
-            comp = openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
+            comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
             content = (comp.choices[0].message.content or "").strip()
             m = re.search(r"\{[\s\S]*\}", content)
             if not m:
@@ -90,7 +66,7 @@ No other text or markdown."""
 
 
 def get_or_create_part3_item(exclude_task_id=None):
-    return _generic_get_or_create(3, generate_part3_with_openai, exclude_task_id, openai_available=openai_client is not None)
+    return _generic_get_or_create(3, generate_part3_with_openai, exclude_task_id, openai_available=ai_available)
 
 
 def build_part3_html(task_or_items, check_result=None):

@@ -561,13 +561,15 @@ body[data-current-part="5"] .main {
   font-size: 0.95rem;
 }
 
-/* Part 2: green/red emphasis after Check */
+/* Part 1 (select) and Part 2 (text): green/red emphasis after Check */
+.gap-inline.result-correct select,
 .gap-inline.result-correct input[type="text"] {
   border: 2px solid var(--correct);
   background: rgba(45, 106, 79, 0.12);
   color: var(--ink);
 }
 
+.gap-inline.result-wrong select,
 .gap-inline.result-wrong input[type="text"] {
   border: 2px solid var(--wrong);
   background: rgba(157, 44, 44, 0.1);
@@ -1509,101 +1511,87 @@ body.minimal-layout {
   text-align: center;
 }
 
+/* ── Hero ── */
+.home-hero {
+  padding: 2.5rem 0 2rem;
+}
+
 .home-title {
-  margin: 0 0 0.25rem;
-  font-size: 1.75rem;
+  margin: 0 0 0.75rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--ink);
+  line-height: 1.25;
 }
 
-.home-subtitle {
-  margin: 0 0 1.5rem;
-  font-size: 1rem;
+.home-tagline {
+  margin: 0 auto 1.5rem;
+  max-width: 540px;
+  font-size: 1.05rem;
   color: var(--ink-muted);
+  line-height: 1.6;
 }
 
-.home-mode-choice {
+.btn-hero {
+  display: inline-block;
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.btn-hero:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+/* ── Feature highlights ── */
+.home-features {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
   text-align: left;
 }
 
-.home-mode-card {
-  display: block;
-  padding: 1.5rem;
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  text-decoration: none;
-  color: var(--ink);
-  transition: border-color 0.2s, background 0.2s;
+.home-feature {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
 }
 
-.home-mode-card:hover {
-  border-color: var(--accent);
-  background: rgba(0, 102, 204, 0.04);
+.home-feature-icon {
+  display: inline-block;
+  width: 2.5rem;
+  height: 2.5rem;
+  line-height: 2.5rem;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(0, 102, 204, 0.08);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
 }
 
-.home-mode-mock-disabled {
-  opacity: 0.85;
-}
-
-.home-mode-mock-disabled:hover {
-  border-color: var(--ink-muted);
-  background: transparent;
-}
-
-.home-mode-icon {
-  font-size: 1.75rem;
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-.home-mode-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.2rem;
+.home-feature h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--ink);
 }
 
-.home-mode-desc {
-  margin: 0 0 0.75rem;
-  font-size: 0.95rem;
+.home-feature p {
+  margin: 0;
+  font-size: 0.9rem;
   color: var(--ink-muted);
   line-height: 1.5;
-}
-
-.home-mode-cta {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--accent);
-}
-
-.home-mode-cta-muted {
-  color: var(--ink-muted);
-}
-
-.home-mode-card:hover .home-mode-cta:not(.home-mode-cta-muted) {
-  text-decoration: underline;
-}
-
-.home-proctor-alert {
-  padding: 1rem 1.25rem;
-  margin-bottom: 1.5rem;
-  background: rgba(230, 126, 34, 0.12);
-  border: 1px solid rgba(230, 126, 34, 0.4);
-  border-radius: 8px;
-  font-size: 0.9rem;
-  color: var(--ink);
-  text-align: left;
-}
-
-.home-proctor-alert code {
-  background: var(--card-bg);
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.85em;
 }
 
 .home-sections-heading {
@@ -2140,6 +2128,33 @@ html.dark-mode .gap-inline select {
   background: #252525;
   color: var(--ink);
   border-color: var(--border);
+}
+
+/* Correct/wrong emphasis in dark mode (override above for result states) */
+html.dark-mode .gap-inline.result-correct select,
+html.dark-mode .gap-inline.result-correct input[type="text"] {
+  border: 2px solid var(--correct);
+  background: rgba(61, 158, 109, 0.22);
+  color: var(--ink);
+}
+
+html.dark-mode .gap-inline.result-wrong select,
+html.dark-mode .gap-inline.result-wrong input[type="text"] {
+  border: 2px solid var(--wrong);
+  background: rgba(199, 92, 92, 0.18);
+  color: var(--ink);
+}
+
+html.dark-mode .part3-gap.result-correct input[type="text"] {
+  border: 2px solid var(--correct);
+  background: rgba(61, 158, 109, 0.22);
+  color: var(--ink);
+}
+
+html.dark-mode .part3-gap.result-wrong input[type="text"] {
+  border: 2px solid var(--wrong);
+  background: rgba(199, 92, 92, 0.18);
+  color: var(--ink);
 }
 
 html.dark-mode .score-banner {

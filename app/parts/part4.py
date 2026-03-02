@@ -4,7 +4,8 @@ import json
 import logging
 import re
 
-from app.ai import openai_chat_create, openai_client
+from app.ai import chat_create, ai_available
+from app.ai.prompts import get_task_prompt_part4
 from app.ai.explanations import fetch_explanations_part4
 from app.config import PART4_TASKS_PER_SET
 from app.db import (
@@ -66,38 +67,22 @@ def _part4_similar_to_existing(sentence1: str, sentence2: str, answer: str, excl
 
 
 def _generate_tasks_with_openai(count: int, level: str = "b2plus", recent_grammar_topics=None):
-    if not openai_client:
+    if not ai_available:
         return []
     _ensure_uoe_grammar_topic_column()
     recent_grammar_topics = recent_grammar_topics or []
     recent_avoid = ""
     if recent_grammar_topics:
         recent_avoid = "\nAvoid or minimise repetition of these recently used grammar topics: " + ", ".join(recent_grammar_topics[:10]) + ".\n"
-    level_instruction = (
-        "Level: B2+ (slightly more difficult than B2). Use vocabulary and grammar that is upper-intermediate to advanced: less common collocations, more complex structures, idiomatic expressions. Avoid items that are too easy (A2/B1)."
-        if (level or "").strip().lower() == "b2plus"
-        else "Level: B2 (Cambridge B2 First). Use vocabulary and grammar appropriate for upper-intermediate learners. Standard FCE difficulty. Avoid items that are too easy (A2/B1) or too hard (C1)."
-    )
-    prompt_template = """You are an FCE (B2 First) English exam expert. Generate exactly {count} "key word transformation" items.
-
-""" + level_instruction + """
-
-Each item: sentence1 (first sentence), keyword (ONE word in CAPITALS that MUST appear in the answer), sentence2 (second sentence with the SAME meaning, with exactly one gap "_____"), answer (EXACTLY 3 to 5 words to fill the gap—never 1 or 2 words; the answer MUST contain the key word. E.g. for CHANCE use "chance of winning" or "no chance of succeeding", not just "chance". The gap must require a phrase of 3-5 words.), grammar_topic (ONE short label for the main grammar/construction tested, e.g. "passive voice", "third conditional", "reported speech", "comparatives", "past perfect", "modal verbs", "causative have", "wish/if only", "phrasal verbs", "linking words").
-
-CRITICAL: The second sentence (sentence2) must be a REAL REPHRASING: different wording, different grammar or structure where possible. It must NOT be the first sentence with one phrase simply replaced by "_____".
-
-Use a DIFFERENT grammar_topic for each item—vary the grammar (passive, conditionals, reported speech, modals, etc.). Do not repeat the same grammar focus in the set.
-""" + recent_avoid + """
-Return ONLY a valid JSON array of objects with keys: sentence1, keyword, sentence2, answer, grammar_topic. No other text."""
     result = []
     topics_used_in_batch = set()
     for attempt in range(2):
         need = count - len(result)
         if need <= 0:
             break
-        prompt = prompt_template.format(count=need)
+        prompt = get_task_prompt_part4(need, level, recent_avoid)
         try:
-            comp = openai_chat_create([{"role": "user", "content": prompt}], temperature=0.8)
+            comp = chat_create([{"role": "user", "content": prompt}], temperature=0.8)
             content = (comp.choices[0].message.content or "").strip()
             m = re.search(r"\[[\s\S]*\]", content)
             arr = json.loads(m.group(0)) if m else []
@@ -144,7 +129,7 @@ Return ONLY a valid JSON array of objects with keys: sentence1, keyword, sentenc
 def fetch_part4_tasks(level: str = "b2plus", db_only: bool = False):
     _ensure_uoe_grammar_topic_column()
     tasks = []
-    if not db_only and openai_client:
+    if not db_only and ai_available:
         tasks = _generate_tasks_with_openai(
             PART4_TASKS_PER_SET,
             level=level,

@@ -1,51 +1,52 @@
 {% extends "base_minimal.html" %}
-{% block title %}FCE Exam Trainer — Home{% endblock %}
+{% block title %}FCE Exam Trainer — Free B2 First Practice with AI{% endblock %}
 {% block content %}
 <div class="home-page">
-  <h1 class="home-title">FCE Exam Trainer</h1>
-  <p class="home-subtitle">Choose a mode</p>
 
-  <div class="home-mode-choice">
-    <a href="#learning" class="home-mode-card home-mode-learning" id="home-mode-learning">
-      <span class="home-mode-icon" aria-hidden="true">📖</span>
-      <h2 class="home-mode-title">Learning mode</h2>
-      <p class="home-mode-desc">Practice at your own pace. Choose a paper and work through tasks with instant feedback.</p>
-      <span class="home-mode-cta">Practice →</span>
-    </a>
-    <a href="{% if proctor_configured %}{{ url_for('home.mock_exam') }}{% else %}{{ url_for('home.home', mode='mock', proctor_required=1) }}{% endif %}" class="home-mode-card home-mode-mock {% if not proctor_configured %}home-mode-mock-disabled{% endif %}" id="home-mode-mock">
-      <span class="home-mode-icon" aria-hidden="true">📋</span>
-      <h2 class="home-mode-title">Take mock exam</h2>
-      <p class="home-mode-desc">Timed exam with proctoring. Configure your proctor from the <code>proctor</code> directory first.</p>
-      {% if proctor_configured %}
-      <span class="home-mode-cta">Start mock exam →</span>
-      {% else %}
-      <span class="home-mode-cta home-mode-cta-muted">Configure proctor (see proctor/README.md)</span>
-      {% endif %}
-    </a>
+  {# ── Hero ── #}
+  <div class="home-hero">
+    <h1 class="home-title">Practice for Cambridge B2 First (FCE)</h1>
+    <p class="home-tagline">All 7 Use of English &amp; Reading parts. AI-generated tasks at B2 and B2+ levels. Instant feedback with explanations why each answer is correct or wrong.</p>
+    <a href="{{ url_for('use_of_english.use_of_english') }}" class="btn btn-hero">Start practicing &mdash; free</a>
   </div>
 
-  {% if request.args.get('mode') == 'mock' and request.args.get('proctor_required') %}
-  <div class="home-proctor-alert" role="alert">
-    <strong>Proctor required.</strong> To take a mock exam, configure your proctor from the <code>proctor</code> directory. Copy <code>proctor/config.example.json</code> to <code>proctor/config.json</code>, set <code>"enabled": true</code>, and restart the app. See <code>proctor/README.md</code> for details.
+  {# ── Feature highlights ── #}
+  <div class="home-features">
+    <div class="home-feature">
+      <span class="home-feature-icon" aria-hidden="true">1&ndash;7</span>
+      <h3>All exam parts</h3>
+      <p>Multiple-choice cloze, open cloze, word formation, key word transformations, reading comprehension, gapped text, multiple matching.</p>
+    </div>
+    <div class="home-feature">
+      <span class="home-feature-icon" aria-hidden="true">AI</span>
+      <h3>Unlimited practice</h3>
+      <p>New tasks generated on demand so you never run out of material. Choose B2 or B2+ difficulty.</p>
+    </div>
+    <div class="home-feature">
+      <span class="home-feature-icon" aria-hidden="true">?!</span>
+      <h3>Answer explanations</h3>
+      <p>After you check answers, AI explains why the correct option fits and why your choice was wrong — so you actually learn.</p>
+    </div>
   </div>
-  {% endif %}
 
+  {# ── Paper cards ── #}
   <div class="home-sections" id="learning">
-    <h2 class="home-sections-heading">Learning mode — Choose a paper</h2>
+    <h2 class="home-sections-heading">Choose a paper</h2>
     <a href="{{ url_for('use_of_english.use_of_english') }}" class="home-section-card home-section-use">
       <span class="home-section-icon" aria-hidden="true">📖</span>
       <h3 class="home-section-title">Use of English and Reading</h3>
       <p class="home-section-desc">Parts 1–7: multiple-choice cloze, open cloze, word formation, key word transformations, multiple choice, gapped text, multiple matching.</p>
-      <span class="home-section-cta">Start practice →</span>
+      <span class="home-section-cta">Start practice &rarr;</span>
     </a>
     <a href="{{ url_for('writing.writing') }}" class="home-section-card home-section-writing">
       <span class="home-section-icon" aria-hidden="true">✎</span>
       <h3 class="home-section-title">Writing</h3>
-      <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks (140–190 words each).</p>
-      <span class="home-section-cta">Go to Writing →</span>
+      <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks (140–190 words each) with a built-in timer.</p>
+      <span class="home-section-cta">Go to Writing &rarr;</span>
     </a>
   </div>
 
+  {# ── Account & stats ── #}
   <div class="home-account">
     {% if user_id %}
       <p class="home-account-connected">
@@ -57,13 +58,7 @@
         <h2>Your statistics (Use of English)</h2>
         <table class="stats-table">
           <thead>
-            <tr>
-              <th>Part</th>
-              <th>Right</th>
-              <th>Wrong</th>
-              <th>Attempts</th>
-              <th>%</th>
-            </tr>
+            <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
           </thead>
           <tbody>
             {% for s in user_stats %}
@@ -72,23 +67,22 @@
               <td>{{ s.total_correct }}</td>
               <td>{{ s.total_wrong }}</td>
               <td>{{ s.attempts }}</td>
-              <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+              <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}&mdash;{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </section>
       {% else %}
-      <p class="home-stats-empty">No attempts yet. Your stats will appear here after you check answers in Use of English.</p>
+      <p class="home-stats-empty">No attempts yet. Your stats will appear here after you check answers.</p>
       {% endif %}
     {% elif google_available %}
       <p class="home-account-connect">
         <a href="{{ url_for('google.login') }}" class="btn btn-google">Connect Google account</a>
-        <span class="home-account-hint">Connect to see your statistics across devices.</span>
+        <span class="home-account-hint">Track your statistics across devices.</span>
       </p>
-    {% else %}
-      <p class="home-account-hint">Google sign-in is not configured. Add <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code> to your <code>.env</code> file (see <code>.env.example</code>) to connect your account and see your statistics here.</p>
     {% endif %}
   </div>
+
 </div>
 {% endblock %}

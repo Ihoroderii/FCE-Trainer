@@ -112,7 +112,7 @@
     }
     var submitLink = document.getElementById('btn-submit-link');
     if (submitLink) submitLink.addEventListener('click', function(e) {
-      var partInput = document.querySelector('.task-card input[name="part"]');
+      var partInput = document.querySelector('.task-card .task-form input[name="part"]');
       var form = partInput && partInput.closest('form');
       if (form) {
         ensureCsrfToken(form);
@@ -130,8 +130,8 @@
         partLinks[i].addEventListener('click', function(e) {
           var targetPart = this.getAttribute('data-part');
           if (targetPart === currentPart) return;
-          // Use the main task form (has input name="part"), not Generate Part 2/4 forms
-          var partInput = document.querySelector('.task-card input[name="part"]');
+          // Use the main task form only (not the generate form, which also has input name="part")
+          var partInput = document.querySelector('.task-card .task-form input[name="part"]');
           var form = partInput && partInput.closest('form');
           if (!form) {
             window.location.href = this.getAttribute('href') || ('?part=' + targetPart);
@@ -155,7 +155,7 @@
       var body = document.body;
       var currentPart = body && body.getAttribute('data-current-part');
       if (!currentPart) return;
-      var partInput = document.querySelector('.task-card input[name="part"]');
+      var partInput = document.querySelector('.task-card .task-form input[name="part"]');
       var form = partInput && partInput.closest('form');
       if (!form) return;
       var partSeg = document.querySelector('.part-seg[data-part="' + currentPart + '"]');

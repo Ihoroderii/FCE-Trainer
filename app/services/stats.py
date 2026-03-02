@@ -14,11 +14,29 @@ def record_check_result(result):
     if part not in PARTS_RANGE or total <= 0:
         return
     user_id = session.get("user_id")
+    details = result.get("details") or []
     with db_connection() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO check_history (part, score, total, user_id, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
             (part, score, total, user_id),
         )
+        check_id = cur.lastrowid
+        for i, d in enumerate(details):
+            explanation = d.get("explanation") if isinstance(d, dict) else None
+            if not explanation:
+                continue
+            conn.execute(
+                """INSERT INTO answer_explanations (check_id, part, item_index, user_val, expected_val, explanation_text, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+                (
+                    check_id,
+                    part,
+                    i,
+                    d.get("user_val") if isinstance(d, dict) else None,
+                    d.get("expected") if isinstance(d, dict) else None,
+                    str(explanation).strip(),
+                ),
+            )
         conn.commit()
 
 

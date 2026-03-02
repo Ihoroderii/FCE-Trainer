@@ -6,7 +6,8 @@ import re
 
 from flask import session
 
-from app.ai import openai_chat_create, openai_client
+from app.ai import chat_create, ai_available
+from app.ai.prompts import get_task_prompt_part1
 from app.ai.explanations import fetch_explanations_part1
 from app.config import LETTERS
 from app.db import (
@@ -22,30 +23,15 @@ logger = logging.getLogger("fce_trainer")
 
 
 def generate_part1_with_openai(level="b2"):
-    if not openai_client:
+    if not ai_available:
         return None
     level = (level or "b2").strip().lower()
     if level != "b2plus":
         level = "b2"
     topic = random.choice(PART1_TOPICS)
-    if level == "b2plus":
-        level_instruction = "The text must be at B2+ level: slightly more complex vocabulary and grammar (e.g. less common collocations, more formal linkers, or subtle meaning differences between options). Standard FCE Part 1 length (4-6 sentences, 8 gaps)."
-    else:
-        level_instruction = "The text must be at B2 level: clear vocabulary and grammar appropriate for FCE. Standard Part 1 length (4-6 sentences, 8 gaps)."
-    prompt = f"""You are an FCE (B2 First) English exam expert. Generate exactly ONE "multiple-choice cloze" task.
-
-The text MUST be clearly about this topic: "{topic}". Write a short, coherent paragraph that is obviously on this theme (not work or offices unless the topic says so). Use a specific angle or situation so the text feels fresh and varied.
-
-{level_instruction}
-
-The task must have:
-- text: A short paragraph with exactly 8 gaps. Each gap must be written as (1)_____, (2)_____, ... (8)_____ in order. The gaps should test vocabulary/grammar in context.
-- gaps: An array of exactly 8 objects. Each object has: "options" (array of exactly 4 words/phrases that could fit the gap), "correct" (integer 0, 1, 2, or 3 - the index of the correct option in "options").
-
-Return ONLY a valid JSON object with keys "text" and "gaps". No other text. Example shape:
-{{"text": "Some text with (1)_____ and (2)_____ ...", "gaps": [{{"options": ["a","b","c","d"], "correct": 0}}, ...]}}"""
+    prompt = get_task_prompt_part1(topic, level)
     try:
-        comp = openai_chat_create([{"role": "user", "content": prompt}], temperature=0.8)
+        comp = chat_create([{"role": "user", "content": prompt}], temperature=0.8)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -78,7 +64,7 @@ Return ONLY a valid JSON object with keys "text" and "gaps". No other text. Exam
 
 
 def get_or_create_part1_task():
-    item, _ = _generic_get_or_create(1, generate_part1_with_openai, openai_available=openai_client is not None)
+    item, _ = _generic_get_or_create(1, generate_part1_with_openai, openai_available=ai_available)
     return item
 
 

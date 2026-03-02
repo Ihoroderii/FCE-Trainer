@@ -6,7 +6,8 @@ import re
 
 from flask import session
 
-from app.ai import openai_chat_create, openai_client
+from app.ai import chat_create, ai_available
+from app.ai.prompts import get_task_prompt_part6
 from app.ai.explanations import fetch_explanations_part6
 from app.config import MAX_EXPLANATION_LEN
 from app.db import _generic_get_or_create, get_part6_task_by_id, db_connection
@@ -17,25 +18,12 @@ logger = logging.getLogger("fce_trainer")
 
 
 def generate_part6_with_openai():
-    if not openai_client:
+    if not ai_available:
         return None
     topic = random.choice(PART3_TOPICS)
-    prompt = f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 6 (gapped text) task.
-
-The text MUST be about this topic: "{topic}". Use a specific angle to make the text engaging and varied.
-
-Part 6 consists of:
-- A single continuous text of 500-600 words (B2 level). The text must contain exactly 6 numbered gaps where a sentence has been removed. Use the exact placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 in order where each gap appears.
-- 7 sentences labeled A-G. Exactly 6 of these fit into the gaps (one per gap); one sentence is a distractor.
-
-Return ONLY a valid JSON object with these exact keys:
-- "paragraphs": an array of strings. Each string is either a paragraph or exactly "GAP1", "GAP2", "GAP3", "GAP4", "GAP5", "GAP6" where that gap appears.
-- "sentences": an array of exactly 7 strings: the sentence for A, then B, then C, D, E, F, G. Give only the sentence text (no "A)" prefix).
-- "answers": an array of exactly 6 integers (0-6). answers[i] is the index into "sentences" (0=A, 1=B, ... 6=G) that correctly fills gap i+1.
-
-No other text or markdown."""
+    prompt = get_task_prompt_part6(topic)
     try:
-        comp = openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
+        comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -71,7 +59,7 @@ No other text or markdown."""
 
 
 def get_or_create_part6_item(exclude_task_id=None):
-    return _generic_get_or_create(6, generate_part6_with_openai, exclude_task_id, openai_available=openai_client is not None)
+    return _generic_get_or_create(6, generate_part6_with_openai, exclude_task_id, openai_available=ai_available)
 
 
 def build_part6_text(item, check_result=None):

@@ -46,9 +46,19 @@ def _inc_idx(part: int):
 
 
 def _handle_generate_action(action):
-    from app.config import PART4_TASKS_PER_SET
-    from app.db import get_recent_grammar_topics
     from app.parts import part4
+    # Part 4 is not in _GENERATE_CONFIG; handle it first so we always redirect to part=4
+    if action == "generate_part4":
+        level = (request.form.get("level") or "b2").strip().lower()
+        if level not in ("b2", "b2plus"):
+            level = "b2"
+        generated = part4.fetch_part4_tasks(level=level, db_only=False)
+        if generated:
+            session["part4_task_ids"] = [t["id"] for t in generated]
+            session.pop("part4_tasks", None)
+            session.pop("check_result", None)
+        return redirect(url_for("use_of_english.use_of_english", part=4, part4_generated=len(generated) if generated else 0, part4_level=level))
+
     for part_num, cfg in _GENERATE_CONFIG.items():
         if action != f"generate_part{part_num}":
             continue
@@ -56,16 +66,6 @@ def _handle_generate_action(action):
         level = (request.form.get("level") or default_level).strip().lower()
         if level not in ("b2", "b2plus"):
             level = default_level
-        if part_num == 4:
-            generated = part4.fetch_part4_tasks(
-                level=level,
-                db_only=False,
-            )
-            if generated:
-                session["part4_task_ids"] = [t["id"] for t in generated]
-                session.pop("part4_tasks", None)
-                session.pop("check_result", None)
-            return redirect(url_for("use_of_english.use_of_english", part=4, part4_generated=len(generated) if generated else 0, part4_level=level))
         item = cfg["fn"](level)
         if item and item.get("id"):
             session[cfg["session_key"]] = item["id"]
@@ -169,7 +169,7 @@ def _build_template_context(current_part, check_result, items):
         errors[4] = (
             "No Part 4 tasks in database. Generate tasks or turn off 'Database only'."
             if session.get("part4_db_only")
-            else "No tasks in database. Set OPENAI_API_KEY to generate new tasks."
+            else "No tasks in database. Set OPENAI_API_KEY or GOOGLE_AI_API_KEY to generate new tasks."
         )
     ctx = {"current_part": current_part, "check_result": check_result}
     ctx["part1_html"] = build_part1_html(items.get(1), cr if current_part == 1 else None) if 1 not in errors else ""
@@ -208,6 +208,15 @@ def use_of_english():
         try:
             action = request.form.get("action") or ""
             if action.startswith("generate_part"):
+                # Derive part from action string first (e.g. generate_part7 -> 7) so we never run the wrong part
+                action_suffix = action.replace("generate_part", "", 1).strip()
+                part_from_action = int(action_suffix) if action_suffix.isdigit() else None
+                if part_from_action in PARTS_RANGE:
+                    action = f"generate_part{part_from_action}"
+                else:
+                    part_from_form = request.form.get("part", type=int) or request.args.get("part", type=int)
+                    if part_from_form in PARTS_RANGE:
+                        action = f"generate_part{part_from_form}"
                 result = _handle_generate_action(action)
                 if result:
                     return result

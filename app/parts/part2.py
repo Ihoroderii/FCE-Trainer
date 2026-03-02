@@ -6,7 +6,8 @@ import re
 
 from flask import session
 
-from app.ai import openai_chat_create, openai_client
+from app.ai import chat_create, ai_available
+from app.ai.prompts import get_task_prompt_part2
 from app.ai.explanations import fetch_explanations_part2
 from app.config import MAX_EXPLANATION_LEN
 from app.db import _generic_get_or_create, get_part2_task_by_id, db_connection
@@ -37,32 +38,12 @@ PART2_TOPICS = [
 
 
 def generate_part2_with_openai(level="b2"):
-    if not openai_client:
+    if not ai_available:
         return None
     topic = random.choice(PART2_TOPICS)
-    level = (level or "b2").strip().lower()
-    if level != "b2plus":
-        level = "b2"
-    if level == "b2plus":
-        level_instruction = """- The text must be at B2+ level: slightly more complex grammar and vocabulary than standard B2. Use a mix of sentence structures (e.g. participle clauses, inversion, or more formal linkers). Include at least one or two gaps that could require phrasal verbs, complex prepositions, or linking words (e.g. however, although, despite, whereas). Length about 180-220 words."""
-    else:
-        level_instruction = """- A short text (about 150-200 words) at B2 level. Standard FCE open-cloze difficulty."""
-    prompt = f"""You are an FCE (B2 First) Use of English exam expert. Generate exactly ONE Part 2 (Open cloze) task.
-
-The text must be about this topic: {topic}. Use a different angle or situation (e.g. a personal story, a news-style piece, advice, or a description). Do NOT write about working from home or remote work unless the chosen topic is "work and careers" and you pick that angle.
-
-Part 2 consists of:
-{level_instruction}
-- The text must contain exactly 8 gaps marked (1)_____, (2)_____, (3)_____, (4)_____, (5)_____, (6)_____, (7)_____, (8)_____ in order. Each gap needs ONE word (articles, prepositions, auxiliaries, pronouns, conjunctions, phrasal verb particles, linkers, etc.).
-- The 8 correct answers (one word per gap).
-
-Return ONLY a valid JSON object with these exact keys:
-- "text": the full text with the exact placeholders (1)_____, (2)_____, ... (8)_____ where the gaps are. No other placeholder format.
-- "answers": an array of exactly 8 strings: the correct word for gap 1, then gap 2, ... gap 8. Use lowercase unless the word must be capitalised (e.g. start of sentence).
-
-No other text or markdown."""
+    prompt = get_task_prompt_part2(topic, level)
     try:
-        comp = openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
+        comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -90,7 +71,7 @@ No other text or markdown."""
 
 
 def get_or_create_part2_item(exclude_task_id=None):
-    return _generic_get_or_create(2, generate_part2_with_openai, exclude_task_id, openai_available=openai_client is not None)
+    return _generic_get_or_create(2, generate_part2_with_openai, exclude_task_id, openai_available=ai_available)
 
 
 def build_part2_html(item, check_result=None):

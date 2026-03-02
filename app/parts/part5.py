@@ -6,7 +6,8 @@ import re
 
 from flask import session
 
-from app.ai import openai_chat_create, openai_client
+from app.ai import chat_create, ai_available
+from app.ai.prompts import get_task_prompt_part5
 from app.ai.explanations import fetch_explanations_part5
 from app.config import LETTERS, MAX_EXPLANATION_LEN
 from app.db import _generic_get_or_create, get_part5_task_by_id, db_connection
@@ -17,34 +18,12 @@ logger = logging.getLogger("fce_trainer")
 
 
 def generate_part5_with_openai():
-    if not openai_client:
+    if not ai_available:
         return None
     topic = random.choice(PART3_TOPICS)
-    prompt = f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 5 task.
-
-The text MUST be clearly about this topic: "{topic}". Write a single continuous text (e.g. magazine article, report, or extract from a modern novel) that is obviously on this theme. Use a specific angle or situation so the text feels fresh and varied.
-
-Part 5 consists of:
-1. A single continuous text. Length: between 550 and 650 words. Upper-Intermediate (B2) level. The text should test understanding of the writer's opinion, attitude, purpose, tone, and implied meaning—not just surface facts.
-2. Exactly 6 multiple-choice questions. Each question has four options (A, B, C, D). Questions must follow the chronological order of the text: question 1 relates to the beginning, question 6 may relate to the end or the text as a whole. Each correct answer is worth 2 marks.
-
-QUESTION QUALITY REQUIREMENTS:
-- Mix question types: include at least one of each: (a) detail/fact comprehension, (b) writer's opinion/attitude, (c) implied meaning/inference, (d) purpose of a phrase or paragraph.
-- Distractors must be plausible: each wrong option should seem reasonable at first glance but be clearly wrong when the relevant passage is read carefully. Avoid obviously absurd options.
-- Vary the position of the correct answer: do NOT always put it in the same slot. Distribute correct answers across A, B, C, D roughly evenly.
-- Questions should use paraphrase, not copy text verbatim.
-
-Return ONLY a valid JSON object with these exact keys:
-- "title": a short title for the text (e.g. "The benefits of learning music")
-- "text": the full text. Use <p>...</p> for paragraphs. No other HTML. The text must be 550-650 words.
-- "questions": an array of exactly 6 objects. Each object has: "q" (the question text), "options" (array of exactly 4 strings, in order A then B then C then D), "correct" (integer 0, 1, 2, or 3—the index of the correct option).
-
-Example shape:
-{{"title": "...", "text": "<p>...</p><p>...</p>", "questions": [{{"q": "...", "options": ["A text", "B text", "C text", "D text"], "correct": 1}}, ...]}}
-
-No other text or markdown."""
+    prompt = get_task_prompt_part5(topic)
     try:
-        comp = openai_chat_create([{"role": "user", "content": prompt}], temperature=0.7)
+        comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
         m = re.search(r"\{[\s\S]*\}", content)
         if not m:
@@ -82,7 +61,7 @@ No other text or markdown."""
 
 
 def get_or_create_part5_item(exclude_task_id=None):
-    return _generic_get_or_create(5, generate_part5_with_openai, exclude_task_id, openai_available=openai_client is not None)
+    return _generic_get_or_create(5, generate_part5_with_openai, exclude_task_id, openai_available=ai_available)
 
 
 def build_part5_text(item):
