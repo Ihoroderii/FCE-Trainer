@@ -1,0 +1,89 @@
+{% extends "base_minimal.html" %}
+{% block title %}Get phrases — FCE Exam Trainer{% endblock %}
+{% block content %}
+<div class="get-phrases-page">
+  <h1 class="stats-page-title">Get phrases</h1>
+  <p class="stats-page-intro">
+    Practice collocations and phrasal verbs with <strong>get</strong>. A short text has 8 gaps; fill each gap with the correct phrase (e.g. get over, get rid of, get along with, get through). Then click <strong>Check answers</strong> to see your score and explanations.
+  </p>
+
+  {% if error %}
+  <div class="feedback error" role="alert">No tasks available. Set OPENAI_API_KEY (or GOOGLE_AI_API_KEY) to generate new tasks.</div>
+  {% endif %}
+  {% if generated %}
+  <div class="feedback success">New task generated.</div>
+  {% endif %}
+  {% if generate_failed %}
+  <div class="feedback error" role="alert">Task generation failed. Check your internet connection and API key (OPENAI_API_KEY or GOOGLE_AI_API_KEY), then try again.</div>
+  {% endif %}
+
+  <div class="part-stats-box">
+    <div class="part-stats-main">
+      {% if get_phrase_stats and get_phrase_stats.attempts > 0 %}
+        <span class="part-stats-pill part-stats-correct">{{ get_phrase_stats.total_correct }} right</span>
+        <span class="part-stats-pill part-stats-wrong">{{ get_phrase_stats.total_wrong }} wrong</span>
+        <span class="part-stats-pill part-stats-pct">{% if get_phrase_stats.percent is not none %}{{ get_phrase_stats.percent }}%{% else %}—{% endif %}</span>
+        <span class="part-stats-meta">{{ get_phrase_stats.attempts }} attempt{{ 's' if get_phrase_stats.attempts != 1 else '' }}</span>
+      {% else %}
+        <span class="part-stats-meta">No attempts yet for Get phrases. Sign in and check answers to see your stats here.</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if check_result %}
+  <div class="score-banner" id="score-banner" role="status" aria-live="polite">
+    <span class="score-banner-title">Score:</span>
+    <span class="score-banner-value">{{ check_result.score }} / {{ check_result.total }}</span>
+    <span class="score-banner-label">1 mark each</span>
+  </div>
+  {% endif %}
+
+  {% if ai_available %}
+  <div class="get-phrases-generate-wrap">
+    <form method="post" action="{{ url_for('get_phrases.get_phrases') }}" class="get-phrases-generate-form" id="get-phrases-generate-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="action" value="generate" />
+      <button type="submit" class="btn btn-generate" id="get-phrases-generate-btn">Generate new task</button>
+    </form>
+    <div class="get-phrases-load-bar" id="get-phrases-load-bar" aria-hidden="true">
+      <div class="get-phrases-load-bar-fill"></div>
+      <span class="get-phrases-load-bar-label">Generating task…</span>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if task %}
+  <form method="post" action="{{ url_for('get_phrases.get_phrases') }}" class="task-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    {{ task_html|safe }}
+    <div class="actions">
+      <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
+      <button type="submit" name="action" value="next" class="btn btn-next">Next task</button>
+    </div>
+  </form>
+  {% elif not error %}
+  <p class="stats-empty">No tasks in database. Generate a task using the button above (requires an API key).</p>
+  {% endif %}
+
+  <div class="stats-footer" style="margin-top: 1.5rem;">
+    <a href="{{ url_for('home.home') }}" class="btn btn-next">← Back to home</a>
+    <a href="{{ url_for('use_of_english.use_of_english') }}" class="btn btn-check">Use of English (Parts 1–7)</a>
+  </div>
+</div>
+{% if ai_available %}
+<script>
+(function() {
+  var form = document.getElementById('get-phrases-generate-form');
+  var btn = document.getElementById('get-phrases-generate-btn');
+  var bar = document.getElementById('get-phrases-load-bar');
+  if (form && btn && bar) {
+    form.addEventListener('submit', function() {
+      bar.classList.add('get-phrases-load-bar--active');
+      bar.setAttribute('aria-hidden', 'false');
+      btn.disabled = true;
+    });
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

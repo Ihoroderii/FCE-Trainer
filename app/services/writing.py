@@ -1,6 +1,8 @@
 """Writing section: essay prompts and Part 2 options."""
 import random
 
+from flask import session
+
 from app.config import WRITING_MIN_WORDS, WRITING_MAX_WORDS, WRITING_TOTAL_MINUTES
 
 WRITING_ESSAY_PROMPTS = [
@@ -71,10 +73,21 @@ Write your report in 140–190 words.""",
 ]
 
 
-def get_writing_context():
-    essay = random.choice(WRITING_ESSAY_PROMPTS)
-    part2_options = list(WRITING_PART2_OPTIONS)
-    random.shuffle(part2_options)
+def get_writing_context(reset=False):
+    """Return current writing prompts. If reset=True, pick new essay and reshuffle Part 2."""
+    if reset:
+        session.pop("writing_essay_prompt", None)
+        session.pop("writing_part2_options", None)
+    if "writing_essay_prompt" not in session:
+        session["writing_essay_prompt"] = random.choice(WRITING_ESSAY_PROMPTS)
+    essay = session["writing_essay_prompt"]
+
+    if "writing_part2_options" not in session:
+        opts = list(WRITING_PART2_OPTIONS)
+        random.shuffle(opts)
+        session["writing_part2_options"] = opts
+    part2_options = session["writing_part2_options"]
+
     return {
         "essay_prompt": essay,
         "part2_options": part2_options,

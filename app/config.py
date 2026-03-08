@@ -14,6 +14,8 @@ MAX_EXPLANATION_LEN = 400
 MAX_WORD_FAMILY_LEN = 200
 PARTS_RANGE = range(1, 8)
 PART_QUESTION_COUNTS = {1: 8, 2: 8, 3: 8, 4: 6, 5: 6, 6: 6, 7: 10}
+# Get phrases (study mode): separate part id for check_history / stats
+GET_PHRASE_PART = 8
 
 # Check result cache (server-side, avoid session cookie overflow)
 CHECK_RESULT_CACHE_MAX = 20

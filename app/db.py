@@ -165,6 +165,19 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_part7_shows_task_id ON part7_task_shows(task_id);
         CREATE INDEX IF NOT EXISTS idx_part7_shows_shown_at ON part7_task_shows(shown_at);
+        CREATE TABLE IF NOT EXISTS get_phrase_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            items_json TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'manual',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS get_phrase_task_shows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL REFERENCES get_phrase_tasks(id),
+            shown_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_get_phrase_shows_task_id ON get_phrase_task_shows(task_id);
+        CREATE INDEX IF NOT EXISTS idx_get_phrase_shows_shown_at ON get_phrase_task_shows(shown_at);
         CREATE TABLE IF NOT EXISTS check_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             part INTEGER NOT NULL,
@@ -213,6 +226,16 @@ def _ensure_check_history_user_id():
         if "user_id" in cols:
             return
         conn.execute("ALTER TABLE check_history ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        conn.commit()
+
+
+def _ensure_users_password_column():
+    with db_connection() as conn:
+        cur = conn.execute("PRAGMA table_info(users)")
+        cols = [r["name"] for r in cur.fetchall()]
+        if "password_hash" in cols:
+            return
+        conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
         conn.commit()
 
 
@@ -570,3 +593,51 @@ def record_part6_show(tid):
 
 def record_part7_show(tid):
     record_show_for_part(7, tid)
+
+
+# --- Get phrase tasks (study mode) ---
+
+def get_get_phrase_task_by_id(tid):
+    if not tid:
+        return None
+    with db_connection() as conn:
+        cur = conn.execute(
+            "SELECT id, items_json, source FROM get_phrase_tasks WHERE id = ?",
+            (tid,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    data = json.loads(row["items_json"])
+    return {
+        "id": row["id"],
+        "text": data.get("text", ""),
+        "answers": data.get("answers", []),
+        "source": row["source"],
+    }
+
+
+def pick_get_phrase_task_id(exclude_task_id=None):
+    excluded = list(_get_excluded_ids("get_phrase_task_shows"))
+    if exclude_task_id is not None and exclude_task_id not in excluded:
+        excluded.append(exclude_task_id)
+    with db_connection() as conn:
+        if excluded:
+            ph = ",".join("?" * len(excluded))
+            cur = conn.execute(
+                "SELECT id FROM get_phrase_tasks WHERE id NOT IN ({}) ORDER BY RANDOM() LIMIT 1".format(ph),
+                excluded,
+            )
+        else:
+            cur = conn.execute("SELECT id FROM get_phrase_tasks ORDER BY RANDOM() LIMIT 1")
+        row = cur.fetchone()
+        return row["id"] if row else None
+
+
+def record_get_phrase_show(task_id):
+    with db_connection() as conn:
+        conn.execute(
+            "INSERT INTO get_phrase_task_shows (task_id, shown_at) VALUES (?, datetime('now'))",
+            (task_id,),
+        )
+        conn.commit()

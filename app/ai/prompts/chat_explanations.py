@@ -124,3 +124,21 @@ Return ONLY a JSON array of exactly 10 strings. No other text.
 
 Statements:
 """ + statements_lines
+
+
+def get_explanation_prompt_get_phrases(passage: str, gaps_lines: str) -> str:
+    return """You are an English (B2) teacher. This is a "get phrases" cloze: a passage with 8 gaps, each filled with a collocation or phrasal verb using GET (e.g. get over, get rid of, get along with).
+
+PASSAGE (gaps are (1)_____, (2)_____, etc.):
+---
+""" + passage + """
+
+---
+For each gap, write ONE short explanation (1-2 sentences):
+1) Why the correct "get" phrase fits in this context (meaning, collocation).
+2) If the student's answer was wrong or blank, briefly why their phrase doesn't fit or what the gap requires.
+
+Return ONLY a JSON array of exactly 8 strings (one per gap, in order). No other text.
+
+Gaps:
+""" + gaps_lines

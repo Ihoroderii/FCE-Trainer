@@ -32,6 +32,46 @@
     else if (n > wordMax) countEl.classList.add('writing-count-high');
   }
 
+  function createWritingResizer(layoutId, resizerId, cssVarName, storageKey) {
+    var layout = document.getElementById(layoutId);
+    var resizer = document.getElementById(resizerId);
+    if (!layout || !resizer) return;
+    var minPct = 25, maxPct = 75;
+    function setPct(pct, save) {
+      pct = Math.max(minPct, Math.min(maxPct, pct));
+      layout.style.setProperty(cssVarName, pct + '%');
+      if (save !== false) {
+        try { localStorage.setItem(storageKey, String(pct)); } catch (e) {}
+      }
+    }
+    function restoreSaved() {
+      try {
+        var saved = localStorage.getItem(storageKey);
+        if (saved != null && saved !== '') {
+          var n = parseFloat(String(saved).trim(), 10);
+          if (!isNaN(n) && n >= minPct && n <= maxPct) {
+            setPct(n, false);
+          }
+        }
+      } catch (e) {}
+    }
+    restoreSaved();
+    resizer.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      function move(ev) {
+        var r = layout.getBoundingClientRect();
+        var pct = ((ev.clientX - r.left) / r.width) * 100;
+        setPct(pct);
+      }
+      function stop() {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', stop);
+      }
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', stop);
+    });
+  }
+
   // Tabs: Part 1 / Part 2
   var tab1 = document.getElementById('writing-tab-1');
   var tab2 = document.getElementById('writing-tab-2');
@@ -59,6 +99,9 @@
       panel1.setAttribute('hidden', '');
     });
   }
+
+  // Resizer between prompt and editor (Part 1)
+  createWritingResizer('writing-layout', 'writing-resizer', '--writing-left-pct', 'fce_writing_left_pct');
 
   // Part 1 word count
   var part1Text = document.getElementById('writing-part1-text');

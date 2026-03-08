@@ -180,3 +180,21 @@ Return ONLY a valid JSON object with these exact keys:
 - "questions": an array of exactly 10 objects. Each has "text" (the statement to match, one sentence) and "correct" (the section id, e.g. "A", "B").
 
 No other text or markdown."""
+
+
+def get_task_prompt_get_phrases(level: str = "b2") -> str:
+    """Generate one cloze text with 8 gaps; each gap = correct collocation with GET (e.g. get over, get rid of)."""
+    return """You are an English (B2) exam expert. Generate exactly ONE "get phrases" practice task.
+
+The task is a short continuous text (150–200 words) with exactly 8 gaps. Each gap must be filled with a correct collocation or phrasal verb using GET (e.g. get over, get rid of, get along with, get through, get away with, get on with, get round to, get out of, get by, get at, get across, get back to, get down to, get on, get off, get together, get ahead, get behind, get in, get into). Use a variety of common "get" phrases appropriate for B2 level.
+
+Requirements:
+- One continuous text (150–200 words) with exactly 8 gaps.
+- Each gap must be written as (1)_____, (2)_____, (3)_____, (4)_____, (5)_____, (6)_____, (7)_____, (8)_____ in order.
+- Each answer is the full phrase with "get" (e.g. "get over", "get rid of", "get along with"). Use lowercase. The student will type the missing phrase in each gap.
+
+Return ONLY a valid JSON object with these exact keys:
+- "text": the full passage with (1)_____ through (8)_____ where the gaps are.
+- "answers": an array of exactly 8 strings — the correct "get" phrase for each gap (e.g. ["get over", "get rid of", "get along with", "get through", "get away with", "get on with", "get round to", "get out of"]).
+
+No other text or markdown."""

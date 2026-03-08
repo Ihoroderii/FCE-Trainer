@@ -1,0 +1,178 @@
+{% extends "base_minimal.html" %}
+{% block title %}FCE Exam Trainer — Statistics{% endblock %}
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<div class="stats-page">
+  <h1 class="stats-page-title">Your statistics</h1>
+  <p class="stats-page-intro">Day and week overview, progress over time, and words you're learning from Part 3 (word formation). Stats are saved when you're signed in and click <strong>Check answers</strong> after a practice task.</p>
+
+  <nav class="stats-nav" aria-label="Statistics sections">
+    <a href="#overview" class="stats-nav-link">All-time</a>
+    <a href="#today" class="stats-nav-link">Today</a>
+    <a href="#week" class="stats-nav-link">This week</a>
+    <a href="#progress" class="stats-nav-link">Progress</a>
+    <a href="#words" class="stats-nav-link">Words I'm learning (Part 3)</a>
+  </nav>
+
+  {# ── All-time overview ── #}
+  <section id="overview" class="stats-panel">
+    <h2 class="stats-panel-title">All-time (Use of English)</h2>
+    {% set overview_has_any = user_stats and (user_stats | selectattr('attempts') | list | length) > 0 %}
+    {% if overview_has_any %}
+    <table class="stats-table">
+      <thead>
+        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        {% for s in user_stats %}
+        <tr>
+          <td>Part {{ s.part }}</td>
+          <td>{{ s.total_correct }}</td>
+          <td>{{ s.total_wrong }}</td>
+          <td>{{ s.attempts }}</td>
+          <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="stats-empty">No statistics yet. Go to <a href="{{ url_for('use_of_english.use_of_english') }}">Use of English</a>, do a task, then click <strong>Check answers</strong>. Your stats will appear here (and in Today / This week when applicable).</p>
+    {% endif %}
+    {% if get_phrase_stats and get_phrase_stats.get('attempts', 0) %}
+    <h3 class="stats-panel-subtitle">Get phrases</h3>
+    <table class="stats-table">
+      <thead>
+        <tr><th>Activity</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Get phrases (8-gap cloze)</td>
+          <td>{{ get_phrase_stats.total_correct }}</td>
+          <td>{{ get_phrase_stats.total_wrong }}</td>
+          <td>{{ get_phrase_stats.attempts }}</td>
+          <td>{% if get_phrase_stats.percent is not none %}{{ get_phrase_stats.percent }}%{% else %}—{% endif %}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="home-stats-link"><a href="{{ url_for('get_phrases.get_phrases') }}" class="btn btn-next">Practice Get phrases</a></p>
+    {% endif %}
+  </section>
+
+  {# ── Today ── #}
+  <section id="today" class="stats-panel">
+    <h2 class="stats-panel-title">Today</h2>
+    {% set day_has_any = daily_stats and (daily_stats | selectattr('total_questions') | list | length) > 0 %}
+    {% if day_has_any %}
+    <table class="stats-table">
+      <thead>
+        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        {% for s in daily_stats %}
+        <tr>
+          <td>Part {{ s.part }}</td>
+          <td>{{ s.total_correct }}</td>
+          <td>{{ s.total_wrong }}</td>
+          <td>{{ s.attempts }}</td>
+          <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="stats-empty">No activity today yet.</p>
+    {% endif %}
+  </section>
+
+  {# ── This week ── #}
+  <section id="week" class="stats-panel">
+    <h2 class="stats-panel-title">This week (last 7 days)</h2>
+    {% set week_has_any = weekly_stats and (weekly_stats | selectattr('total_questions') | list | length) > 0 %}
+    {% if week_has_any %}
+    <table class="stats-table">
+      <thead>
+        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        {% for s in weekly_stats %}
+        <tr>
+          <td>Part {{ s.part }}</td>
+          <td>{{ s.total_correct }}</td>
+          <td>{{ s.total_wrong }}</td>
+          <td>{{ s.attempts }}</td>
+          <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="stats-empty">No activity this week yet.</p>
+    {% endif %}
+  </section>
+
+  {# ── Progress chart ── #}
+  <section id="progress" class="stats-panel">
+    <h2 class="stats-panel-title">Progress (last 14 days)</h2>
+    {% if progress_series %}
+    <div class="stats-chart-wrap">
+      <canvas id="stats-chart" width="800" height="280" aria-label="Daily accuracy percentage"></canvas>
+    </div>
+    <script>
+      (function() {
+        var data = {{ progress_series | tojson }};
+        var labels = data.map(function(d) { return d.date; });
+        var percents = data.map(function(d) { return d.percent; });
+        var ctx = document.getElementById('stats-chart');
+        if (!ctx || typeof Chart === 'undefined') return;
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Accuracy %',
+              data: percents,
+              borderColor: '#0066cc',
+              backgroundColor: 'rgba(0, 102, 204, 0.1)',
+              fill: true,
+              tension: 0.2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: { y: { min: 0, max: 100 } },
+            plugins: { legend: { display: false } }
+          }
+        });
+      })();
+    </script>
+    {% else %}
+    <p class="stats-empty">No data yet for the last 14 days.</p>
+    {% endif %}
+  </section>
+
+  {# ── Words I'm learning (Part 3) ── #}
+  <section id="words" class="stats-panel">
+    <h2 class="stats-panel-title">Words I'm learning (Part 3)</h2>
+    <p class="stats-panel-desc">Vocabulary from word-formation tasks you checked. Correct answers and explanations you saw.</p>
+    {% if words_learning %}
+    <ul class="stats-words-list">
+      {% for w in words_learning %}
+      <li class="stats-word-item">
+        <span class="stats-word-term">{{ w.word }}</span>
+        <span class="stats-word-explanation">{{ w.explanation }}</span>
+        <span class="stats-word-date">{{ w.created_at_display }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="stats-empty">No Part 3 explanations yet. Practice Part 3 and check answers to see words and explanations here.</p>
+    {% endif %}
+  </section>
+
+  <div class="stats-footer">
+    <a href="{{ url_for('home.home') }}" class="btn btn-next">← Back to home</a>
+    <a href="{{ url_for('use_of_english.use_of_english') }}" class="btn btn-check">Practice</a>
+  </div>
+</div>
+{% endblock %}

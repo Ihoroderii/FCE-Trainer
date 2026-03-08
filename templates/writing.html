@@ -1,6 +1,7 @@
 {% extends "base_minimal.html" %}
 {% block title %}FCE Exam Trainer — Writing{% endblock %}
 {% block content %}
+{% macro csrf_input() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endmacro %}
 <div class="writing-page" data-word-min="{{ word_min }}" data-word-max="{{ word_max }}" data-total-minutes="{{ total_minutes }}">
   <div class="writing-header-row">
     <h1 class="writing-title">Writing</h1>
@@ -13,29 +14,66 @@
   </div>
 
   <div class="writing-tabs" role="tablist" aria-label="Writing parts">
-    <button type="button" class="writing-tab writing-tab-active" role="tab" aria-selected="true" aria-controls="writing-part1-panel" id="writing-tab-1" data-part="1">Part 1 — Essay</button>
-    <button type="button" class="writing-tab" role="tab" aria-selected="false" aria-controls="writing-part2-panel" id="writing-tab-2" data-part="2">Part 2 — Choice</button>
+    <button type="button" class="writing-tab{% if active_part == 1 %} writing-tab-active{% endif %}" role="tab" aria-selected="{{ 'true' if active_part == 1 else 'false' }}" aria-controls="writing-part1-panel" id="writing-tab-1" data-part="1">Part 1 — Essay</button>
+    <button type="button" class="writing-tab{% if active_part == 2 %} writing-tab-active{% endif %}" role="tab" aria-selected="{{ 'true' if active_part == 2 else 'false' }}" aria-controls="writing-part2-panel" id="writing-tab-2" data-part="2">Part 2 — Choice</button>
   </div>
 
-  <section id="writing-part1-panel" class="writing-panel writing-panel-active" role="tabpanel" aria-labelledby="writing-tab-1">
+  <section id="writing-part1-panel" class="writing-panel{% if active_part == 1 %} writing-panel-active{% endif %}" role="tabpanel" aria-labelledby="writing-tab-1"{% if active_part != 1 %} hidden{% endif %}>
     <h2 class="writing-part-title">Part 1 — Compulsory essay</h2>
     <p class="writing-instruction">Write an essay (140–190 words). Discuss the two points below and add <strong>one idea of your own</strong>.</p>
-    <div class="writing-prompt-box">
-      <p class="writing-question">{{ essay_prompt.question }}</p>
-      <ul class="writing-points">
-        {% for point in essay_prompt.points %}
-        <li>{{ point }}</li>
-        {% endfor %}
-      </ul>
-      <p class="writing-notes">{{ essay_prompt.notes }}</p>
-    </div>
-    <div class="writing-editor-wrap">
-      <label for="writing-part1-text" class="writing-word-count" id="writing-part1-count" aria-live="polite">0 words ({{ word_min }}–{{ word_max }})</label>
-      <textarea id="writing-part1-text" class="writing-textarea" name="part1_text" rows="12" placeholder="Write your essay here…" aria-label="Part 1 essay"></textarea>
+    <div class="writing-layout" id="writing-layout">
+      <div class="writing-prompt-col">
+        {% if task_token %}
+        <div class="writing-task-image-wrap">
+          <img src="{{ url_for('writing.task_image', token=task_token) }}" alt="Part 1 essay task" class="writing-task-image" />
+        </div>
+        <form method="post" action="{{ url_for('writing.writing') }}" class="writing-generate-form">
+          {{ csrf_input() }}
+          <input type="hidden" name="action" value="generate" />
+          <button type="submit" class="btn btn-generate-writing">Generate task</button>
+        </form>
+        {% else %}
+        <div class="writing-prompt-box">
+          <p class="writing-question">{{ essay_prompt.question }}</p>
+          <ul class="writing-points">
+            {% for point in essay_prompt.points %}
+            <li>{{ point }}</li>
+            {% endfor %}
+          </ul>
+          <p class="writing-notes">{{ essay_prompt.notes }}</p>
+        </div>
+        {% endif %}
+      </div>
+      <div class="split-resizer writing-resizer" id="writing-resizer" title="Drag to resize"></div>
+      <div class="writing-editor-col">
+        <form method="post" action="{{ url_for('writing.writing') }}" class="writing-editor-wrap">
+          {{ csrf_input() }}
+          <input type="hidden" name="part" value="1" />
+          <label for="writing-part1-text" class="writing-word-count" id="writing-part1-count" aria-live="polite">0 words ({{ word_min }}–{{ word_max }})</label>
+          <textarea id="writing-part1-text" class="writing-textarea" name="answer" rows="12" placeholder="Write your essay here…" aria-label="Part 1 essay">{{ request.form.answer if active_part == 1 else '' }}</textarea>
+          <div class="writing-actions">
+            <button type="submit" name="action" value="check" class="btn btn-check">Check with AI</button>
+          </div>
+          {% if part1_feedback %}
+          <div class="writing-feedback">
+            <div class="writing-feedback-scores">
+              <span class="writing-feedback-score"><strong>Overall:</strong> {{ part1_feedback.overall }}/5</span>
+              {% if part1_feedback.content is defined %}
+              <span class="writing-feedback-score"><strong>Content:</strong> {{ part1_feedback.content }}/5</span>
+              <span class="writing-feedback-score"><strong>Comm. achievement:</strong> {{ part1_feedback.communicative_achievement }}/5</span>
+              <span class="writing-feedback-score"><strong>Organisation:</strong> {{ part1_feedback.organisation }}/5</span>
+              <span class="writing-feedback-score"><strong>Language:</strong> {{ part1_feedback.language }}/5</span>
+              {% endif %}
+            </div>
+            <p class="writing-feedback-comment">{{ part1_feedback.comment or part1_feedback.raw_text }}</p>
+          </div>
+          {% endif %}
+        </form>
+      </div>
     </div>
   </section>
 
-  <section id="writing-part2-panel" class="writing-panel" role="tabpanel" aria-labelledby="writing-tab-2" hidden>
+  <section id="writing-part2-panel" class="writing-panel{% if active_part == 2 %} writing-panel-active{% endif %}" role="tabpanel" aria-labelledby="writing-tab-2"{% if active_part != 2 %} hidden{% endif %}>
     <h2 class="writing-part-title">Part 2 — Choose one task</h2>
     <p class="writing-instruction">Choose <strong>one</strong> of the following (140–190 words): article, letter/email, report or review.</p>
     <div class="writing-part2-options" role="group" aria-label="Part 2 task options">
@@ -46,13 +84,40 @@
           <span class="writing-option-type">{{ opt.type }}</span>
         </button>
         <div id="writing-option-prompt-{{ opt.id }}" class="writing-option-prompt" hidden>
-          <div class="writing-prompt-box">
-            <p class="writing-task-intro">{{ opt.task }}</p>
-            <pre class="writing-prompt-text">{{ opt.prompt }}</pre>
-          </div>
-          <div class="writing-editor-wrap">
-            <label class="writing-word-count writing-part2-count" id="writing-part2-count-{{ opt.id }}" aria-live="polite" data-option="{{ opt.id }}">0 words ({{ word_min }}–{{ word_max }})</label>
-            <textarea class="writing-textarea writing-part2-text" name="part2_text" data-option="{{ opt.id }}" rows="12" placeholder="Write your {{ opt.type|lower }} here…" aria-label="Part 2 {{ opt.type }}"></textarea>
+          <div class="writing-layout writing-layout-part2">
+            <div class="writing-prompt-col">
+              <div class="writing-prompt-box">
+                <p class="writing-task-intro">{{ opt.task }}</p>
+                <pre class="writing-prompt-text">{{ opt.prompt }}</pre>
+              </div>
+            </div>
+            <div class="writing-editor-col">
+              <form method="post" action="{{ url_for('writing.writing') }}" class="writing-editor-wrap">
+                {{ csrf_input() }}
+                <input type="hidden" name="part" value="2" />
+                <input type="hidden" name="option_id" value="{{ opt.id }}" />
+                <label class="writing-word-count writing-part2-count" id="writing-part2-count-{{ opt.id }}" aria-live="polite" data-option="{{ opt.id }}">0 words ({{ word_min }}–{{ word_max }})</label>
+                <textarea class="writing-textarea writing-part2-text" name="answer" data-option="{{ opt.id }}" rows="12" placeholder="Write your {{ opt.type|lower }} here…" aria-label="Part 2 {{ opt.type }}">{{ request.form.answer if active_part == 2 and request.form.get('option_id') == opt.id else '' }}</textarea>
+                <div class="writing-actions">
+                  <button type="submit" name="action" value="check" class="btn btn-check">Check with AI</button>
+                </div>
+                {% set fb = part2_feedback.get(opt.id) if part2_feedback else None %}
+                {% if fb %}
+                <div class="writing-feedback">
+                  <div class="writing-feedback-scores">
+                    <span class="writing-feedback-score"><strong>Overall:</strong> {{ fb.overall }}/5</span>
+                    {% if fb.content is defined %}
+                    <span class="writing-feedback-score"><strong>Content:</strong> {{ fb.content }}/5</span>
+                    <span class="writing-feedback-score"><strong>Comm. achievement:</strong> {{ fb.communicative_achievement }}/5</span>
+                    <span class="writing-feedback-score"><strong>Organisation:</strong> {{ fb.organisation }}/5</span>
+                    <span class="writing-feedback-score"><strong>Language:</strong> {{ fb.language }}/5</span>
+                    {% endif %}
+                  </div>
+                  <p class="writing-feedback-comment">{{ fb.comment or fb.raw_text }}</p>
+                </div>
+                {% endif %}
+              </form>
+            </div>
           </div>
         </div>
       </div>

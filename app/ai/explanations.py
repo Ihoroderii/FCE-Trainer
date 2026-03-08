@@ -11,6 +11,7 @@ from app.ai.prompts import (
     get_explanation_prompt_part5,
     get_explanation_prompt_part6,
     get_explanation_prompt_part7,
+    get_explanation_prompt_get_phrases,
 )
 from app.config import LETTERS, MAX_EXPLANATION_LEN, MAX_WORD_FAMILY_LEN
 
@@ -240,4 +241,30 @@ def fetch_explanations_part7(item, details):
         return []
     except Exception:
         logger.exception("OpenAI explanations Part 7 error")
+        return []
+
+
+def fetch_explanations_get_phrases(task, details):
+    """Get phrases: 8 gaps, each correct answer is a 'get' collocation. Returns list of dicts with 'explanation'."""
+    if not ai_available or not task or not task.get("text") or not task.get("answers") or len(details) < 8:
+        return []
+    passage = (task.get("text") or "").strip()
+    answers = task.get("answers") or []
+    if len(answers) < 8:
+        return []
+    lines = []
+    for i in range(8):
+        correct = (answers[i] if i < len(answers) else "").strip()
+        user_val = (details[i].get("user_val") or "").strip()
+        lines.append(f"Gap {i+1}: Correct: '{correct}'. Student wrote: '{user_val or '(blank)'}'.")
+    prompt = get_explanation_prompt_get_phrases(passage[:4000], "\n".join(lines))
+    try:
+        comp = chat_create([{"role": "user", "content": prompt}], temperature=0.3)
+        content = (comp.choices[0].message.content or "").strip()
+        arr = _extract_json_array(content)
+        if isinstance(arr, list) and len(arr) >= 8:
+            return [{"explanation": str(arr[i]).strip()[:MAX_EXPLANATION_LEN]} for i in range(8)]
+        return []
+    except Exception:
+        logger.exception("OpenAI explanations Get phrases error")
         return []

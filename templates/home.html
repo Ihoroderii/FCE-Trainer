@@ -44,6 +44,12 @@
       <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks (140–190 words each) with a built-in timer.</p>
       <span class="home-section-cta">Go to Writing &rarr;</span>
     </a>
+    <a href="{{ url_for('get_phrases.get_phrases') }}" class="home-section-card home-section-use">
+      <span class="home-section-icon" aria-hidden="true">GET</span>
+      <h3 class="home-section-title">Get phrases</h3>
+      <p class="home-section-desc">Study collocations with <strong>get</strong>: 8-gap cloze (e.g. get over, get rid of, get along with). Check answers and review explanations.</p>
+      <span class="home-section-cta">Practice get phrases &rarr;</span>
+    </a>
   </div>
 
   {# ── Account & stats ── #}
@@ -72,13 +78,18 @@
             {% endfor %}
           </tbody>
         </table>
+        <p class="home-stats-link"><a href="{{ url_for('home.stats') }}" class="btn btn-next">View full statistics (day, week, chart, Part 3 words)</a></p>
       </section>
       {% else %}
-      <p class="home-stats-empty">No attempts yet. Your stats will appear here after you check answers.</p>
+      <p class="home-stats-empty">No attempts yet. Your stats will appear here after you check answers. <a href="{{ url_for('home.stats') }}">Statistics</a></p>
       {% endif %}
-    {% elif google_available %}
+    {% else %}
       <p class="home-account-connect">
+        <a href="{{ url_for('home.register') }}" class="btn btn-next">Sign up</a>
+        <a href="{{ url_for('home.login') }}" class="btn btn-next">Log in</a>
+        {% if google_available %}
         <a href="{{ url_for('google.login') }}" class="btn btn-google">Connect Google account</a>
+        {% endif %}
         <span class="home-account-hint">Track your statistics across devices.</span>
       </p>
     {% endif %}

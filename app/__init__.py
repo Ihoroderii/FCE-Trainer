@@ -8,10 +8,11 @@ from flask import Flask, redirect, request, url_for
 from flask_wtf.csrf import CSRFProtect
 
 from app.config import PARTS_RANGE
-from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id
+from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column
 from app.views.home import bp as home_bp
 from app.views.use_of_english import bp as uoe_bp
 from app.views.writing import bp as writing_bp
+from app.views.get_phrases import bp as get_phrases_bp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("fce_trainer")
@@ -63,6 +64,7 @@ def create_app(config=None):
     app.register_blueprint(home_bp)
     app.register_blueprint(uoe_bp)
     app.register_blueprint(writing_bp)
+    app.register_blueprint(get_phrases_bp)
 
     if app.config["GOOGLE_OAUTH_CLIENT_ID"] and app.config["GOOGLE_OAUTH_CLIENT_SECRET"]:
         from flask_dance.contrib.google import make_google_blueprint
@@ -75,6 +77,7 @@ def create_app(config=None):
         init_db()
         _ensure_uoe_grammar_topic_column()
         _ensure_check_history_user_id()
+        _ensure_users_password_column()
         seed_db()
 
     return app
