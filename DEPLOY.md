@@ -33,8 +33,9 @@ This app runs as a Flask app with SQLite. Below are free hosting options. Pick o
        ```
      - **Start command:**
        ```bash
-       gunicorn --bind 0.0.0.0:$PORT wsgi:app
+       python -m gunicorn --bind 0.0.0.0:$PORT wsgi:app
        ```
+       (Using `python -m gunicorn` ensures the same Python that has your dependencies is used; plain `gunicorn` can be "command not found" on some hosts.)
    - **Instance type:** Free
 
 4. **Environment variables** (Render → your service → **Environment**):

@@ -16,15 +16,15 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 logger = logging.getLogger("fce_trainer")
 
 # ----- OpenAI -----
-openai_api_key = os.environ.get("OPENAI_API_KEY")
+openai_api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
 openai_client = None
-openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+openai_model = (os.environ.get("OPENAI_MODEL") or "gpt-4o-mini").strip()
 if openai_api_key:
     from openai import OpenAI
     openai_client = OpenAI(api_key=openai_api_key)
 
 # ----- Groq (OpenAI-compatible, free tier) -----
-groq_api_key = os.environ.get("GROQ_API_KEY")
+groq_api_key = (os.environ.get("GROQ_API_KEY") or "").strip()
 groq_model = (os.environ.get("GROQ_MODEL") or "llama-3.3-70b-versatile").strip()
 groq_client = None
 if groq_api_key:
@@ -38,13 +38,13 @@ if groq_api_key:
             os.environ["OPENAI_BASE_URL"] = _saved_base
 
 # ----- Google AI Studio (Gemini) — REST API -----
-google_ai_api_key = os.environ.get("GOOGLE_AI_API_KEY")
+google_ai_api_key = (os.environ.get("GOOGLE_AI_API_KEY") or "").strip()
 google_ai_model = (os.environ.get("GOOGLE_AI_MODEL") or "gemini-2.0-flash").strip()
 google_ai_configured = bool(google_ai_api_key)
 GOOGLE_AI_MODEL_FALLBACKS = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
 
 # ----- Hugging Face Inference API -----
-hf_api_key = os.environ.get("HUGGINGFACE_API_KEY") or os.environ.get("HF_TOKEN")
+hf_api_key = (os.environ.get("HUGGINGFACE_API_KEY") or os.environ.get("HF_TOKEN") or "").strip()
 hf_model = (os.environ.get("HUGGINGFACE_MODEL") or os.environ.get("HF_MODEL") or "HuggingFaceH4/zephyr-7b-beta").strip()
 hf_configured = bool(hf_api_key)
 HF_INFERENCE_URL = "https://api-inference.huggingface.co/models"
