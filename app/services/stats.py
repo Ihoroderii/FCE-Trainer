@@ -1,6 +1,7 @@
 """Check history and per-part statistics."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from flask import session
@@ -52,7 +53,11 @@ def record_check_result(result: dict) -> dict | None:
         conn.commit()
 
     # Award XP & check achievements for logged-in users
-    reward = award_xp(user_id, score, total, part)
+    try:
+        reward = award_xp(user_id, score, total, part)
+    except Exception:
+        logging.getLogger("fce_trainer").warning("award_xp failed", exc_info=True)
+        reward = None
     if reward and reward.get("xp_gained"):
         session["last_reward"] = reward
     return reward
