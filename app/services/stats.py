@@ -18,6 +18,18 @@ def _user_filter_sql(user_id: int | None) -> tuple[str, tuple]:
     return "user_id = ?", (user_id,)
 
 
+def claim_orphaned_stats(user_id: int) -> int:
+    """Assign all check_history rows with user_id=NULL to the given user. Returns count."""
+    with db_connection() as conn:
+        cur = conn.execute("SELECT COUNT(*) AS n FROM check_history WHERE user_id IS NULL")
+        count = cur.fetchone()["n"]
+        if count > 0:
+            conn.execute("UPDATE check_history SET user_id = ? WHERE user_id IS NULL", (user_id,))
+            conn.commit()
+            logging.getLogger("fce_trainer").info("Claimed %d orphaned stats for user %d", count, user_id)
+    return count
+
+
 def record_check_result(result: dict) -> dict | None:
     part = result.get("part")
     score = result.get("score", 0)

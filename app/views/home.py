@@ -17,6 +17,7 @@ from app.services.stats import (
     get_progress_series,
     get_words_learning,
     get_get_phrase_stats,
+    claim_orphaned_stats,
 )
 from app.services.user import create_email_user, verify_email_password
 from app.utils import login_required
@@ -170,6 +171,7 @@ def register():
                 session["user_id"] = uid
                 session["user_email"] = email
                 session["user_name"] = name or email
+                claim_orphaned_stats(uid)
                 return redirect(url_for("home.home"))
             error = "This email is already registered. Try logging in."
     return render_template("register.html", error=error)
@@ -191,6 +193,7 @@ def login():
                 session["user_id"] = user["id"]
                 session["user_email"] = user["email"]
                 session["user_name"] = user["name"]
+                claim_orphaned_stats(user["id"])
                 return redirect(url_for("home.home"))
             error = "Invalid email or password."
     return render_template("login.html", error=error)
@@ -216,6 +219,7 @@ def login_callback():
                     session["user_id"] = uid
                     session["user_email"] = email
                     session["user_name"] = name
+                    claim_orphaned_stats(uid)
         except Exception:
             logger.exception("OAuth callback error")
     return redirect(url_for("home.home"))
