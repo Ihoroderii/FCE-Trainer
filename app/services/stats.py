@@ -6,9 +6,8 @@ from datetime import datetime
 
 from flask import session
 
-from app.config import GET_PHRASE_PART, PARTS_RANGE
+from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE
 from app.db import db_connection
-from app.services.gamification import award_xp
 from app.services.repetition import record_review
 
 
@@ -104,13 +103,15 @@ def record_check_result(result: dict) -> dict | None:
         conn.commit()
 
     # Award XP & check achievements for logged-in users
-    try:
-        reward = award_xp(user_id, score, total, part)
-    except Exception:
-        logging.getLogger("fce_trainer").warning("award_xp failed", exc_info=True)
-        reward = None
-    if reward and reward.get("xp_gained"):
-        session["last_reward"] = reward
+    reward = None
+    if GAMIFICATION_ENABLED:
+        try:
+            from app.services.gamification import award_xp
+            reward = award_xp(user_id, score, total, part)
+        except Exception:
+            logging.getLogger("fce_trainer").warning("award_xp failed", exc_info=True)
+        if reward and reward.get("xp_gained"):
+            session["last_reward"] = reward
 
     # Schedule spaced repetition review for the task
     try:

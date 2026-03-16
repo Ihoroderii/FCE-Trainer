@@ -8,8 +8,7 @@ import re
 
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 
-from app.config import ACHIEVEMENTS, PARTS_RANGE
-from app.services.gamification import get_game_stats
+from app.config import ACHIEVEMENTS, GAMIFICATION_ENABLED, PARTS_RANGE
 from app.services.stats import (
     get_part_stats,
     get_daily_stats,
@@ -51,7 +50,10 @@ def stats():
     words_learning = get_words_learning(user_id, part=3, limit=60)
     get_phrase_stats = get_get_phrase_stats(user_id)
     has_attempts = any(s.get("attempts", 0) for s in user_stats) or get_phrase_stats.get("attempts", 0)
-    game_stats = get_game_stats(user_id)
+    game_stats = None
+    if GAMIFICATION_ENABLED:
+        from app.services.gamification import get_game_stats
+        game_stats = get_game_stats(user_id)
     return render_template(
         "stats.html",
         user_stats=user_stats,
@@ -62,7 +64,7 @@ def stats():
         get_phrase_stats=get_phrase_stats,
         has_attempts=has_attempts,
         game=game_stats,
-        all_achievements=ACHIEVEMENTS,
+        all_achievements=ACHIEVEMENTS if GAMIFICATION_ENABLED else {},
     )
 
 
@@ -73,7 +75,10 @@ def home():
     user_name = session.get("user_name") or ""
     user_stats = get_part_stats(user_id) if user_id is not None else None
     has_attempts = user_stats and any(s.get("attempts", 0) for s in user_stats)
-    game_stats = get_game_stats(user_id) if user_id is not None else None
+    game_stats = None
+    if GAMIFICATION_ENABLED and user_id is not None:
+        from app.services.gamification import get_game_stats
+        game_stats = get_game_stats(user_id)
     google_available = bool(
         current_app.config.get("GOOGLE_OAUTH_CLIENT_ID") and current_app.config.get("GOOGLE_OAUTH_CLIENT_SECRET")
     )
