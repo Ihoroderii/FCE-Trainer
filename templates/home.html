@@ -1,28 +1,170 @@
 {% extends "base_minimal.html" %}
-{% block title %}FCE Exam Trainer — Home{% endblock %}
+{% block title %}FCE Exam Trainer — Free B2 First Practice with AI{% endblock %}
 {% block content %}
 <div class="home-page">
-  <h1 class="home-title">FCE Exam Trainer</h1>
-  <p class="home-subtitle">Choose a paper to practice</p>
 
+  {# ── Floating stats sidebar (logged-in only) ── #}
+  {% if user_id and has_attempts %}
+  <aside class="home-sidebar-stats" id="home-sidebar-stats">
+    <button class="sidebar-stats-toggle" id="sidebar-stats-toggle" title="Toggle stats panel" aria-label="Toggle stats">📊</button>
+    <div class="sidebar-stats-body">
+      <h3 class="sidebar-stats-title">📈 All-time stats</h3>
+      <table class="sidebar-stats-table">
+        <thead><tr><th>Part</th><th>✓</th><th>✗</th><th>#</th><th>%</th></tr></thead>
+        <tbody>
+          {% set ns = namespace(total_correct=0, total_wrong=0, total_attempts=0, total_q=0) %}
+          {% for s in user_stats %}
+          {% set ns.total_correct = ns.total_correct + s.total_correct %}
+          {% set ns.total_wrong = ns.total_wrong + s.total_wrong %}
+          {% set ns.total_attempts = ns.total_attempts + s.attempts %}
+          {% set ns.total_q = ns.total_q + s.total_questions %}
+          <tr class="{{ 'stat-excellent' if s.percent is not none and s.percent >= 75 else ('stat-good' if s.percent is not none and s.percent >= 60 else ('stat-mid' if s.percent is not none and s.percent >= 40 else ('stat-low' if s.percent is not none else ''))) }}">
+            <td><span class="sidebar-part-badge">P{{ s.part }}</span></td>
+            <td class="sidebar-cell-correct">{{ s.total_correct }}</td>
+            <td class="sidebar-cell-wrong">{{ s.total_wrong }}</td>
+            <td>{{ s.attempts }}</td>
+            <td class="sidebar-cell-pct">
+              {% if s.percent is not none %}
+              <span class="sidebar-pct-bar"><span class="sidebar-pct-fill" style="width:{{ s.percent }}%"></span></span>
+              <span>{{ s.percent }}%</span>
+              {% else %}&mdash;{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          {% set overall_pct = (100 * ns.total_correct / ns.total_q)|round(1) if ns.total_q > 0 else 0 %}
+          <tr class="sidebar-stats-total">
+            <td><strong>All</strong></td>
+            <td class="sidebar-cell-correct"><strong>{{ ns.total_correct }}</strong></td>
+            <td class="sidebar-cell-wrong"><strong>{{ ns.total_wrong }}</strong></td>
+            <td><strong>{{ ns.total_attempts }}</strong></td>
+            <td class="sidebar-cell-pct">
+              <span class="sidebar-pct-bar sidebar-pct-bar--total"><span class="sidebar-pct-fill" style="width:{{ overall_pct }}%"></span></span>
+              <span><strong>{{ overall_pct }}%</strong></span>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+      <a href="{{ url_for('home.stats') }}" class="sidebar-stats-link">Full stats &rarr;</a>
+    </div>
+  </aside>
+  {% endif %}
+
+  {# ── Hero ── #}
+  <div class="home-hero">
+    <h1 class="home-title">Practice for Cambridge B2 First (FCE)</h1>
+    <p class="home-tagline">All 7 Use of English &amp; Reading parts. AI-generated tasks at B2 and B2+ levels. Instant feedback with explanations why each answer is correct or wrong.</p>
+    <a href="{{ url_for('use_of_english.use_of_english') }}" class="btn btn-hero">Start practicing &mdash; free</a>
+  </div>
+
+  {# ── Feature highlights ── #}
+  <div class="home-features">
+    <div class="home-feature">
+      <span class="home-feature-icon" aria-hidden="true">1&ndash;7</span>
+      <h3>All exam parts</h3>
+      <p>Multiple-choice cloze, open cloze, word formation, key word transformations, reading comprehension, gapped text, multiple matching.</p>
+    </div>
+    <div class="home-feature">
+      <span class="home-feature-icon" aria-hidden="true">AI</span>
+      <h3>Unlimited practice</h3>
+      <p>New tasks generated on demand so you never run out of material. Choose B2 or B2+ difficulty.</p>
+    </div>
+    <div class="home-feature">
+      <span class="home-feature-icon" aria-hidden="true">?!</span>
+      <h3>Answer explanations</h3>
+      <p>After you check answers, AI explains why the correct option fits and why your choice was wrong — so you actually learn.</p>
+    </div>
+  </div>
+
+  {# ── Paper cards ── #}
+  <div class="home-sections" id="learning">
+    <h2 class="home-sections-heading">Choose a paper</h2>
+    <a href="{{ url_for('use_of_english.use_of_english') }}" class="home-section-card home-section-use">
+      <span class="home-section-icon" aria-hidden="true">📖</span>
+      <h3 class="home-section-title">Use of English and Reading</h3>
+      <p class="home-section-desc">Parts 1–7: multiple-choice cloze, open cloze, word formation, key word transformations, multiple choice, gapped text, multiple matching.</p>
+      <span class="home-section-cta">Start practice &rarr;</span>
+    </a>
+    <a href="{{ url_for('writing.writing') }}" class="home-section-card home-section-writing">
+      <span class="home-section-icon" aria-hidden="true">✎</span>
+      <h3 class="home-section-title">Writing</h3>
+      <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks (140–190 words each) with a built-in timer.</p>
+      <span class="home-section-cta">Go to Writing &rarr;</span>
+    </a>
+    <a href="{{ url_for('get_phrases.get_phrases') }}" class="home-section-card home-section-use">
+      <span class="home-section-icon" aria-hidden="true">GET</span>
+      <h3 class="home-section-title">Get phrases</h3>
+      <p class="home-section-desc">Study collocations with <strong>get</strong>: 8-gap cloze (e.g. get over, get rid of, get along with). Check answers and review explanations.</p>
+      <span class="home-section-cta">Practice get phrases &rarr;</span>
+    </a>
+  </div>
+
+  {# ── Account & stats ── #}
   <div class="home-account">
     {% if user_id %}
-      <p class="home-account-connected">
-        Connected as <strong>{{ user_email or user_name or 'Google account' }}</strong>
-        <a href="{{ url_for('logout') }}" class="home-account-disconnect">Disconnect</a>
-      </p>
+
+      {# ── Game dashboard ── #}
+      {% if game %}
+      <section class="game-dashboard">
+        <div class="game-level-card">
+          <div class="game-level-header">
+            <span class="game-level-badge">Lv {{ game.level }}</span>
+            <span class="game-level-name">{{ game.level_name }}</span>
+            <span class="game-xp-total">{{ game.xp }} XP</span>
+          </div>
+          <div class="game-xp-bar-wrap">
+            <div class="game-xp-bar" style="width: {{ game.xp_progress_pct }}%"></div>
+          </div>
+          <div class="game-xp-label">{{ game.xp_in_level }} / {{ game.xp_needed }} XP to next level</div>
+        </div>
+
+        <div class="game-stats-row">
+          <div class="game-stat-card">
+            <span class="game-stat-icon">🔥</span>
+            <span class="game-stat-value">{{ game.streak_days }}</span>
+            <span class="game-stat-label">Day streak</span>
+          </div>
+          <div class="game-stat-card">
+            <span class="game-stat-icon">⚡</span>
+            <span class="game-stat-value">{{ game.best_streak }}</span>
+            <span class="game-stat-label">Best streak</span>
+          </div>
+          <div class="game-stat-card">
+            <span class="game-stat-icon">💯</span>
+            <span class="game-stat-value">{{ game.total_perfect }}</span>
+            <span class="game-stat-label">Perfect scores</span>
+          </div>
+          <div class="game-stat-card">
+            <span class="game-stat-icon">🎮</span>
+            <span class="game-stat-value">{{ game.best_combo }}</span>
+            <span class="game-stat-label">Best combo</span>
+          </div>
+        </div>
+
+        {% if game.achievements %}
+        <div class="game-achievements-preview">
+          <h3>Recent achievements</h3>
+          <div class="game-badges-row">
+            {% for a in game.achievements[:5] %}
+            <div class="game-badge" title="{{ a.desc }} — {{ a.unlocked_display }}">
+              <span class="game-badge-icon">{{ a.icon }}</span>
+              <span class="game-badge-name">{{ a.name }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          <a href="{{ url_for('home.stats') }}#achievements" class="btn btn-next">All achievements</a>
+        </div>
+        {% endif %}
+      </section>
+      {% endif %}
+
       {% if has_attempts %}
       <section class="stats-section home-stats">
         <h2>Your statistics (Use of English)</h2>
         <table class="stats-table">
           <thead>
-            <tr>
-              <th>Part</th>
-              <th>Right</th>
-              <th>Wrong</th>
-              <th>Attempts</th>
-              <th>%</th>
-            </tr>
+            <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
           </thead>
           <tbody>
             {% for s in user_stats %}
@@ -31,39 +173,39 @@
               <td>{{ s.total_correct }}</td>
               <td>{{ s.total_wrong }}</td>
               <td>{{ s.attempts }}</td>
-              <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+              <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}&mdash;{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
+        <p class="home-stats-link"><a href="{{ url_for('home.stats') }}" class="btn btn-next">View full statistics (day, week, chart, Part 3 words)</a></p>
       </section>
       {% else %}
-      <p class="home-stats-empty">No attempts yet. Your stats will appear here after you check answers in Use of English.</p>
+      <p class="home-stats-empty">No attempts yet. Your stats will appear here after you check answers. <a href="{{ url_for('home.stats') }}">Statistics</a></p>
       {% endif %}
-    {% elif google_available %}
-      <p class="home-account-connect">
-        <a href="{{ url_for('google.login') }}" class="btn btn-google">Connect Google account</a>
-        <span class="home-account-hint">Connect to see your statistics across devices.</span>
-      </p>
     {% else %}
-      <p class="home-account-hint">Google sign-in is not configured. Add <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code> to your <code>.env</code> file (see <code>.env.example</code>) to connect your account and see your statistics here.</p>
+      <p class="home-account-connect">
+        {% if google_available %}
+        <a href="{{ url_for('google.login') }}" class="btn btn-google">Connect Google account</a>
+        {% endif %}
+        <span class="home-account-hint">Sign in to track your statistics across devices.</span>
+      </p>
     {% endif %}
   </div>
 
-  <div class="home-sections">
-    <a href="{{ url_for('use_of_english') }}" class="home-section-card home-section-use">
-      <span class="home-section-icon" aria-hidden="true">📖</span>
-      <h2 class="home-section-title">Use of English and Reading</h2>
-      <p class="home-section-desc">Parts 1–7: multiple-choice cloze, open cloze, word formation, key word transformations, multiple choice, gapped text, multiple matching.</p>
-      <span class="home-section-cta">Start practice →</span>
-    </a>
-
-    <a href="{{ url_for('writing') }}" class="home-section-card home-section-writing">
-      <span class="home-section-icon" aria-hidden="true">✎</span>
-      <h2 class="home-section-title">Writing</h2>
-      <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks and get feedback.</p>
-      <span class="home-section-cta">Go to Writing →</span>
-    </a>
-  </div>
 </div>
+{% if user_id and has_attempts %}
+<script>
+(function() {
+  var panel = document.getElementById('home-sidebar-stats');
+  var btn = document.getElementById('sidebar-stats-toggle');
+  if (!panel || !btn) return;
+  if (localStorage.getItem('sidebarStatsHidden') === '1') panel.classList.add('collapsed');
+  btn.addEventListener('click', function() {
+    panel.classList.toggle('collapsed');
+    localStorage.setItem('sidebarStatsHidden', panel.classList.contains('collapsed') ? '1' : '0');
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

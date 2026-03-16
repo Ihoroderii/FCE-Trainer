@@ -1,0 +1,36 @@
+{% extends "base_minimal.html" %}
+{% block title %}Sign up — FCE Exam Trainer{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <h1 class="auth-title">Sign up</h1>
+  <p class="auth-intro">Create an account with email and password to track your statistics.</p>
+  {% if error %}
+  <div class="feedback error" role="alert">{{ error }}</div>
+  {% endif %}
+  <form method="post" action="{{ url_for('home.register') }}" class="auth-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <div class="auth-field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required autocomplete="email" value="{{ request.form.email or '' }}" />
+    </div>
+    <div class="auth-field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password" />
+    </div>
+    <div class="auth-field">
+      <label for="password_confirm">Confirm password</label>
+      <input type="password" id="password_confirm" name="password_confirm" required minlength="8" autocomplete="new-password" />
+    </div>
+    <div class="auth-field">
+      <label for="name">Name <span class="auth-optional">(optional)</span></label>
+      <input type="text" id="name" name="name" autocomplete="name" value="{{ request.form.name or '' }}" />
+    </div>
+    <div class="auth-actions">
+      <button type="submit" class="btn btn-hero">Sign up</button>
+    </div>
+  </form>
+  <p class="auth-footer">
+    Already have an account? <a href="{{ url_for('home.login') }}">Log in</a>
+  </p>
+</div>
+{% endblock %}

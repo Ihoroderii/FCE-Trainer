@@ -1,0 +1,61 @@
+# Code review: lint, security, and smoke check on PR and push to main
+name: Code review
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff bandit
+
+      - name: Ruff (lint)
+        run: |
+          . .venv/bin/activate
+          ruff check . --output-format=github
+        continue-on-error: true
+
+      - name: Ruff (format check)
+        run: |
+          . .venv/bin/activate
+          ruff format --check .
+        # Remove continue-on-error once you run: ruff format .
+        continue-on-error: true
+
+      - name: Bandit (security)
+        run: |
+          . .venv/bin/activate
+          bandit -r . -x .venv,node_modules,.git --format custom
+        continue-on-error: true
+
+      - name: App import check
+        run: |
+          . .venv/bin/activate
+          python -c "from app import app; print('OK')"
+        env:
+          SECRET_KEY: test-secret-for-ci
+          OPENAI_API_KEY: skip
