@@ -3,6 +3,54 @@
 {% block content %}
 <div class="home-page">
 
+  {# ── Floating stats sidebar (logged-in only) ── #}
+  {% if user_id and has_attempts %}
+  <aside class="home-sidebar-stats" id="home-sidebar-stats">
+    <button class="sidebar-stats-toggle" id="sidebar-stats-toggle" title="Toggle stats panel" aria-label="Toggle stats">📊</button>
+    <div class="sidebar-stats-body">
+      <h3 class="sidebar-stats-title">📈 All-time stats</h3>
+      <table class="sidebar-stats-table">
+        <thead><tr><th>Part</th><th>✓</th><th>✗</th><th>#</th><th>%</th></tr></thead>
+        <tbody>
+          {% set ns = namespace(total_correct=0, total_wrong=0, total_attempts=0, total_q=0) %}
+          {% for s in user_stats %}
+          {% set ns.total_correct = ns.total_correct + s.total_correct %}
+          {% set ns.total_wrong = ns.total_wrong + s.total_wrong %}
+          {% set ns.total_attempts = ns.total_attempts + s.attempts %}
+          {% set ns.total_q = ns.total_q + s.total_questions %}
+          <tr class="{{ 'stat-excellent' if s.percent is not none and s.percent >= 75 else ('stat-good' if s.percent is not none and s.percent >= 60 else ('stat-mid' if s.percent is not none and s.percent >= 40 else ('stat-low' if s.percent is not none else ''))) }}">
+            <td><span class="sidebar-part-badge">P{{ s.part }}</span></td>
+            <td class="sidebar-cell-correct">{{ s.total_correct }}</td>
+            <td class="sidebar-cell-wrong">{{ s.total_wrong }}</td>
+            <td>{{ s.attempts }}</td>
+            <td class="sidebar-cell-pct">
+              {% if s.percent is not none %}
+              <span class="sidebar-pct-bar"><span class="sidebar-pct-fill" style="width:{{ s.percent }}%"></span></span>
+              <span>{{ s.percent }}%</span>
+              {% else %}&mdash;{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          {% set overall_pct = (100 * ns.total_correct / ns.total_q)|round(1) if ns.total_q > 0 else 0 %}
+          <tr class="sidebar-stats-total">
+            <td><strong>All</strong></td>
+            <td class="sidebar-cell-correct"><strong>{{ ns.total_correct }}</strong></td>
+            <td class="sidebar-cell-wrong"><strong>{{ ns.total_wrong }}</strong></td>
+            <td><strong>{{ ns.total_attempts }}</strong></td>
+            <td class="sidebar-cell-pct">
+              <span class="sidebar-pct-bar sidebar-pct-bar--total"><span class="sidebar-pct-fill" style="width:{{ overall_pct }}%"></span></span>
+              <span><strong>{{ overall_pct }}%</strong></span>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+      <a href="{{ url_for('home.stats') }}" class="sidebar-stats-link">Full stats &rarr;</a>
+    </div>
+  </aside>
+  {% endif %}
+
   {# ── Hero ── #}
   <div class="home-hero">
     <h1 class="home-title">Practice for Cambridge B2 First (FCE)</h1>
@@ -152,4 +200,18 @@
   </div>
 
 </div>
+{% if user_id and has_attempts %}
+<script>
+(function() {
+  var panel = document.getElementById('home-sidebar-stats');
+  var btn = document.getElementById('sidebar-stats-toggle');
+  if (!panel || !btn) return;
+  if (localStorage.getItem('sidebarStatsHidden') === '1') panel.classList.add('collapsed');
+  btn.addEventListener('click', function() {
+    panel.classList.toggle('collapsed');
+    localStorage.setItem('sidebarStatsHidden', panel.classList.contains('collapsed') ? '1' : '0');
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
