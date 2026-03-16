@@ -75,5 +75,28 @@
   </nav>
 
   <script src="{{ url_for('static', filename='main.js') }}?v=4"></script>
+  {% if last_reward and last_reward.xp_gained %}
+  <div class="xp-toast" id="xp-toast" data-reward="{{ last_reward | tojson | e }}">
+    <div class="xp-toast-body">
+      <span class="xp-toast-xp">+{{ last_reward.xp_gained }} XP</span>
+      {% if last_reward.is_perfect %}<span class="xp-toast-tag">💯 Perfect!</span>{% endif %}
+      {% if last_reward.streak > 1 %}<span class="xp-toast-tag">🔥 {{ last_reward.streak }}-day streak</span>{% endif %}
+      {% if last_reward.combo_xp %}<span class="xp-toast-tag">🎮 Combo +{{ last_reward.combo_xp }}</span>{% endif %}
+      {% if last_reward.level_up %}<span class="xp-toast-level-up">⬆ Level up: {{ last_reward.new_level }}!</span>{% endif %}
+      {% for a in last_reward.new_achievements %}
+      <span class="xp-toast-achievement">{{ a.icon }} {{ a.name }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  <script>
+  (function() {
+    var t = document.getElementById('xp-toast');
+    if (t) {
+      setTimeout(function(){ t.classList.add('xp-toast--show'); }, 200);
+      setTimeout(function(){ t.classList.remove('xp-toast--show'); }, 5500);
+    }
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>

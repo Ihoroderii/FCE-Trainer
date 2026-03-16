@@ -24,6 +24,11 @@ ignore = [
     "UP032",  # f-string instead of .format()
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+
 [tool.ruff.format]
 quote-style = "double"
 

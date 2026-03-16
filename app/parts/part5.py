@@ -12,7 +12,7 @@ from app.ai.explanations import fetch_explanations_part5
 from app.config import LETTERS, MAX_EXPLANATION_LEN
 from app.db import _generic_get_or_create, get_part5_task_by_id, db_connection
 from app.parts.topics import PART3_TOPICS
-from app.utils import e as _e
+from app.utils import e as _e, extract_json_object, validate_part5_data
 
 logger = logging.getLogger("fce_trainer")
 
@@ -25,32 +25,16 @@ def generate_part5_with_openai():
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
-        m = re.search(r"\{[\s\S]*\}", content)
-        if not m:
+        data = extract_json_object(content)
+        if not data:
             return None
-        data = json.loads(m.group(0))
-        title = (data.get("title") or "").strip()
-        text = (data.get("text") or "").strip()
-        questions = data.get("questions")
-        if not title or not text or not isinstance(questions, list) or len(questions) != 6:
+        validated = validate_part5_data(data)
+        if not validated:
             return None
-        wc = len(text.split())
-        if wc < 400 or wc > 750:
-            return None
-        normalized = []
-        for i, qq in enumerate(questions):
-            q = (qq.get("q") or "").strip()
-            opts = qq.get("options") or []
-            if len(opts) != 4:
-                return None
-            correct = int(qq.get("correct", 0))
-            if correct not in (0, 1, 2, 3):
-                correct = 0
-            normalized.append({"q": q, "options": [str(o).strip() for o in opts], "correct": correct})
         with db_connection() as conn:
             cur = conn.execute(
                 "INSERT INTO part5_tasks (title, text, questions_json, source) VALUES (?, ?, ?, ?)",
-                (title, text, json.dumps(normalized), "openai"),
+                (validated["title"], validated["text"], json.dumps(validated["questions"]), "openai"),
             )
             tid = cur.lastrowid
             conn.commit()

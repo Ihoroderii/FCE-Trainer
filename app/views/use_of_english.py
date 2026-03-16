@@ -1,6 +1,6 @@
 """Use of English / Reading: index page with part tabs and check result."""
 import logging
-import uuid
+import secrets
 
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 
@@ -100,7 +100,7 @@ def _handle_check_action(form):
                 session["parts_checked"] = parts_checked + [part_checked]
         if len(_CHECK_RESULT_CACHE) >= CHECK_RESULT_CACHE_MAX:
             _CHECK_RESULT_CACHE.pop(next(iter(_CHECK_RESULT_CACHE)))
-        token = uuid.uuid4().hex
+        token = secrets.token_urlsafe(32)
         _CHECK_RESULT_CACHE[token] = result
         return redirect(url_for("use_of_english.use_of_english", part=part, check_result_token=token))
     return redirect(url_for("use_of_english.use_of_english", part=part))
@@ -240,4 +240,5 @@ def use_of_english():
     items = _load_part_items(current_part)
     ctx = _build_template_context(current_part, check_result, items)
     ctx["csrf_expired"] = request.args.get("csrf_expired")
+    ctx["last_reward"] = session.pop("last_reward", None)
     return render_template("index.html", **ctx)

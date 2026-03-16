@@ -8,7 +8,7 @@ from flask import Flask, redirect, request, url_for
 from flask_wtf.csrf import CSRFProtect
 
 from app.config import PARTS_RANGE
-from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column
+from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables
 from app.views.home import bp as home_bp
 from app.views.use_of_english import bp as uoe_bp
 from app.views.writing import bp as writing_bp
@@ -43,7 +43,18 @@ def create_app(config=None):
     if os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes"):
         app.config["SESSION_COOKIE_SECURE"] = True
     CSRFProtect(app)
-    app.config["WTF_CSRF_TIME_LIMIT"] = None
+    app.config["WTF_CSRF_TIME_LIMIT"] = 3600
+
+    # Rate limiting
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri="memory://",
+    )
+    app.extensions["limiter"] = limiter
 
     app.config["GOOGLE_OAUTH_CLIENT_ID"] = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
     app.config["GOOGLE_OAUTH_CLIENT_SECRET"] = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "")
@@ -66,6 +77,10 @@ def create_app(config=None):
     app.register_blueprint(writing_bp)
     app.register_blueprint(get_phrases_bp)
 
+    # Apply strict rate limits to auth endpoints
+    limiter.limit("5/minute")(app.view_functions["home.register"])
+    limiter.limit("5/minute")(app.view_functions["home.login"])
+
     if app.config["GOOGLE_OAUTH_CLIENT_ID"] and app.config["GOOGLE_OAUTH_CLIENT_SECRET"]:
         from flask_dance.contrib.google import make_google_blueprint
         google_bp = make_google_blueprint(scope=["profile", "email"], redirect_to="home.login_callback")
@@ -78,6 +93,7 @@ def create_app(config=None):
         _ensure_uoe_grammar_topic_column()
         _ensure_check_history_user_id()
         _ensure_users_password_column()
+        _ensure_gamification_tables()
         seed_db()
 
     return app

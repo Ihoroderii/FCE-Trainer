@@ -10,7 +10,7 @@ from app.ai.prompts import get_task_prompt_get_phrases
 from app.ai.explanations import fetch_explanations_get_phrases
 from app.config import GET_PHRASE_PART, MAX_EXPLANATION_LEN
 from app.db import db_connection, get_get_phrase_task_by_id, pick_get_phrase_task_id, record_get_phrase_show
-from app.utils import e as _e, answers_match
+from app.utils import e as _e, answers_match, extract_json_object, validate_get_phrase_data
 
 logger = logging.getLogger("fce_trainer")
 
@@ -23,28 +23,20 @@ def generate_get_phrase_with_openai(level="b2"):
         try:
             comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
             content = (comp.choices[0].message.content or "").strip()
-            m = re.search(r"\{[\s\S]*\}", content)
-            if not m:
+            data = extract_json_object(content)
+            if not data:
                 continue
-            data = json.loads(m.group(0))
-            text = (data.get("text") or "").strip()
-            answers = data.get("answers")
-            if not text or not isinstance(answers, list) or len(answers) != 8:
+            validated = validate_get_phrase_data(data)
+            if not validated:
                 continue
-            for i in range(1, 9):
-                if f"({i})_____" not in text:
-                    break
-            else:
-                answers_str = [str(a).strip().lower() for a in answers]
-                payload = {"text": text, "answers": answers_str}
-                with db_connection() as conn:
-                    cur = conn.execute(
-                        "INSERT INTO get_phrase_tasks (items_json, source) VALUES (?, ?)",
-                        (json.dumps(payload), "openai"),
-                    )
-                    tid = cur.lastrowid
-                    conn.commit()
-                return get_get_phrase_task_by_id(tid)
+            with db_connection() as conn:
+                cur = conn.execute(
+                    "INSERT INTO get_phrase_tasks (items_json, source) VALUES (?, ?)",
+                    (json.dumps(validated), "openai"),
+                )
+                tid = cur.lastrowid
+                conn.commit()
+            return get_get_phrase_task_by_id(tid)
         except Exception:
             if attempt == 2:
                 logger.exception("OpenAI Get phrases error")

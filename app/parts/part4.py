@@ -17,7 +17,7 @@ from app.db import (
     uoe_task_exists,
     _ensure_uoe_grammar_topic_column,
 )
-from app.utils import e as _e, norm, word_count, answers_match
+from app.utils import e as _e, norm, word_count, answers_match, extract_json_array
 
 logger = logging.getLogger("fce_trainer")
 
@@ -84,8 +84,7 @@ def _generate_tasks_with_openai(count: int, level: str = "b2plus", recent_gramma
         try:
             comp = chat_create([{"role": "user", "content": prompt}], temperature=0.8)
             content = (comp.choices[0].message.content or "").strip()
-            m = re.search(r"\[[\s\S]*\]", content)
-            arr = json.loads(m.group(0)) if m else []
+            arr = extract_json_array(content)
             if not isinstance(arr, list):
                 continue
             with db_connection() as conn:

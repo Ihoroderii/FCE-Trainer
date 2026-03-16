@@ -6,9 +6,12 @@ Priority (first configured key wins, or set AI_PROVIDER to force one):
   3. GOOGLE_AI_API_KEY  → Gemini (gemini-2.0-flash default) — free tier
   4. HUGGINGFACE_API_KEY → Hugging Face Inference API — free tier
 """
+from __future__ import annotations
+
 import json
 import logging
 import os
+from typing import Any
 
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -83,6 +86,10 @@ logger.debug(
 )
 
 
+# Default request timeout in seconds for AI API calls
+AI_REQUEST_TIMEOUT = int(os.environ.get("AI_REQUEST_TIMEOUT", "60"))
+
+
 class _ChatResponse:
     """Thin wrapper so all providers return .choices[0].message.content (same as OpenAI shape)."""
 
@@ -94,7 +101,7 @@ class _ChatResponse:
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-def chat_create(messages, temperature=0.7, model=None):
+def chat_create(messages: list[dict[str, str]], temperature: float = 0.7, model: str | None = None) -> Any:
     """Call the configured AI provider. Returns object with .choices[0].message.content."""
     if _provider is None:
         raise ValueError(
@@ -115,6 +122,7 @@ def _openai_create(messages, temperature, model):
         model=model or openai_model,
         messages=messages,
         temperature=temperature,
+        timeout=AI_REQUEST_TIMEOUT,
     )
 
 
@@ -123,6 +131,7 @@ def _groq_create(messages, temperature, model):
         model=model or groq_model,
         messages=messages,
         temperature=temperature,
+        timeout=AI_REQUEST_TIMEOUT,
     )
 
 
@@ -162,7 +171,7 @@ def _hf_create(messages, temperature, model):
         url,
         headers={"Authorization": f"Bearer {hf_api_key}", "Content-Type": "application/json"},
         json=payload,
-        timeout=120,
+        timeout=AI_REQUEST_TIMEOUT,
     )
     try:
         data = resp.json()
@@ -210,7 +219,7 @@ def _gemini_rest(model_id: str, prompt: str, temperature: float) -> _ChatRespons
         url,
         params={"key": google_ai_api_key},
         json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": temperature}},
-        timeout=60,
+        timeout=AI_REQUEST_TIMEOUT,
     )
     try:
         data = resp.json()

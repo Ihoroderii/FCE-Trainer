@@ -1,15 +1,21 @@
 """Database connection, schema, seed, and task/shows helpers. No Flask or OpenAI."""
+from __future__ import annotations
+
 import contextlib
 import json
+import logging
 import re
 import sqlite3
+from typing import Any
 
 from app.config import DB_PATH, LAST_N_SHOWS
+
+logger = logging.getLogger("fce_trainer")
 
 # --- Connection ---
 
 
-def get_db():
+def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -24,7 +30,7 @@ def db_connection():
         conn.close()
 
 
-def _get_excluded_ids(shows_table: str):
+def _get_excluded_ids(shows_table: str) -> list[int]:
     with db_connection() as conn:
         cur = conn.execute(
             f"SELECT DISTINCT task_id FROM {shows_table} ORDER BY id DESC LIMIT ?",
@@ -33,7 +39,7 @@ def _get_excluded_ids(shows_table: str):
         return [r["task_id"] for r in cur.fetchall()]
 
 
-def _pick_one_task_id(tasks_table: str, shows_table: str, exclude_current=None):
+def _pick_one_task_id(tasks_table: str, shows_table: str, exclude_current: int | None = None) -> int | None:
     excluded = list(_get_excluded_ids(shows_table))
     if exclude_current is not None and exclude_current not in excluded:
         excluded.append(exclude_current)
@@ -50,7 +56,7 @@ def _pick_one_task_id(tasks_table: str, shows_table: str, exclude_current=None):
         return row["id"] if row else None
 
 
-def _record_show(shows_table: str, task_id: int):
+def _record_show(shows_table: str, task_id: int) -> None:
     with db_connection() as conn:
         conn.execute(
             f"INSERT INTO {shows_table} (task_id, shown_at) VALUES (?, datetime('now'))",
@@ -62,7 +68,7 @@ def _record_show(shows_table: str, task_id: int):
 # --- Schema & migrations ---
 
 
-def init_db():
+def init_db() -> None:
     with db_connection() as conn:
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS uoe_tasks (
@@ -205,41 +211,95 @@ def init_db():
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_answer_explanations_check_id ON answer_explanations(check_id);
+        CREATE INDEX IF NOT EXISTS idx_check_history_user_id ON check_history(user_id);
+        CREATE INDEX IF NOT EXISTS idx_check_history_created_at ON check_history(created_at);
+        CREATE INDEX IF NOT EXISTS idx_check_history_user_part ON check_history(user_id, part);
+        CREATE INDEX IF NOT EXISTS idx_answer_explanations_part ON answer_explanations(part);
     """)
         conn.commit()
 
 
 def _ensure_uoe_grammar_topic_column():
-    with db_connection() as conn:
-        cur = conn.execute("PRAGMA table_info(uoe_tasks)")
-        cols = [r["name"] for r in cur.fetchall()]
-        if "grammar_topic" in cols:
-            return
-        conn.execute("ALTER TABLE uoe_tasks ADD COLUMN grammar_topic TEXT")
-        conn.commit()
+    _run_migration("add_uoe_grammar_topic", _migrate_uoe_grammar_topic)
 
 
 def _ensure_check_history_user_id():
-    with db_connection() as conn:
-        cur = conn.execute("PRAGMA table_info(check_history)")
-        cols = [r["name"] for r in cur.fetchall()]
-        if "user_id" in cols:
-            return
-        conn.execute("ALTER TABLE check_history ADD COLUMN user_id INTEGER REFERENCES users(id)")
-        conn.commit()
+    _run_migration("add_check_history_user_id", _migrate_check_history_user_id)
 
 
 def _ensure_users_password_column():
+    _run_migration("add_users_password_hash", _migrate_users_password_column)
+
+
+def _ensure_gamification_tables():
+    _run_migration("add_gamification_tables", _migrate_gamification_tables)
+
+
+# --- Migration infrastructure ---
+
+def _run_migration(name: str, fn):
+    """Run a migration function only once. Tracks applied migrations in a table."""
     with db_connection() as conn:
-        cur = conn.execute("PRAGMA table_info(users)")
-        cols = [r["name"] for r in cur.fetchall()]
-        if "password_hash" in cols:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS _migrations (
+                name TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        cur = conn.execute("SELECT 1 FROM _migrations WHERE name = ?", (name,))
+        if cur.fetchone():
             return
-        conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+        fn(conn)
+        conn.execute("INSERT INTO _migrations (name) VALUES (?)", (name,))
         conn.commit()
+        logger.info("Applied migration: %s", name)
 
 
-def seed_db():
+def _migrate_uoe_grammar_topic(conn):
+    cur = conn.execute("PRAGMA table_info(uoe_tasks)")
+    cols = [r["name"] for r in cur.fetchall()]
+    if "grammar_topic" not in cols:
+        conn.execute("ALTER TABLE uoe_tasks ADD COLUMN grammar_topic TEXT")
+
+
+def _migrate_check_history_user_id(conn):
+    cur = conn.execute("PRAGMA table_info(check_history)")
+    cols = [r["name"] for r in cur.fetchall()]
+    if "user_id" not in cols:
+        conn.execute("ALTER TABLE check_history ADD COLUMN user_id INTEGER REFERENCES users(id)")
+
+
+def _migrate_users_password_column(conn):
+    cur = conn.execute("PRAGMA table_info(users)")
+    cols = [r["name"] for r in cur.fetchall()]
+    if "password_hash" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+
+
+def _migrate_gamification_tables(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS user_game_stats (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id),
+            xp INTEGER NOT NULL DEFAULT 0,
+            streak_days INTEGER NOT NULL DEFAULT 0,
+            last_practice_date TEXT,
+            best_streak INTEGER NOT NULL DEFAULT 0,
+            total_perfect INTEGER NOT NULL DEFAULT 0,
+            best_combo INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS user_achievements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            achievement_key TEXT NOT NULL,
+            unlocked_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, achievement_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);
+    """)
+
+
+def seed_db() -> None:
     from data import (
         UOE_SEED_TASKS,
         PART_1_DATA,
@@ -377,7 +437,7 @@ _PART_DB_SCHEMA = {
 }
 
 
-def get_task_by_id_for_part(part, task_id):
+def get_task_by_id_for_part(part: int, task_id: int | None) -> dict[str, Any] | None:
     schema = _PART_DB_SCHEMA.get(part)
     if not schema or not task_id:
         return None
@@ -389,7 +449,7 @@ def get_task_by_id_for_part(part, task_id):
     return schema["parse"](row)
 
 
-def record_show_for_part(part, task_id):
+def record_show_for_part(part: int, task_id: int) -> None:
     schema = _PART_DB_SCHEMA.get(part)
     if schema:
         _record_show(schema["shows"], task_id)
@@ -429,14 +489,14 @@ def _generic_get_or_create(part, generate_fn, exclude_task_id=None, openai_avail
     return (get_task_by_id_for_part(part, task_id), task_id)
 
 
-def pick_task_id_for_part(part, exclude_current=None):
+def pick_task_id_for_part(part: int, exclude_current: int | None = None) -> int | None:
     schema = _PART_DB_SCHEMA.get(part)
     if not schema:
         return None
     return _pick_one_task_id(schema["table"], schema["shows"], exclude_current)
 
 
-def get_excluded_task_ids():
+def get_excluded_task_ids() -> list[int]:
     return _get_excluded_ids("uoe_task_shows")
 
 
@@ -504,14 +564,14 @@ def get_recent_grammar_topics(limit=20):
         return []
 
 
-def record_shows(task_ids):
+def record_shows(task_ids: list[int]) -> None:
     with db_connection() as conn:
         for tid in task_ids:
             conn.execute("INSERT INTO uoe_task_shows (task_id, shown_at) VALUES (?, datetime('now'))", (tid,))
         conn.commit()
 
 
-def get_tasks_by_ids(ids):
+def get_tasks_by_ids(ids: list[int]) -> list[dict[str, Any]]:
     if not ids:
         return []
     ph = ",".join("?" * len(ids))
@@ -597,7 +657,7 @@ def record_part7_show(tid):
 
 # --- Get phrase tasks (study mode) ---
 
-def get_get_phrase_task_by_id(tid):
+def get_get_phrase_task_by_id(tid: int | None) -> dict[str, Any] | None:
     if not tid:
         return None
     with db_connection() as conn:
@@ -617,7 +677,7 @@ def get_get_phrase_task_by_id(tid):
     }
 
 
-def pick_get_phrase_task_id(exclude_task_id=None):
+def pick_get_phrase_task_id(exclude_task_id: int | None = None) -> int | None:
     excluded = list(_get_excluded_ids("get_phrase_task_shows"))
     if exclude_task_id is not None and exclude_task_id not in excluded:
         excluded.append(exclude_task_id)
@@ -634,7 +694,7 @@ def pick_get_phrase_task_id(exclude_task_id=None):
         return row["id"] if row else None
 
 
-def record_get_phrase_show(task_id):
+def record_get_phrase_show(task_id: int) -> None:
     with db_connection() as conn:
         conn.execute(
             "INSERT INTO get_phrase_task_shows (task_id, shown_at) VALUES (?, datetime('now'))",

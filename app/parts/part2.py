@@ -11,7 +11,7 @@ from app.ai.prompts import get_task_prompt_part2
 from app.ai.explanations import fetch_explanations_part2
 from app.config import MAX_EXPLANATION_LEN
 from app.db import _generic_get_or_create, get_part2_task_by_id, db_connection
-from app.utils import e as _e, answers_match
+from app.utils import e as _e, answers_match, extract_json_object, validate_part2_data
 
 logger = logging.getLogger("fce_trainer")
 
@@ -45,22 +45,16 @@ def generate_part2_with_openai(level="b2"):
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
-        m = re.search(r"\{[\s\S]*\}", content)
-        if not m:
+        data = extract_json_object(content)
+        if not data:
             return None
-        data = json.loads(m.group(0))
-        text = (data.get("text") or "").strip()
-        answers = data.get("answers")
-        if not text or not isinstance(answers, list) or len(answers) != 8:
+        validated = validate_part2_data(data)
+        if not validated:
             return None
-        for i in range(1, 9):
-            if f"({i})_____" not in text:
-                return None
-        answers_clean = [str(a).strip() for a in answers]
         with db_connection() as conn:
             cur = conn.execute(
                 "INSERT INTO part2_tasks (text, answers_json, source) VALUES (?, ?, ?)",
-                (text, json.dumps(answers_clean), "openai"),
+                (validated["text"], json.dumps(validated["answers"]), "openai"),
             )
             tid = cur.lastrowid
             conn.commit()

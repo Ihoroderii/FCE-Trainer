@@ -1,6 +1,6 @@
 """Get phrases study mode: 8 gaps, each gap = correct GET collocation."""
 import logging
-import uuid
+import secrets
 
 from flask import Blueprint, redirect, render_template, request, session, url_for
 
@@ -40,7 +40,7 @@ def get_phrases():
                 record_check_result(result)
                 if len(_CHECK_RESULT_CACHE) >= CHECK_RESULT_CACHE_MAX:
                     _CHECK_RESULT_CACHE.pop(next(iter(_CHECK_RESULT_CACHE)))
-                token = uuid.uuid4().hex
+                token = secrets.token_urlsafe(32)
                 _CHECK_RESULT_CACHE[token] = result
                 return redirect(url_for("get_phrases.get_phrases", check_result_token=token))
         if action == "next":
@@ -73,4 +73,5 @@ def get_phrases():
         generated=request.args.get("generated", type=int),
         generate_failed=request.args.get("generate_failed", type=int),
         ai_available=ai_available,
+        last_reward=session.pop("last_reward", None),
     )

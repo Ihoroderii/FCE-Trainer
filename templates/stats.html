@@ -7,12 +7,77 @@
   <p class="stats-page-intro">Day and week overview, progress over time, and words you're learning from Part 3 (word formation). Stats are saved when you're signed in and click <strong>Check answers</strong> after a practice task.</p>
 
   <nav class="stats-nav" aria-label="Statistics sections">
+    <a href="#game" class="stats-nav-link">Game</a>
+    <a href="#achievements" class="stats-nav-link">Achievements</a>
     <a href="#overview" class="stats-nav-link">All-time</a>
     <a href="#today" class="stats-nav-link">Today</a>
     <a href="#week" class="stats-nav-link">This week</a>
     <a href="#progress" class="stats-nav-link">Progress</a>
-    <a href="#words" class="stats-nav-link">Words I'm learning (Part 3)</a>
+    <a href="#words" class="stats-nav-link">Words</a>
   </nav>
+
+  {# ── Game profile ── #}
+  {% if game %}
+  <section id="game" class="stats-panel">
+    <h2 class="stats-panel-title">Your game profile</h2>
+    <div class="game-dashboard game-dashboard--stats">
+      <div class="game-level-card">
+        <div class="game-level-header">
+          <span class="game-level-badge">Lv {{ game.level }}</span>
+          <span class="game-level-name">{{ game.level_name }}</span>
+          <span class="game-xp-total">{{ game.xp }} XP</span>
+        </div>
+        <div class="game-xp-bar-wrap">
+          <div class="game-xp-bar" style="width: {{ game.xp_progress_pct }}%"></div>
+        </div>
+        <div class="game-xp-label">{{ game.xp_in_level }} / {{ game.xp_needed }} XP to next level</div>
+      </div>
+      <div class="game-stats-row">
+        <div class="game-stat-card">
+          <span class="game-stat-icon">🔥</span>
+          <span class="game-stat-value">{{ game.streak_days }}</span>
+          <span class="game-stat-label">Day streak</span>
+        </div>
+        <div class="game-stat-card">
+          <span class="game-stat-icon">⚡</span>
+          <span class="game-stat-value">{{ game.best_streak }}</span>
+          <span class="game-stat-label">Best streak</span>
+        </div>
+        <div class="game-stat-card">
+          <span class="game-stat-icon">💯</span>
+          <span class="game-stat-value">{{ game.total_perfect }}</span>
+          <span class="game-stat-label">Perfect scores</span>
+        </div>
+        <div class="game-stat-card">
+          <span class="game-stat-icon">🎮</span>
+          <span class="game-stat-value">{{ game.best_combo }}</span>
+          <span class="game-stat-label">Best combo</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ── Achievements ── #}
+  <section id="achievements" class="stats-panel">
+    <h2 class="stats-panel-title">Achievements</h2>
+    <p class="stats-panel-desc">Earn badges by practicing regularly, getting perfect scores, and reaching XP milestones.</p>
+    <div class="game-achievements-grid">
+      {% for key, meta in all_achievements.items() %}
+        {% set unlocked = game and game.achievements and (game.achievements | selectattr('key', 'equalto', key) | list) %}
+        <div class="game-achievement {{ 'unlocked' if unlocked else 'locked' }}">
+          <span class="game-achievement-icon">{{ meta.icon }}</span>
+          <div class="game-achievement-info">
+            <span class="game-achievement-name">{{ meta.name }}</span>
+            <span class="game-achievement-desc">{{ meta.desc }}</span>
+            {% if unlocked %}
+            <span class="game-achievement-date">{{ unlocked[0].unlocked_display }}</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
 
   {# ── All-time overview ── #}
   <section id="overview" class="stats-panel">

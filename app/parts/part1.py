@@ -17,7 +17,7 @@ from app.db import (
     record_show_for_part,
 )
 from app.parts.topics import PART1_TOPICS
-from app.utils import e as _e
+from app.utils import e as _e, extract_json_object, validate_part1_data
 
 logger = logging.getLogger("fce_trainer")
 
@@ -33,27 +33,16 @@ def generate_part1_with_openai(level="b2"):
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.8)
         content = (comp.choices[0].message.content or "").strip()
-        m = re.search(r"\{[\s\S]*\}", content)
-        if not m:
+        data = extract_json_object(content)
+        if not data:
             return None
-        data = json.loads(m.group(0))
-        text = (data.get("text") or "").strip()
-        gaps = data.get("gaps")
-        if not text or not isinstance(gaps, list) or len(gaps) != 8:
+        validated = validate_part1_data(data)
+        if not validated:
             return None
-        normalized = []
-        for g in gaps:
-            opts = g.get("options") or []
-            if len(opts) != 4:
-                return None
-            correct = int(g.get("correct", 0))
-            if correct not in (0, 1, 2, 3):
-                correct = 0
-            normalized.append({"options": [str(o).strip() for o in opts], "correct": correct})
         with db_connection() as conn:
             cur = conn.execute(
                 "INSERT INTO part1_tasks (text, gaps_json, source) VALUES (?, ?, ?)",
-                (text, json.dumps(normalized), "openai"),
+                (validated["text"], json.dumps(validated["gaps"]), "openai"),
             )
             tid = cur.lastrowid
             conn.commit()

@@ -1,27 +1,30 @@
 """Check history and per-part statistics."""
+from __future__ import annotations
+
 from datetime import datetime
 
 from flask import session
 
 from app.config import GET_PHRASE_PART, PARTS_RANGE
 from app.db import db_connection
+from app.services.gamification import award_xp
 
 
-def _user_filter_sql(user_id):
+def _user_filter_sql(user_id: int | None) -> tuple[str, tuple]:
     """Return (sql_fragment, params) for filtering by user_id or anonymous."""
     if user_id is None:
         return "user_id IS NULL", ()
     return "user_id = ?", (user_id,)
 
 
-def record_check_result(result):
+def record_check_result(result: dict) -> dict | None:
     part = result.get("part")
     score = result.get("score", 0)
     total = result.get("total", 0)
     if total <= 0:
-        return
+        return None
     if part not in PARTS_RANGE and part != GET_PHRASE_PART:
-        return
+        return None
     user_id = session.get("user_id")
     details = result.get("details") or []
     with db_connection() as conn:
@@ -48,8 +51,14 @@ def record_check_result(result):
             )
         conn.commit()
 
+    # Award XP & check achievements for logged-in users
+    reward = award_xp(user_id, score, total, part)
+    if reward and reward.get("xp_gained"):
+        session["last_reward"] = reward
+    return reward
 
-def get_part_stats(user_id=None):
+
+def get_part_stats(user_id: int | None = None) -> list[dict]:
     if user_id is None:
         user_id = session.get("user_id")
     with db_connection() as conn:

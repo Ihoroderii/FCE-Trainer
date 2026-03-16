@@ -8,7 +8,8 @@ import re
 
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 
-from app.config import PARTS_RANGE
+from app.config import ACHIEVEMENTS, PARTS_RANGE
+from app.services.gamification import get_game_stats
 from app.services.stats import (
     get_part_stats,
     get_daily_stats,
@@ -18,6 +19,7 @@ from app.services.stats import (
     get_get_phrase_stats,
 )
 from app.services.user import create_email_user, verify_email_password
+from app.utils import login_required
 
 logger = logging.getLogger("fce_trainer")
 
@@ -38,10 +40,9 @@ def health():
 
 
 @bp.route("/stats")
+@login_required
 def stats():
     user_id = session.get("user_id")
-    if user_id is None:
-        return redirect(url_for("home.home"))
     user_stats = get_part_stats(user_id)
     daily = get_daily_stats(user_id)
     weekly = get_weekly_stats(user_id)
@@ -49,6 +50,7 @@ def stats():
     words_learning = get_words_learning(user_id, part=3, limit=60)
     get_phrase_stats = get_get_phrase_stats(user_id)
     has_attempts = any(s.get("attempts", 0) for s in user_stats) or get_phrase_stats.get("attempts", 0)
+    game_stats = get_game_stats(user_id)
     return render_template(
         "stats.html",
         user_stats=user_stats,
@@ -58,6 +60,8 @@ def stats():
         words_learning=words_learning,
         get_phrase_stats=get_phrase_stats,
         has_attempts=has_attempts,
+        game=game_stats,
+        all_achievements=ACHIEVEMENTS,
     )
 
 
@@ -68,6 +72,7 @@ def home():
     user_name = session.get("user_name") or ""
     user_stats = get_part_stats(user_id) if user_id is not None else None
     has_attempts = user_stats and any(s.get("attempts", 0) for s in user_stats)
+    game_stats = get_game_stats(user_id) if user_id is not None else None
     google_available = bool(
         current_app.config.get("GOOGLE_OAUTH_CLIENT_ID") and current_app.config.get("GOOGLE_OAUTH_CLIENT_SECRET")
     )
@@ -81,6 +86,7 @@ def home():
         has_attempts=has_attempts,
         google_available=google_available,
         proctor_configured=proctor_configured,
+        game=game_stats,
     )
 
 
@@ -103,6 +109,7 @@ def _call_proctor_join(backend_url, exam_code, candidate_identifier):
 
 
 @bp.route("/mock-exam")
+@login_required
 def mock_exam():
     if not proctor_is_configured():
         return redirect(url_for("home.home", mode="mock", proctor_required=1))
@@ -114,6 +121,7 @@ def mock_exam():
 
 
 @bp.route("/mock-exam/start", methods=["GET", "POST"])
+@login_required
 def mock_exam_start():
     if not proctor_is_configured():
         return redirect(url_for("home.home", mode="mock", proctor_required=1))

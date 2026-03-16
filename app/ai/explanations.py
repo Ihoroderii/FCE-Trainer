@@ -14,27 +14,14 @@ from app.ai.prompts import (
     get_explanation_prompt_get_phrases,
 )
 from app.config import LETTERS, MAX_EXPLANATION_LEN, MAX_WORD_FAMILY_LEN
+from app.utils import extract_json_array
 
 logger = logging.getLogger("fce_trainer")
 
 
 def _extract_json_array(content: str):
-    """Extract a JSON array from model output. Tries from first '[' to each ']' (longest first) until parse succeeds."""
-    start = content.find("[")
-    if start == -1:
-        return None
-    # Try from first '[' to each ']' from the end backwards
-    for end in range(len(content) - 1, start, -1):
-        if content[end] != "]":
-            continue
-        try:
-            chunk = content[start : end + 1]
-            arr = json.loads(chunk)
-            if isinstance(arr, list):
-                return arr
-        except (json.JSONDecodeError, TypeError):
-            continue
-    return None
+    """Extract a JSON array from model output. Delegates to shared util."""
+    return extract_json_array(content)
 
 
 def fetch_explanations_part1(item, details):

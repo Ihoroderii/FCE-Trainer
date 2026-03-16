@@ -1,14 +1,17 @@
 """Writing section: essay + Part 2 options."""
+from __future__ import annotations
+
 import io
 import json
 import re
-import uuid
+import secrets
 
 from flask import Blueprint, Response, redirect, render_template, request, session, url_for
 
 from app.ai import ai_available, chat_create
 from app.config import WRITING_MIN_WORDS, WRITING_MAX_WORDS
 from app.services.writing import get_writing_context
+from app.utils import extract_json_object
 
 bp = Blueprint("writing", __name__)
 
@@ -101,14 +104,8 @@ def _parse_essay_task_from_ai(content: str) -> dict | None:
     """Extract and validate essay task JSON from AI response. Returns dict or None."""
     if not content:
         return None
-    obj = _extract_json_object(content)
-    if not obj:
-        return None
-    try:
-        data = json.loads(obj)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, dict):
+    data = extract_json_object(content)
+    if not data:
         return None
     question = (data.get("question") or "").strip()
     points = data.get("points")
@@ -143,7 +140,7 @@ def _ensure_task_image(essay_prompt: dict) -> str:
     token = session.get("writing_task_token")
     if token and token in _TASK_IMAGE_CACHE:
         return token
-    token = uuid.uuid4().hex
+    token = secrets.token_urlsafe(32)
     png = _render_task_image_png(essay_prompt)
     if png:
         while len(_TASK_IMAGE_CACHE) >= _MAX_TASK_IMAGES and _TASK_IMAGE_CACHE:
@@ -156,26 +153,18 @@ def _ensure_task_image(essay_prompt: dict) -> str:
 
 
 def _extract_json_object(text: str):
-    """Extract first {...} block from text, if present."""
-    if not text:
-        return None
-    m = re.search(r"\{[\s\S]*\}", text)
-    return m.group(0) if m else None
+    """Deprecated — use extract_json_object from app.utils instead."""
+    return extract_json_object(text)
 
 
 def _parse_feedback(raw: str):
     """Parse JSON feedback or fall back to plain text."""
     if not raw:
         return None
-    obj = _extract_json_object(raw)
-    if obj:
-        try:
-            data = json.loads(obj)
-            if isinstance(data, dict):
-                data.setdefault("raw_text", raw)
-                return data
-        except json.JSONDecodeError:
-            pass
+    data = extract_json_object(raw)
+    if data:
+        data.setdefault("raw_text", raw)
+        return data
     return {"raw_text": raw}
 
 
@@ -208,7 +197,9 @@ def _build_writing_prompt(part: int, task_desc: str, answer: str) -> str:
 
 @bp.route("/writing/task-image/<token>")
 def task_image(token):
-    """Serve the task image PNG for the given token (from cache)."""
+    """Serve the task image PNG for the given token (from cache). Only the owning session can access."""
+    if session.get("writing_task_token") != token:
+        return Response(status=403)
     png = _TASK_IMAGE_CACHE.get(token)
     if not png:
         return Response(status=404)

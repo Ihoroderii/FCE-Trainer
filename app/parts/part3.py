@@ -12,7 +12,7 @@ from app.ai.explanations import fetch_explanations_part3
 from app.config import MAX_EXPLANATION_LEN, MAX_WORD_FAMILY_LEN
 from app.db import _generic_get_or_create, get_part3_task_by_id, db_connection
 from app.parts.topics import PART3_TOPICS
-from app.utils import e as _e, answers_match
+from app.utils import e as _e, answers_match, extract_json_object, validate_part3_data
 
 logger = logging.getLogger("fce_trainer")
 
@@ -27,37 +27,26 @@ def generate_part3_with_openai(level="b2"):
         try:
             comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
             content = (comp.choices[0].message.content or "").strip()
-            m = re.search(r"\{[\s\S]*\}", content)
-            if not m:
+            data = extract_json_object(content)
+            if not data:
                 continue
-            data = json.loads(m.group(0))
-            text = (data.get("text") or "").strip()
-            stems = data.get("stems")
-            answers = data.get("answers")
-            if not text or not isinstance(stems, list) or len(stems) != 8 or not isinstance(answers, list) or len(answers) != 8:
+            validated = validate_part3_data(data)
+            if not validated:
                 continue
-            for i in range(1, 9):
-                if f"({i})_____" not in text:
-                    break
-            else:
-                stems_upper = [str(s).strip().upper() for s in stems]
-                answers_str = [str(a).strip() for a in answers]
-                unchanged_count = sum(
-                    1 for i in range(8)
-                    if i < len(answers_str) and i < len(stems_upper)
-                    and answers_str[i].upper() == stems_upper[i]
+            unchanged_count = sum(
+                1 for i in range(8)
+                if validated["answers"][i].upper() == validated["stems"][i]
+            )
+            if unchanged_count > max_unchanged:
+                continue
+            with db_connection() as conn:
+                cur = conn.execute(
+                    "INSERT INTO part3_tasks (items_json, source) VALUES (?, ?)",
+                    (json.dumps(validated), "openai"),
                 )
-                if unchanged_count > max_unchanged:
-                    continue
-                payload = {"text": text, "stems": stems_upper, "answers": answers_str}
-                with db_connection() as conn:
-                    cur = conn.execute(
-                        "INSERT INTO part3_tasks (items_json, source) VALUES (?, ?)",
-                        (json.dumps(payload), "openai"),
-                    )
-                    tid = cur.lastrowid
-                    conn.commit()
-                return get_part3_task_by_id(tid)
+                tid = cur.lastrowid
+                conn.commit()
+            return get_part3_task_by_id(tid)
         except Exception:
             if attempt == 2:
                 logger.exception("OpenAI Part 3 error")
