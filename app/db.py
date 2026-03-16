@@ -234,6 +234,14 @@ def _ensure_gamification_tables():
     _run_migration("add_gamification_tables", _migrate_gamification_tables)
 
 
+def _ensure_check_history_created_index():
+    _run_migration("add_check_history_user_created_index", _migrate_check_history_user_created_index)
+
+
+def _ensure_spaced_repetition_table():
+    _run_migration("add_spaced_repetition_table", _migrate_spaced_repetition_table)
+
+
 def _ensure_orphaned_stats_claimed():
     _run_migration("claim_orphaned_check_history", _migrate_claim_orphaned_stats)
 
@@ -307,6 +315,31 @@ def _migrate_gamification_tables(conn):
     """)
 
 
+def _migrate_check_history_user_created_index(conn):
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_check_history_user_created ON check_history(user_id, created_at)")
+
+
+def _migrate_spaced_repetition_table(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS spaced_repetition (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            part INTEGER NOT NULL,
+            task_id INTEGER NOT NULL,
+            ease_factor REAL NOT NULL DEFAULT 2.5,
+            interval_days INTEGER NOT NULL DEFAULT 0,
+            repetitions INTEGER NOT NULL DEFAULT 0,
+            next_review TEXT NOT NULL DEFAULT (date('now')),
+            last_review TEXT,
+            last_score REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, part, task_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_sr_user_part_next ON spaced_repetition(user_id, part, next_review);
+        CREATE INDEX IF NOT EXISTS idx_sr_user_next ON spaced_repetition(user_id, next_review);
+    """)
+
+
 def _migrate_claim_orphaned_stats(conn):
     """If there's exactly one user, assign all anonymous check_history to them."""
     cur = conn.execute("SELECT COUNT(*) AS n FROM users")
@@ -320,7 +353,6 @@ def _migrate_claim_orphaned_stats(conn):
     if orphan_count == 0:
         return
     conn.execute("UPDATE check_history SET user_id = ? WHERE user_id IS NULL", (user_id,))
-    conn.execute("UPDATE answer_explanations SET created_at = created_at WHERE check_id IN (SELECT id FROM check_history WHERE user_id = ?)", (user_id,))
     logger.info("Claimed %d orphaned check_history records for user %d", orphan_count, user_id)
 
 

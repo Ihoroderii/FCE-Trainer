@@ -124,6 +124,45 @@ body {
   gap: 0.75rem;
 }
 
+.header-user {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-auth-link {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.header-auth-link:hover {
+  background: rgba(0, 102, 204, 0.08);
+  text-decoration: none;
+}
+
+.header-auth-signup {
+  background: var(--accent);
+  color: #fff;
+}
+
+.header-auth-signup:hover {
+  background: var(--accent-hover);
+  color: #fff;
+}
+
+html.dark-mode .header-auth-link:hover {
+  background: rgba(77, 166, 255, 0.12);
+}
+
 .header-stat-link {
   font-size: 0.9rem;
   font-weight: 500;
@@ -3123,4 +3162,45 @@ html.dark-mode .sidebar-stats-link {
     border-right: 1px solid var(--border);
     border-bottom: none;
   }
+}
+
+/* ── Spaced Repetition ─────────────────────────────────────────────────── */
+.sr-review-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
+}
+.sr-review-icon {
+  font-size: 1.2em;
+}
+.sr-due-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #667eea;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 4px;
+  vertical-align: middle;
+  box-shadow: 0 1px 3px rgba(102, 126, 234, 0.3);
+}
+html.dark-mode .sr-review-banner {
+  background: linear-gradient(135deg, #4a5dbd 0%, #5c3a82 100%);
+}
+html.dark-mode .sr-due-badge {
+  background: #4a5dbd;
 }

@@ -4,11 +4,11 @@ import os
 from pathlib import Path
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 
-from flask import Flask, redirect, request, url_for
+from flask import Flask, redirect, request, session, url_for
 from flask_wtf.csrf import CSRFProtect
 
 from app.config import PARTS_RANGE
-from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_orphaned_stats_claimed
+from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_check_history_created_index, _ensure_spaced_repetition_table, _ensure_orphaned_stats_claimed
 from app.views.home import bp as home_bp
 from app.views.use_of_english import bp as uoe_bp
 from app.views.writing import bp as writing_bp
@@ -88,12 +88,22 @@ def create_app(config=None):
     else:
         pass  # no Google OAuth
 
+    @app.context_processor
+    def inject_user():
+        return {
+            "current_user_id": session.get("user_id"),
+            "current_user_email": session.get("user_email") or "",
+            "current_user_name": session.get("user_name") or "",
+        }
+
     with app.app_context():
         init_db()
         _ensure_uoe_grammar_topic_column()
         _ensure_check_history_user_id()
         _ensure_users_password_column()
         _ensure_gamification_tables()
+        _ensure_check_history_created_index()
+        _ensure_spaced_repetition_table()
         _ensure_orphaned_stats_claimed()
         seed_db()
 

@@ -1,6 +1,7 @@
 """Writing section: essay + Part 2 options."""
 from __future__ import annotations
 
+import collections
 import io
 import json
 import re
@@ -15,8 +16,8 @@ from app.utils import extract_json_object
 
 bp = Blueprint("writing", __name__)
 
-# In-memory cache: task_token -> PNG bytes. Evict oldest when over limit.
-_TASK_IMAGE_CACHE = {}
+# In-memory cache: task_token -> PNG bytes. Evict oldest (FIFO) when over limit.
+_TASK_IMAGE_CACHE: collections.OrderedDict[str, bytes] = collections.OrderedDict()
 _MAX_TASK_IMAGES = 15
 
 
@@ -31,16 +32,20 @@ def _render_task_image_png(essay_prompt: dict) -> bytes:
     padding = 24
     line_height = 22
     font_size = 15
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
-        font_bold = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
-    except (OSError, TypeError):
+    font = None
+    for path in (
+        "/System/Library/Fonts/Helvetica.ttc",          # macOS
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
+        "C:\\Windows\\Fonts\\arial.ttf",                    # Windows
+    ):
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
-            font_bold = font
+            font = ImageFont.truetype(path, font_size)
+            break
         except (OSError, TypeError):
-            font = ImageFont.load_default()
-            font_bold = font
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+    font_bold = font
 
     def wrap_text(draw, text, font, max_width):
         words = text.replace("\n", " \n ").split()
@@ -143,8 +148,8 @@ def _ensure_task_image(essay_prompt: dict) -> str:
     token = secrets.token_urlsafe(32)
     png = _render_task_image_png(essay_prompt)
     if png:
-        while len(_TASK_IMAGE_CACHE) >= _MAX_TASK_IMAGES and _TASK_IMAGE_CACHE:
-            _TASK_IMAGE_CACHE.pop(next(iter(_TASK_IMAGE_CACHE)))
+        while len(_TASK_IMAGE_CACHE) >= _MAX_TASK_IMAGES:
+            _TASK_IMAGE_CACHE.popitem(last=False)
         _TASK_IMAGE_CACHE[token] = png
         session["writing_task_token"] = token
     else:

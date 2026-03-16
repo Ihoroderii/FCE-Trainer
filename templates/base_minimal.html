@@ -34,6 +34,13 @@
         <span class="logo-text"><strong>CAMBRIDGE</strong><br />English</span>
       </a>
       <div class="header-actions">
+        {% if current_user_id %}
+        <span class="header-user">{{ current_user_name or current_user_email }}</span>
+        <a href="{{ url_for('home.logout') }}" class="header-auth-link" title="Log out">Log out</a>
+        {% else %}
+        <a href="{{ url_for('home.login') }}" class="header-auth-link">Log in</a>
+        <a href="{{ url_for('home.register') }}" class="header-auth-link header-auth-signup">Sign up</a>
+        {% endif %}
         <button type="button" class="dark-mode-btn" id="dark-mode-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
           <span class="dark-mode-icon sun">☀</span>
           <span class="dark-mode-icon moon">🌙</span>

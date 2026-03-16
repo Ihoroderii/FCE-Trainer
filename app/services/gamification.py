@@ -213,7 +213,7 @@ def award_xp(user_id: int, score: int, total: int, part: int) -> dict:
     level_up = new_level_idx > old_level
 
     # ── Achievements ──
-    new_achievements = _check_achievements(user_id, new_xp, streak, total_perfect, best_combo, is_perfect, part)
+    new_achievements = _check_achievements(user_id, new_xp, streak, total_perfect, best_combo, is_perfect)
 
     return {
         "xp_gained": xp_gained,
@@ -229,7 +229,7 @@ def award_xp(user_id: int, score: int, total: int, part: int) -> dict:
     }
 
 
-def _check_achievements(user_id: int, xp: int, streak: int, total_perfect: int, best_combo: int, is_perfect: bool, part: int) -> list[dict]:
+def _check_achievements(user_id: int, xp: int, streak: int, total_perfect: int, best_combo: int, is_perfect: bool) -> list[dict]:
     """Check and unlock any new achievements. Returns list of newly unlocked."""
     candidates = []
 

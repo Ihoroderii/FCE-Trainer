@@ -53,6 +53,7 @@
       {% for p in range(1, 8) %}
       <a href="{{ url_for('use_of_english.use_of_english') }}?part={{ p }}" class="part-seg {{ 'done' if parts_done[p - 1] else '' }} {{ 'active' if current_part == p else '' }}" data-part="{{ p }}" data-total="{{ part_counts[p - 1] }}">
         <span class="part-seg-label">Part {{ p }}</span>
+        {% if due_counts is defined and due_counts.get(p) %}<span class=\"sr-due-badge\" title=\"{{ due_counts[p] }} review{{ 's' if due_counts[p] != 1 else '' }} due\">{{ due_counts[p] }}</span>{% endif %}
         {% if current_part == p %}
         <span class="part-seg-tasks part-seg-tasks-active" data-part="{{ p }}">
           {% for t in range(1, part_counts[p - 1] + 1) %}<span class="part-seg-task-num" data-task="{{ t }}">{{ t }}</span>{% endfor %}

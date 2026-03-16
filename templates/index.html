@@ -49,6 +49,13 @@
   {% endif %}
 </div>
 
+{% if is_review %}
+<div class="sr-review-banner" role="status">
+  <span class="sr-review-icon">🔁</span>
+  <span class="sr-review-text">Spaced Repetition Review — this task was scheduled for review based on your previous mistakes</span>
+</div>
+{% endif %}
+
 {% if check_result and check_result.part == current_part %}
 <div class="score-banner" id="score-banner" role="status" aria-live="polite">
   <span class="score-banner-title">Score:</span>

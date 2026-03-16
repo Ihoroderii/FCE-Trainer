@@ -103,10 +103,6 @@
   {# ── Account & stats ── #}
   <div class="home-account">
     {% if user_id %}
-      <p class="home-account-connected">
-        Connected as <strong>{{ user_email or user_name or 'Google account' }}</strong>
-        <a href="{{ url_for('home.logout') }}" class="home-account-disconnect">Disconnect</a>
-      </p>
 
       {# ── Game dashboard ── #}
       {% if game %}
@@ -189,12 +185,10 @@
       {% endif %}
     {% else %}
       <p class="home-account-connect">
-        <a href="{{ url_for('home.register') }}" class="btn btn-next">Sign up</a>
-        <a href="{{ url_for('home.login') }}" class="btn btn-next">Log in</a>
         {% if google_available %}
         <a href="{{ url_for('google.login') }}" class="btn btn-google">Connect Google account</a>
         {% endif %}
-        <span class="home-account-hint">Track your statistics across devices.</span>
+        <span class="home-account-hint">Sign in to track your statistics across devices.</span>
       </p>
     {% endif %}
   </div>

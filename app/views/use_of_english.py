@@ -6,6 +6,7 @@ from flask import Blueprint, current_app, redirect, render_template, request, se
 
 from app.config import CHECK_RESULT_CACHE_MAX, PARTS_RANGE, PART_QUESTION_COUNTS
 from app.db import get_task_by_id_for_part, get_tasks_by_ids
+from app.services.repetition import get_due_task_id, get_due_task_ids_for_part4, get_due_counts
 from app.parts import (
     CHECKERS,
     _PART_ERROR_MSGS,
@@ -55,7 +56,6 @@ def _handle_generate_action(action):
         generated = part4.fetch_part4_tasks(level=level, db_only=False)
         if generated:
             session["part4_task_ids"] = [t["id"] for t in generated]
-            session.pop("part4_tasks", None)
             session.pop("check_result", None)
         return redirect(url_for("use_of_english.use_of_english", part=4, part4_generated=len(generated) if generated else 0, part4_level=level))
 
@@ -108,36 +108,66 @@ def _handle_check_action(form):
 
 def _handle_next(current_part):
     _inc_idx(current_part)
-    if current_part == 1:
-        task = get_or_create_part1_task()
-        if task and task.get("id"):
-            session["part1_task_id"] = task["id"]
-            session.pop("part1_task", None)
-    elif current_part == 4:
-        p4 = fetch_part4_tasks(level="b2plus", db_only=bool(session.get("part4_db_only")))
-        session["part4_task_ids"] = [t["id"] for t in p4] if p4 else []
-        session.pop("part4_tasks", None)
-    if current_part in _PART_TASK_CONFIG:
-        key, get_or_create, _get_by_id = _PART_TASK_CONFIG[current_part]
-        current_tid = session.get(key)
-        _, tid = get_or_create(exclude_task_id=current_tid)
-        if tid:
-            session[key] = tid
+    review_served = _try_serve_review(current_part)
+    if not review_served:
+        if current_part == 1:
+            task = get_or_create_part1_task()
+            if task and task.get("id"):
+                session["part1_task_id"] = task["id"]
+        elif current_part == 4:
+            p4 = fetch_part4_tasks(level="b2plus", db_only=bool(session.get("part4_db_only")))
+            session["part4_task_ids"] = [t["id"] for t in p4] if p4 else []
+        if current_part in _PART_TASK_CONFIG:
+            key, get_or_create, _get_by_id = _PART_TASK_CONFIG[current_part]
+            current_tid = session.get(key)
+            _, tid = get_or_create(exclude_task_id=current_tid)
+            if tid:
+                session[key] = tid
     session.pop("check_result", None)
     return redirect(url_for("use_of_english.use_of_english", part=current_part))
 
 
+def _try_serve_review(part: int) -> bool:
+    """Try to load a due spaced-repetition task for the given part.
+
+    Returns True if a review task was set into session, False otherwise.
+    """
+    user_id = session.get("user_id")
+    if not user_id:
+        return False
+    if part == 4:
+        due_ids = get_due_task_ids_for_part4(user_id)
+        if due_ids:
+            session["part4_task_ids"] = due_ids
+            session["sr_review"] = True
+            return True
+        return False
+    due_tid = get_due_task_id(user_id, part)
+    if not due_tid:
+        return False
+    # Verify the task still exists
+    task = get_task_by_id_for_part(part, due_tid) if part != 1 else None
+    if part == 1:
+        task = get_part1_task_by_id(due_tid)
+    if not task:
+        return False
+    if part == 1:
+        session["part1_task_id"] = due_tid
+    else:
+        key = f"part{part}_task_id"
+        session[key] = due_tid
+    session["sr_review"] = True
+    return True
+
+
 def _load_part_items(current_part):
     items = {}
-    if current_part == 1 and not session.get("part1_task_id") and not session.get("part1_task"):
+    if current_part == 1 and not session.get("part1_task_id"):
         task = get_or_create_part1_task()
         if task and task.get("id"):
             session["part1_task_id"] = task["id"]
-            session.pop("part1_task", None)
     if session.get("part1_task_id"):
         items[1] = get_part1_task_by_id(session["part1_task_id"])
-    elif session.get("part1_task"):
-        items[1] = session.get("part1_task")
     for p in (2, 3, 5, 6, 7):
         if current_part == p:
             item, _ = _ensure_part_task(p)
@@ -145,15 +175,12 @@ def _load_part_items(current_part):
         else:
             tid = session.get(f"part{p}_task_id")
             items[p] = get_task_by_id_for_part(p, tid) if tid else None
-    if current_part == 4 and not session.get("part4_task_ids") and not session.get("part4_tasks"):
+    if current_part == 4 and not session.get("part4_task_ids"):
         p4 = fetch_part4_tasks(level="b2plus", db_only=bool(session.get("part4_db_only")))
         if p4:
             session["part4_task_ids"] = [t["id"] for t in p4]
-            session.pop("part4_tasks", None)
     if session.get("part4_task_ids"):
         items[4] = get_tasks_by_ids(session["part4_task_ids"])
-    elif session.get("part4_tasks"):
-        items[4] = session.get("part4_tasks")
     else:
         items[4] = None
     return items
@@ -199,6 +226,10 @@ def _build_template_context(current_part, check_result, items):
     parts_checked = session.get("parts_checked") or []
     ctx["parts_done"] = [p in parts_checked for p in PARTS_RANGE]
     ctx["part_counts"] = [PART_QUESTION_COUNTS[p] for p in PARTS_RANGE]
+    # Spaced repetition: review indicator + due counts for tab badges
+    ctx["is_review"] = session.pop("sr_review", False)
+    user_id = session.get("user_id")
+    ctx["due_counts"] = get_due_counts(user_id) if user_id else {}
     return ctx
 
 

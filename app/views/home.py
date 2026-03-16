@@ -143,7 +143,7 @@ def mock_exam_start():
     return redirect(url_for("use_of_english.use_of_english", part=1))
 
 
-EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 MIN_PASSWORD_LEN = 8
 
 

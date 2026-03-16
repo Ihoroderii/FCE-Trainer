@@ -9,6 +9,7 @@ from flask import session
 from app.config import GET_PHRASE_PART, PARTS_RANGE
 from app.db import db_connection
 from app.services.gamification import award_xp
+from app.services.repetition import record_review
 
 
 def _user_filter_sql(user_id: int | None) -> tuple[str, tuple]:
@@ -16,6 +17,44 @@ def _user_filter_sql(user_id: int | None) -> tuple[str, tuple]:
     if user_id is None:
         return "user_id IS NULL", ()
     return "user_id = ?", (user_id,)
+
+
+# Map part number → session key holding the current task_id
+_PART_SESSION_KEYS = {
+    1: "part1_task_id",
+    2: "part2_task_id",
+    3: "part3_task_id",
+    5: "part5_task_id",
+    6: "part6_task_id",
+    7: "part7_task_id",
+}
+
+
+def _current_task_id(part: int) -> int | None:
+    """Return the current task_id from session for the given part."""
+    key = _PART_SESSION_KEYS.get(part)
+    if key:
+        return session.get(key)
+    # Part 4 uses a list of task IDs — return first one as representative
+    if part == 4:
+        ids = session.get("part4_task_ids")
+        return ids[0] if ids else None
+    return None
+
+
+def _record_part4_reviews(user_id: int, result: dict) -> None:
+    """Record spaced repetition for each individual Part 4 item."""
+    if not user_id:
+        return
+    task_ids = session.get("part4_task_ids") or []
+    details = result.get("details") or []
+    for i, d in enumerate(details):
+        if i >= len(task_ids):
+            break
+        tid = task_ids[i]
+        # Each item is scored individually: 1/1 if correct, 0/1 if wrong
+        item_score = 1 if d.get("correct") else 0
+        record_review(user_id, 4, tid, item_score, 1)
 
 
 def claim_orphaned_stats(user_id: int) -> int:
@@ -72,6 +111,18 @@ def record_check_result(result: dict) -> dict | None:
         reward = None
     if reward and reward.get("xp_gained"):
         session["last_reward"] = reward
+
+    # Schedule spaced repetition review for the task
+    try:
+        if part == 4:
+            _record_part4_reviews(user_id, result)
+        else:
+            task_id = _current_task_id(part)
+            if user_id and task_id:
+                record_review(user_id, part, task_id, score, total)
+    except Exception:
+        logging.getLogger("fce_trainer").warning("record_review failed", exc_info=True)
+
     return reward
 
 
@@ -208,7 +259,7 @@ def get_weekly_stats(user_id=None):
         cur = conn.execute(
             f"""SELECT part, SUM(score) AS total_correct, SUM(total) AS total_questions, COUNT(*) AS attempts
                 FROM check_history
-                WHERE {where} AND created_at >= datetime('now', '-7 days')
+                WHERE {where} AND created_at >= datetime('now', '-7 days', 'localtime')
                 GROUP BY part""",
             params,
         )
@@ -251,7 +302,7 @@ def get_progress_series(user_id=None, days=14):
         cur = conn.execute(
             f"""SELECT date(created_at) AS d, SUM(score) AS total_correct, SUM(total) AS total_questions
                 FROM check_history
-                WHERE {where} AND created_at >= date('now', '-{int(days)} days')
+                WHERE {where} AND created_at >= date('now', '-{int(days)} days', 'localtime')
                 GROUP BY date(created_at)
                 ORDER BY d ASC""",
             params,

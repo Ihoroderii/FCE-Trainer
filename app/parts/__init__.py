@@ -27,7 +27,7 @@ _PART_TASK_CONFIG = {
 }
 
 _GENERATE_CONFIG = {
-    1: {"fn": lambda level: part1.generate_part1_with_openai(level=level), "session_key": "part1_task_id", "default_level": "b2", "extra_cleanup": ["part1_task"]},
+    1: {"fn": lambda level: part1.generate_part1_with_openai(level=level), "session_key": "part1_task_id", "default_level": "b2"},
     2: {"fn": lambda level: part2.generate_part2_with_openai(level=level), "session_key": "part2_task_id", "default_level": "b2"},
     3: {"fn": lambda level: part3.generate_part3_with_openai(level=level), "session_key": "part3_task_id", "default_level": "b2"},
     5: {"fn": lambda level: part5.generate_part5_with_openai(), "session_key": "part5_task_id", "default_level": "b2"},
