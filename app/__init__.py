@@ -8,7 +8,7 @@ from flask import Flask, redirect, request, url_for
 from flask_wtf.csrf import CSRFProtect
 
 from app.config import PARTS_RANGE
-from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables
+from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_orphaned_stats_claimed
 from app.views.home import bp as home_bp
 from app.views.use_of_english import bp as uoe_bp
 from app.views.writing import bp as writing_bp
@@ -94,6 +94,7 @@ def create_app(config=None):
         _ensure_check_history_user_id()
         _ensure_users_password_column()
         _ensure_gamification_tables()
+        _ensure_orphaned_stats_claimed()
         seed_db()
 
     return app

@@ -211,9 +211,7 @@ def init_db() -> None:
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_answer_explanations_check_id ON answer_explanations(check_id);
-        CREATE INDEX IF NOT EXISTS idx_check_history_user_id ON check_history(user_id);
         CREATE INDEX IF NOT EXISTS idx_check_history_created_at ON check_history(created_at);
-        CREATE INDEX IF NOT EXISTS idx_check_history_user_part ON check_history(user_id, part);
         CREATE INDEX IF NOT EXISTS idx_answer_explanations_part ON answer_explanations(part);
     """)
         conn.commit()
@@ -225,6 +223,7 @@ def _ensure_uoe_grammar_topic_column():
 
 def _ensure_check_history_user_id():
     _run_migration("add_check_history_user_id", _migrate_check_history_user_id)
+    _run_migration("add_check_history_user_indexes", _migrate_check_history_user_indexes)
 
 
 def _ensure_users_password_column():
@@ -233,6 +232,10 @@ def _ensure_users_password_column():
 
 def _ensure_gamification_tables():
     _run_migration("add_gamification_tables", _migrate_gamification_tables)
+
+
+def _ensure_orphaned_stats_claimed():
+    _run_migration("claim_orphaned_check_history", _migrate_claim_orphaned_stats)
 
 
 # --- Migration infrastructure ---
@@ -269,6 +272,11 @@ def _migrate_check_history_user_id(conn):
         conn.execute("ALTER TABLE check_history ADD COLUMN user_id INTEGER REFERENCES users(id)")
 
 
+def _migrate_check_history_user_indexes(conn):
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_check_history_user_id ON check_history(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_check_history_user_part ON check_history(user_id, part)")
+
+
 def _migrate_users_password_column(conn):
     cur = conn.execute("PRAGMA table_info(users)")
     cols = [r["name"] for r in cur.fetchall()]
@@ -297,6 +305,23 @@ def _migrate_gamification_tables(conn):
         );
         CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);
     """)
+
+
+def _migrate_claim_orphaned_stats(conn):
+    """If there's exactly one user, assign all anonymous check_history to them."""
+    cur = conn.execute("SELECT COUNT(*) AS n FROM users")
+    user_count = cur.fetchone()["n"]
+    if user_count != 1:
+        return
+    cur = conn.execute("SELECT id FROM users LIMIT 1")
+    user_id = cur.fetchone()["id"]
+    cur = conn.execute("SELECT COUNT(*) AS n FROM check_history WHERE user_id IS NULL")
+    orphan_count = cur.fetchone()["n"]
+    if orphan_count == 0:
+        return
+    conn.execute("UPDATE check_history SET user_id = ? WHERE user_id IS NULL", (user_id,))
+    conn.execute("UPDATE answer_explanations SET created_at = created_at WHERE check_id IN (SELECT id FROM check_history WHERE user_id = ?)", (user_id,))
+    logger.info("Claimed %d orphaned check_history records for user %d", orphan_count, user_id)
 
 
 def seed_db() -> None:
