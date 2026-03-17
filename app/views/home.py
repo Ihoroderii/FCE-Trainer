@@ -39,6 +39,11 @@ def health():
     return {"status": "ok"}, 200
 
 
+@bp.route("/faq")
+def faq():
+    return render_template("faq.html")
+
+
 @bp.route("/stats")
 @login_required
 def stats():

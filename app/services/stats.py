@@ -10,6 +10,8 @@ from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE
 from app.db import db_connection
 from app.services.repetition import record_review
 
+logger = logging.getLogger("fce_trainer")
+
 
 def _user_filter_sql(user_id: int | None) -> tuple[str, tuple]:
     """Return (sql_fragment, params) for filtering by user_id or anonymous."""
@@ -77,6 +79,7 @@ def record_check_result(result: dict) -> dict | None:
     if part not in PARTS_RANGE and part != GET_PHRASE_PART:
         return None
     user_id = session.get("user_id")
+    logger.debug("record_check_result: part=%s score=%d/%d user=%s", part, score, total, user_id)
     details = result.get("details") or []
     with db_connection() as conn:
         cur = conn.execute(

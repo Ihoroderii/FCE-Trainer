@@ -84,21 +84,48 @@
     <h2 class="stats-panel-title">All-time (Use of English)</h2>
     {% set overview_has_any = user_stats and (user_stats | selectattr('attempts') | list | length) > 0 %}
     {% if overview_has_any %}
-    <table class="stats-table">
+    <table class="stats-table stats-table--colorful">
       <thead>
-        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
+        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>Accuracy</th></tr>
       </thead>
       <tbody>
+        {% set ns = namespace(tc=0, tw=0, att=0, tq=0) %}
         {% for s in user_stats %}
-        <tr>
-          <td>Part {{ s.part }}</td>
-          <td>{{ s.total_correct }}</td>
-          <td>{{ s.total_wrong }}</td>
+        {% set tier = 'excellent' if s.percent is not none and s.percent >= 80 else ('good' if s.percent is not none and s.percent >= 60 else ('mid' if s.percent is not none and s.percent >= 40 else 'low')) %}
+        <tr class="stats-row--{{ tier if s.attempts else 'none' }}">
+          <td class="stats-part-cell"><span class="stats-part-badge">Part {{ s.part }}</span></td>
+          <td class="stats-right">{{ s.total_correct }}</td>
+          <td class="stats-wrong">{{ s.total_wrong }}</td>
           <td>{{ s.attempts }}</td>
-          <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+          <td class="stats-pct-cell">
+            {% if s.percent is not none %}
+            <div class="stats-pct-bar"><div class="stats-pct-fill stats-pct-fill--{{ tier }}" style="width:{{ s.percent }}%"></div></div>
+            <span class="stats-pct-val">{{ s.percent }}%</span>
+            {% else %}<span class="stats-pct-val stats-pct-val--none">&mdash;</span>{% endif %}
+          </td>
         </tr>
+        {% set ns.tc = ns.tc + s.total_correct %}
+        {% set ns.tw = ns.tw + s.total_wrong %}
+        {% set ns.att = ns.att + s.attempts %}
+        {% set ns.tq = ns.tq + s.total_questions %}
         {% endfor %}
       </tbody>
+      <tfoot>
+        {% set overall_pct = (ns.tc * 100 / ns.tq)|round(1) if ns.tq else 0 %}
+        {% set otier = 'excellent' if overall_pct >= 80 else ('good' if overall_pct >= 60 else ('mid' if overall_pct >= 40 else 'low')) %}
+        <tr class="stats-row--total">
+          <td class="stats-part-cell"><span class="stats-part-badge stats-part-badge--total">Overall</span></td>
+          <td class="stats-right">{{ ns.tc }}</td>
+          <td class="stats-wrong">{{ ns.tw }}</td>
+          <td>{{ ns.att }}</td>
+          <td class="stats-pct-cell">
+            {% if ns.tq %}
+            <div class="stats-pct-bar"><div class="stats-pct-fill stats-pct-fill--{{ otier }}" style="width:{{ overall_pct }}%"></div></div>
+            <span class="stats-pct-val">{{ overall_pct }}%</span>
+            {% else %}<span class="stats-pct-val stats-pct-val--none">&mdash;</span>{% endif %}
+          </td>
+        </tr>
+      </tfoot>
     </table>
     {% else %}
     <p class="stats-empty">No statistics yet. Go to <a href="{{ url_for('use_of_english.use_of_english') }}">Use of English</a>, do a task, then click <strong>Check answers</strong>. Your stats will appear here (and in Today / This week when applicable).</p>
@@ -128,18 +155,24 @@
     <h2 class="stats-panel-title">Today</h2>
     {% set day_has_any = daily_stats and (daily_stats | selectattr('total_questions') | list | length) > 0 %}
     {% if day_has_any %}
-    <table class="stats-table">
+    <table class="stats-table stats-table--colorful">
       <thead>
-        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
+        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>Accuracy</th></tr>
       </thead>
       <tbody>
         {% for s in daily_stats %}
-        <tr>
-          <td>Part {{ s.part }}</td>
-          <td>{{ s.total_correct }}</td>
-          <td>{{ s.total_wrong }}</td>
+        {% set tier = 'excellent' if s.percent is not none and s.percent >= 80 else ('good' if s.percent is not none and s.percent >= 60 else ('mid' if s.percent is not none and s.percent >= 40 else 'low')) %}
+        <tr class="stats-row--{{ tier if s.attempts else 'none' }}">
+          <td class="stats-part-cell"><span class="stats-part-badge">Part {{ s.part }}</span></td>
+          <td class="stats-right">{{ s.total_correct }}</td>
+          <td class="stats-wrong">{{ s.total_wrong }}</td>
           <td>{{ s.attempts }}</td>
-          <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+          <td class="stats-pct-cell">
+            {% if s.percent is not none %}
+            <div class="stats-pct-bar"><div class="stats-pct-fill stats-pct-fill--{{ tier }}" style="width:{{ s.percent }}%"></div></div>
+            <span class="stats-pct-val">{{ s.percent }}%</span>
+            {% else %}<span class="stats-pct-val stats-pct-val--none">&mdash;</span>{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -154,18 +187,24 @@
     <h2 class="stats-panel-title">This week (last 7 days)</h2>
     {% set week_has_any = weekly_stats and (weekly_stats | selectattr('total_questions') | list | length) > 0 %}
     {% if week_has_any %}
-    <table class="stats-table">
+    <table class="stats-table stats-table--colorful">
       <thead>
-        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
+        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>Accuracy</th></tr>
       </thead>
       <tbody>
         {% for s in weekly_stats %}
-        <tr>
-          <td>Part {{ s.part }}</td>
-          <td>{{ s.total_correct }}</td>
-          <td>{{ s.total_wrong }}</td>
+        {% set tier = 'excellent' if s.percent is not none and s.percent >= 80 else ('good' if s.percent is not none and s.percent >= 60 else ('mid' if s.percent is not none and s.percent >= 40 else 'low')) %}
+        <tr class="stats-row--{{ tier if s.attempts else 'none' }}">
+          <td class="stats-part-cell"><span class="stats-part-badge">Part {{ s.part }}</span></td>
+          <td class="stats-right">{{ s.total_correct }}</td>
+          <td class="stats-wrong">{{ s.total_wrong }}</td>
           <td>{{ s.attempts }}</td>
-          <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}—{% endif %}</td>
+          <td class="stats-pct-cell">
+            {% if s.percent is not none %}
+            <div class="stats-pct-bar"><div class="stats-pct-fill stats-pct-fill--{{ tier }}" style="width:{{ s.percent }}%"></div></div>
+            <span class="stats-pct-val">{{ s.percent }}%</span>
+            {% else %}<span class="stats-pct-val stats-pct-val--none">&mdash;</span>{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

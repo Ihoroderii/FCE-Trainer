@@ -14,8 +14,12 @@ from app.views.use_of_english import bp as uoe_bp
 from app.views.writing import bp as writing_bp
 from app.views.get_phrases import bp as get_phrases_bp
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+_debug_mode = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+_log_level = logging.DEBUG if _debug_mode else logging.INFO
+logging.basicConfig(level=_log_level, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("fce_trainer")
+if _debug_mode:
+    logger.debug("Debug mode ON — verbose logging enabled")
 
 # Project root (parent of the app package) — templates/ and static/ live here
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -97,6 +101,7 @@ def create_app(config=None):
         }
 
     with app.app_context():
+        logger.debug("Initialising database and running migrations…")
         init_db()
         _ensure_uoe_grammar_topic_column()
         _ensure_check_history_user_id()
@@ -106,5 +111,10 @@ def create_app(config=None):
         _ensure_spaced_repetition_table()
         _ensure_orphaned_stats_claimed()
         seed_db()
+        logger.debug("Database ready")
+
+    logger.info("FCE-Trainer starting (debug=%s, AI=%s)",
+                _debug_mode,
+                "enabled" if app.config.get("AI_ENABLED") else "disabled")
 
     return app

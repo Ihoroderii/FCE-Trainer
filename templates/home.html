@@ -98,6 +98,12 @@
       <p class="home-section-desc">Study collocations with <strong>get</strong>: 8-gap cloze (e.g. get over, get rid of, get along with). Check answers and review explanations.</p>
       <span class="home-section-cta">Practice get phrases &rarr;</span>
     </a>
+    <a href="{{ url_for('home.faq') }}" class="home-section-card home-section-faq">
+      <span class="home-section-icon" aria-hidden="true">?</span>
+      <h3 class="home-section-title">FAQ & How It Works</h3>
+      <p class="home-section-desc">Features, spaced repetition method, exam parts guide, and study tips to get the most out of your practice.</p>
+      <span class="home-section-cta">Read more &rarr;</span>
+    </a>
   </div>
 
   {# ── Account & stats ── #}
@@ -159,30 +165,6 @@
       </section>
       {% endif %}
 
-      {% if has_attempts %}
-      <section class="stats-section home-stats">
-        <h2>Your statistics (Use of English)</h2>
-        <table class="stats-table">
-          <thead>
-            <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>%</th></tr>
-          </thead>
-          <tbody>
-            {% for s in user_stats %}
-            <tr>
-              <td>Part {{ s.part }}</td>
-              <td>{{ s.total_correct }}</td>
-              <td>{{ s.total_wrong }}</td>
-              <td>{{ s.attempts }}</td>
-              <td>{% if s.percent is not none %}{{ s.percent }}%{% else %}&mdash;{% endif %}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        <p class="home-stats-link"><a href="{{ url_for('home.stats') }}" class="btn btn-next">View full statistics (day, week, chart, Part 3 words)</a></p>
-      </section>
-      {% else %}
-      <p class="home-stats-empty">No attempts yet. Your stats will appear here after you check answers. <a href="{{ url_for('home.stats') }}">Statistics</a></p>
-      {% endif %}
     {% else %}
       <p class="home-account-connect">
         {% if google_available %}
