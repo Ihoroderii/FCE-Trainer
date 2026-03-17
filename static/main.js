@@ -399,3 +399,154 @@
       firstWrong.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   })();
+
+  // ── Vocabulary notebook: double-click to save a word ──────────────────────
+  (function() {
+    // Works on Part 5/6/7 reading text areas
+    var textAreas = document.querySelectorAll('.reading-text, .part7-text-col');
+    if (!textAreas.length) return;
+
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+    var body = document.body;
+    var currentPart = parseInt(body.getAttribute('data-current-part') || '0', 10);
+
+    // Create the save popup
+    var popup = document.createElement('div');
+    popup.className = 'vocab-popup';
+    popup.innerHTML =
+      '<div class="vocab-popup-header">' +
+        '<span class="vocab-popup-title">Save word</span>' +
+        '<button class="vocab-popup-close" type="button">&times;</button>' +
+      '</div>' +
+      '<div class="vocab-popup-word"></div>' +
+      '<div class="vocab-popup-sentence"></div>' +
+      '<div class="vocab-popup-buttons">' +
+        '<button class="btn vocab-popup-save" type="button">📒 Save to notebook</button>' +
+      '</div>' +
+      '<div class="vocab-popup-status"></div>';
+    popup.style.display = 'none';
+    document.body.appendChild(popup);
+
+    var popupWord = popup.querySelector('.vocab-popup-word');
+    var popupSentence = popup.querySelector('.vocab-popup-sentence');
+    var popupSave = popup.querySelector('.vocab-popup-save');
+    var popupClose = popup.querySelector('.vocab-popup-close');
+    var popupStatus = popup.querySelector('.vocab-popup-status');
+
+    var selectedWord = '';
+    var selectedSentence = '';
+
+    function hidePopup() {
+      popup.style.display = 'none';
+      popupStatus.textContent = '';
+    }
+
+    popupClose.addEventListener('click', hidePopup);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') hidePopup();
+    });
+
+    // Find the sentence (closest block element text) containing the selection
+    function getSentenceFromNode(node) {
+      var el = node.nodeType === 3 ? node.parentElement : node;
+      // Walk up to find a block-level element (p, div, li, h1-h6)
+      while (el && el !== document.body) {
+        var tag = el.tagName.toLowerCase();
+        if (tag === 'p' || tag === 'div' || tag === 'li' || /^h[1-6]$/.test(tag)) {
+          return el.textContent.trim();
+        }
+        el = el.parentElement;
+      }
+      return '';
+    }
+
+    function showPopup(word, sentence, x, y) {
+      selectedWord = word;
+      selectedSentence = sentence;
+      popupWord.textContent = word;
+      popupSentence.textContent = sentence ? (sentence.length > 200 ? sentence.slice(0, 200) + '…' : sentence) : '';
+      popupStatus.textContent = '';
+      popupSave.disabled = false;
+      popupSave.textContent = '📒 Save to notebook';
+
+      popup.style.display = 'block';
+      // Position near click, but keep on screen
+      var pw = popup.offsetWidth, ph = popup.offsetHeight;
+      var winW = window.innerWidth, winH = window.innerHeight;
+      var left = Math.min(x + 10, winW - pw - 20);
+      var top = Math.min(y + 10, winH - ph - 20);
+      if (left < 10) left = 10;
+      if (top < 10) top = 10;
+      popup.style.left = left + 'px';
+      popup.style.top = top + 'px';
+    }
+
+    // Listen for double-click on reading text areas
+    for (var i = 0; i < textAreas.length; i++) {
+      textAreas[i].addEventListener('dblclick', function(e) {
+        var sel = window.getSelection();
+        var word = sel ? sel.toString().trim() : '';
+        // Keep only the first word, strip punctuation
+        word = word.split(/\s+/)[0].replace(/[^a-zA-Z'-]/g, '');
+        if (!word || word.length < 2) return;
+
+        var sentence = '';
+        if (sel.anchorNode) {
+          sentence = getSentenceFromNode(sel.anchorNode);
+        }
+
+        showPopup(word.toLowerCase(), sentence, e.clientX, e.clientY);
+      });
+    }
+
+    // Save button
+    popupSave.addEventListener('click', function() {
+      if (!selectedWord) return;
+      popupSave.disabled = true;
+      popupSave.textContent = 'Saving…';
+
+      fetch('/api/vocab/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+          word: selectedWord,
+          sentence: selectedSentence,
+          source_part: currentPart || null,
+        }),
+      })
+      .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+      .then(function(res) {
+        if (res.status === 200 && res.data.ok) {
+          popupStatus.className = 'vocab-popup-status vocab-popup-ok';
+          popupStatus.textContent = '✓ Saved! Translation will appear in your notebook.';
+          popupSave.textContent = '✓ Saved';
+          setTimeout(hidePopup, 1800);
+        } else if (res.status === 409) {
+          popupStatus.className = 'vocab-popup-status vocab-popup-dup';
+          popupStatus.textContent = 'Already in your notebook';
+          popupSave.textContent = '📒 Already saved';
+          setTimeout(hidePopup, 1500);
+        } else if (res.status === 401 || res.status === 302) {
+          popupStatus.className = 'vocab-popup-status vocab-popup-err';
+          popupStatus.textContent = 'Please log in first';
+          popupSave.disabled = false;
+          popupSave.textContent = '📒 Save to notebook';
+        } else {
+          popupStatus.className = 'vocab-popup-status vocab-popup-err';
+          popupStatus.textContent = res.data.error || 'Save failed';
+          popupSave.disabled = false;
+          popupSave.textContent = '📒 Save to notebook';
+        }
+      })
+      .catch(function() {
+        popupStatus.className = 'vocab-popup-status vocab-popup-err';
+        popupStatus.textContent = 'Network error';
+        popupSave.disabled = false;
+        popupSave.textContent = '📒 Save to notebook';
+      });
+    });
+  })();

@@ -104,6 +104,14 @@
       <p class="home-section-desc">Features, spaced repetition method, exam parts guide, and study tips to get the most out of your practice.</p>
       <span class="home-section-cta">Read more &rarr;</span>
     </a>
+    {% if current_user_id %}
+    <a href="{{ url_for('vocab.vocab_page') }}" class="home-section-card home-section-vocab">
+      <span class="home-section-icon" aria-hidden="true">📒</span>
+      <h3 class="home-section-title">Vocabulary Notebook</h3>
+      <p class="home-section-desc">Words saved from reading texts with Russian translations. Double-click any word in Part 5/6/7 to save it. Export to Anki.</p>
+      <span class="home-section-cta">Open notebook &rarr;</span>
+    </a>
+    {% endif %}
   </div>
 
   {# ── Account & stats ── #}

@@ -3562,6 +3562,14 @@ html.dark-mode .sr-due-badge {
   font-weight: 800;
 }
 
+/* Home section card for Vocabulary */
+.home-section-vocab {
+  border-left-color: #7c4dff;
+}
+.home-section-vocab .home-section-icon {
+  font-size: 1.8rem;
+}
+
 /* Dark mode FAQ */
 html.dark-mode .faq-q { color: #90caf9; }
 html.dark-mode .faq-nav-link {
@@ -3595,4 +3603,355 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
   .faq-algo-step { flex-direction: column; gap: 6px; }
   .faq-quality-grid { grid-template-columns: 1fr; }
   .faq-footer { flex-direction: column; align-items: stretch; text-align: center; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VOCABULARY NOTEBOOK
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Double-click popup ─────────────────────────────────────────────────── */
+.vocab-popup {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  border: 2px solid #7c4dff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(124,77,255,0.18), 0 2px 8px rgba(0,0,0,0.08);
+  padding: 0;
+  min-width: 260px;
+  max-width: 360px;
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+}
+.vocab-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #7c4dff, #651fff);
+  color: #fff;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.vocab-popup-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+}
+.vocab-popup-word {
+  padding: 10px 14px 4px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #333;
+}
+.vocab-popup-sentence {
+  padding: 0 14px 10px;
+  font-size: 0.82rem;
+  color: #666;
+  line-height: 1.4;
+  font-style: italic;
+  max-height: 80px;
+  overflow: auto;
+}
+.vocab-popup-buttons {
+  padding: 0 14px 10px;
+}
+.vocab-popup-save {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #7c4dff, #651fff);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.vocab-popup-save:hover { opacity: 0.88; }
+.vocab-popup-save:disabled { opacity: 0.6; cursor: wait; }
+.vocab-popup-status {
+  padding: 0 14px 10px;
+  font-size: 0.8rem;
+  min-height: 1.2em;
+}
+.vocab-popup-ok { color: #2e7d32; font-weight: 600; }
+.vocab-popup-dup { color: #f57f17; }
+.vocab-popup-err { color: #c62828; }
+
+/* Highlight words in reading text on hover for discoverability */
+.reading-text p, .reading-text div, .part7-text-col p, .part7-text-col div {
+  cursor: text;
+}
+.reading-text ::selection, .part7-text-col ::selection {
+  background: rgba(124,77,255,0.2);
+}
+
+/* ── Vocabulary page ────────────────────────────────────────────────────── */
+.vocab-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+.vocab-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.vocab-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #7c4dff, #651fff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 6px;
+}
+.vocab-subtitle {
+  color: #666;
+  font-size: 0.95rem;
+  margin: 0 0 16px;
+}
+.vocab-actions-top {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.vocab-btn-back {
+  background: #f5f5f5;
+  color: #555;
+  border: 1px solid #ddd;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.vocab-btn-back:hover { background: #eee; }
+.vocab-btn-anki {
+  background: linear-gradient(135deg, #7c4dff, #651fff);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(124,77,255,0.25);
+}
+.vocab-btn-anki:hover { opacity: 0.9; }
+
+/* Empty state */
+.vocab-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #888;
+}
+.vocab-empty-icon { font-size: 3rem; display: block; margin-bottom: 12px; }
+.vocab-empty h2 { font-size: 1.3rem; color: #555; margin: 0 0 8px; }
+.vocab-empty p { font-size: 0.95rem; margin: 0 0 20px; }
+.vocab-btn-start {
+  display: inline-block;
+  background: linear-gradient(135deg, #7c4dff, #651fff);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* Stats bar */
+.vocab-stats-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  margin-bottom: 12px;
+}
+.vocab-count {
+  font-weight: 600;
+  color: #7c4dff;
+  font-size: 0.95rem;
+}
+
+/* Table */
+.vocab-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 32px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+.vocab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.vocab-table thead {
+  background: linear-gradient(135deg, #7c4dff, #651fff);
+  color: #fff;
+}
+.vocab-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.vocab-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: top;
+}
+.vocab-table tbody tr:hover {
+  background: rgba(124,77,255,0.04);
+}
+.vocab-td-word {
+  font-weight: 700;
+  color: #333;
+  font-size: 0.95rem;
+}
+.vocab-td-word-ru {
+  color: #7c4dff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vocab-td-sentence {
+  font-style: italic;
+  color: #555;
+  max-width: 280px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.vocab-td-sentence-ru {
+  color: #888;
+  font-style: italic;
+  max-width: 260px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.vocab-td-sentence-ru:hover, .vocab-td-word-ru:hover {
+  background: rgba(124,77,255,0.06);
+  border-radius: 4px;
+}
+.vocab-part-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #7c4dff, #651fff);
+  color: #fff;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.vocab-td-date {
+  white-space: nowrap;
+  color: #999;
+  font-size: 0.8rem;
+}
+.vocab-btn-delete {
+  background: none;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  color: #999;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px 8px;
+  transition: all 0.2s;
+}
+.vocab-btn-delete:hover {
+  background: #ffebee;
+  border-color: #ef5350;
+  color: #c62828;
+}
+.vocab-inline-edit {
+  width: 100%;
+  border: 1px solid #7c4dff;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+}
+
+/* Anki help section */
+.vocab-anki-help {
+  background: #f8f5ff;
+  border: 1px solid #e8e0ff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-top: 24px;
+}
+.vocab-anki-help h3 {
+  font-size: 1.05rem;
+  color: #7c4dff;
+  margin: 0 0 12px;
+}
+.vocab-anki-help ol {
+  padding-left: 20px;
+  margin: 0 0 12px;
+  line-height: 1.8;
+  color: #555;
+}
+.vocab-anki-help code {
+  background: #eee;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+.vocab-anki-note {
+  color: #888;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* ── Dark mode ──────────────────────────────────────────────────────────── */
+html.dark-mode .vocab-popup {
+  background: #1e1e2e;
+  border-color: #9c7cff;
+}
+html.dark-mode .vocab-popup-word { color: #e0e0e0; }
+html.dark-mode .vocab-popup-sentence { color: #aaa; }
+
+html.dark-mode .vocab-page { color: #e0e0e0; }
+html.dark-mode .vocab-subtitle { color: #aaa; }
+html.dark-mode .vocab-btn-back {
+  background: #2a2a3e;
+  color: #ccc;
+  border-color: #444;
+}
+html.dark-mode .vocab-empty { color: #aaa; }
+html.dark-mode .vocab-empty h2 { color: #ddd; }
+html.dark-mode .vocab-table td { border-bottom-color: #333; }
+html.dark-mode .vocab-table tbody tr:hover { background: rgba(124,77,255,0.08); }
+html.dark-mode .vocab-td-word { color: #eee; }
+html.dark-mode .vocab-td-sentence { color: #bbb; }
+html.dark-mode .vocab-td-sentence-ru { color: #999; }
+html.dark-mode .vocab-td-date { color: #777; }
+html.dark-mode .vocab-btn-delete { border-color: #555; color: #888; }
+html.dark-mode .vocab-btn-delete:hover { background: rgba(229,57,53,0.15); }
+html.dark-mode .vocab-inline-edit {
+  background: #2a2a3e;
+  color: #eee;
+  border-color: #9c7cff;
+}
+html.dark-mode .vocab-anki-help {
+  background: #1e1e2e;
+  border-color: #3a3a5e;
+}
+html.dark-mode .vocab-anki-help ol { color: #bbb; }
+html.dark-mode .vocab-anki-help code { background: #2a2a3e; color: #ddd; }
+html.dark-mode .vocab-anki-note { color: #888; }
+
+/* ── Mobile ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .vocab-table { font-size: 0.8rem; }
+  .vocab-th-sentence, .vocab-td-sentence,
+  .vocab-th-sentence-ru, .vocab-td-sentence-ru { display: none; }
+  .vocab-page { padding: 16px 12px 40px; }
+  .vocab-title { font-size: 1.4rem; }
+  .vocab-popup { min-width: 220px; max-width: 300px; }
 }

@@ -246,6 +246,10 @@ def _ensure_orphaned_stats_claimed():
     _run_migration("claim_orphaned_check_history", _migrate_claim_orphaned_stats)
 
 
+def _ensure_vocab_notebook_table():
+    _run_migration("add_vocab_notebook_table", _migrate_vocab_notebook_table)
+
+
 # --- Migration infrastructure ---
 
 def _run_migration(name: str, fn):
@@ -354,6 +358,24 @@ def _migrate_claim_orphaned_stats(conn):
         return
     conn.execute("UPDATE check_history SET user_id = ? WHERE user_id IS NULL", (user_id,))
     logger.info("Claimed %d orphaned check_history records for user %d", orphan_count, user_id)
+
+
+def _migrate_vocab_notebook_table(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS vocab_notebook (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            word TEXT NOT NULL,
+            sentence TEXT NOT NULL DEFAULT '',
+            word_ru TEXT NOT NULL DEFAULT '',
+            sentence_ru TEXT NOT NULL DEFAULT '',
+            source_part INTEGER,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_vocab_user ON vocab_notebook(user_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_user_word_sentence
+            ON vocab_notebook(user_id, word, sentence);
+    """)
 
 
 def seed_db() -> None:
