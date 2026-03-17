@@ -423,6 +423,7 @@
         '<span class="vocab-popup-word"></span>' +
         '<button class="vocab-popup-speak" type="button" title="Pronounce">🔊</button>' +
       '</div>' +
+      '<div class="vocab-popup-forms"></div>' +
       '<div class="vocab-popup-sentence"></div>' +
       '<div class="vocab-popup-buttons">' +
         '<button class="btn vocab-popup-save" type="button">📒 Save to notebook</button>' +
@@ -432,6 +433,7 @@
     document.body.appendChild(popup);
 
     var popupWord = popup.querySelector('.vocab-popup-word');
+    var popupForms = popup.querySelector('.vocab-popup-forms');
     var popupSentence = popup.querySelector('.vocab-popup-sentence');
     var popupSave = popup.querySelector('.vocab-popup-save');
     var popupClose = popup.querySelector('.vocab-popup-close');
@@ -440,10 +442,15 @@
 
     var selectedWord = '';
     var selectedSentence = '';
+    var selectedForms = '';
+    var _isPhrase = false;
+    var _dblClickGuard = false;
 
     function hidePopup() {
       popup.style.display = 'none';
       popupStatus.textContent = '';
+      popupForms.textContent = '';
+      popupForms.style.display = 'none';
     }
 
     popupClose.addEventListener('click', hidePopup);
@@ -489,12 +496,17 @@
       return sentences[0] ? sentences[0].trim() : text;
     }
 
-    function showPopup(word, sentence, x, y) {
+    function showPopup(word, sentence, x, y, isPhrase) {
       selectedWord = word;
       selectedSentence = sentence;
+      selectedForms = '';
+      _isPhrase = !!isPhrase;
       popupWord.textContent = word;
+      popup.querySelector('.vocab-popup-title').textContent = isPhrase ? 'Save phrase' : 'Save word';
       popupSentence.textContent = sentence ? (sentence.length > 200 ? sentence.slice(0, 200) + '…' : sentence) : '';
       popupStatus.textContent = '';
+      popupForms.textContent = '';
+      popupForms.style.display = 'none';
       popupSave.disabled = false;
       popupSave.textContent = '📒 Save to notebook';
 
@@ -508,11 +520,40 @@
       if (top < 10) top = 10;
       popup.style.left = left + 'px';
       popup.style.top = top + 'px';
+
+      // Fetch word forms for single words (not phrases)
+      if (!isPhrase && word.indexOf(' ') === -1) {
+        fetchWordForms(word);
+      }
     }
 
-    // Listen for double-click on reading text areas
+    // Fetch word forms from server
+    function fetchWordForms(word) {
+      fetch('/api/vocab/word-forms?word=' + encodeURIComponent(word))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.forms && Object.keys(data.forms).length > 0) {
+            selectedForms = JSON.stringify(data.forms);
+            var html = '';
+            var labels = {noun: 'noun', verb: 'verb', adjective: 'adj', adverb: 'adv'};
+            for (var pos in labels) {
+              if (data.forms[pos]) {
+                html += '<span class="vocab-form-tag vocab-form-' + pos + '">' + labels[pos] + ': ' + data.forms[pos] + '</span> ';
+              }
+            }
+            popupForms.innerHTML = html;
+            popupForms.style.display = 'block';
+          }
+        })
+        .catch(function() {});
+    }
+
+    // Listen for double-click on reading text (single word)
     for (var i = 0; i < textAreas.length; i++) {
       textAreas[i].addEventListener('dblclick', function(e) {
+        _dblClickGuard = true;
+        setTimeout(function() { _dblClickGuard = false; }, 300);
+
         var sel = window.getSelection();
         var word = sel ? sel.toString().trim() : '';
         // Keep only the first word, strip punctuation
@@ -524,7 +565,31 @@
           sentence = getSentenceForWord(sel.anchorNode, word);
         }
 
-        showPopup(word.toLowerCase(), sentence, e.clientX, e.clientY);
+        showPopup(word.toLowerCase(), sentence, e.clientX, e.clientY, false);
+      });
+
+      // Listen for mouseup — phrase selection (highlight + release)
+      textAreas[i].addEventListener('mouseup', function(e) {
+        // Skip if this was a double-click (handled above)
+        setTimeout(function() {
+          if (_dblClickGuard) return;
+          var sel = window.getSelection();
+          var text = sel ? sel.toString().trim() : '';
+          if (!text || text.length < 3) return;
+          // Must have at least 2 words to count as a phrase
+          var words = text.split(/\s+/);
+          if (words.length < 2) return;
+          // Clean: strip trailing/leading punctuation
+          text = text.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+          if (text.length < 3) return;
+
+          var sentence = '';
+          if (sel.anchorNode) {
+            sentence = getSentenceForWord(sel.anchorNode, words[0]);
+          }
+
+          showPopup(text.toLowerCase(), sentence, e.clientX, e.clientY, true);
+        }, 50);
       });
     }
 
@@ -544,6 +609,7 @@
           word: selectedWord,
           sentence: selectedSentence,
           source_part: currentPart || null,
+          word_forms: selectedForms || null,
         }),
       })
       .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })

@@ -18,7 +18,7 @@
   <div class="vocab-empty">
     <span class="vocab-empty-icon">📖</span>
     <h2>No words saved yet</h2>
-    <p>Go to <strong>Part 5, 6 or 7</strong> and <strong>double-click any word</strong> in the reading text to save it here.</p>
+    <p>Go to <strong>Part 5, 6 or 7</strong>: <strong>double-click</strong> a word or <strong>highlight a phrase</strong> to save it here.</p>
     <a href="{{ url_for('use_of_english.use_of_english', part=5) }}" class="btn vocab-btn-start">Start reading &rarr;</a>
   </div>
   {% else %}
@@ -32,7 +32,8 @@
       <thead>
         <tr>
           <th class="vocab-th-num">#</th>
-          <th class="vocab-th-word">Word</th>
+          <th class="vocab-th-word">Word / Phrase</th>
+          <th class="vocab-th-forms">Forms</th>
           <th class="vocab-th-word-ru">Перевод</th>
           <th class="vocab-th-sentence">Sentence</th>
           <th class="vocab-th-sentence-ru">Предложение</th>
@@ -48,6 +49,13 @@
           <td class="vocab-td-word">
             <span class="vocab-word-text">{{ w.word }}</span>
             <button class="vocab-btn-speak" data-word="{{ w.word }}" title="Pronounce">🔊</button>
+          </td>
+          <td class="vocab-td-forms">
+            {% if w.forms_parsed %}
+              {% for pos, val in w.forms_parsed.items() %}
+                <span class="vocab-form-tag vocab-form-{{ pos }}">{{ {'noun':'n','verb':'v','adjective':'adj','adverb':'adv'}.get(pos, pos) }}: {{ val }}</span>
+              {% endfor %}
+            {% else %}—{% endif %}
           </td>
           <td class="vocab-td-word-ru" data-field="word_ru">{{ w.word_ru or '—' }}</td>
           <td class="vocab-td-sentence">{{ w.sentence or '—' }}</td>

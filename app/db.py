@@ -250,6 +250,10 @@ def _ensure_vocab_notebook_table():
     _run_migration("add_vocab_notebook_table", _migrate_vocab_notebook_table)
 
 
+def _ensure_vocab_word_forms_column():
+    _run_migration("add_vocab_word_forms_column", _migrate_vocab_word_forms_column)
+
+
 # --- Migration infrastructure ---
 
 def _run_migration(name: str, fn):
@@ -376,6 +380,13 @@ def _migrate_vocab_notebook_table(conn):
         CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_user_word_sentence
             ON vocab_notebook(user_id, word, sentence);
     """)
+
+
+def _migrate_vocab_word_forms_column(conn):
+    cur = conn.execute("PRAGMA table_info(vocab_notebook)")
+    cols = [r["name"] for r in cur.fetchall()]
+    if "word_forms" not in cols:
+        conn.execute("ALTER TABLE vocab_notebook ADD COLUMN word_forms TEXT NOT NULL DEFAULT ''")
 
 
 def seed_db() -> None:

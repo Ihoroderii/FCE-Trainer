@@ -16,8 +16,10 @@ from app.db import db_connection
 logger = logging.getLogger("fce_trainer")
 
 _MYMEMORY_URL = "https://api.mymemory.translated.net/get"
+_DICT_API_URL = "https://api.dictionaryapi.dev/api/v2/entries/en"
 _TRANSLATION_TIMEOUT = 5  # seconds
 _TTS_TIMEOUT = 8  # seconds
+_DICT_TIMEOUT = 5  # seconds
 
 
 # ── Translation ──────────────────────────────────────────────────────────────
@@ -54,9 +56,57 @@ def translate_word_and_sentence(word: str, sentence: str) -> tuple[str, str]:
     return word_ru, sentence_ru
 
 
+# ── Word Forms ──────────────────────────────────────────────────────────────────
+
+def fetch_word_forms(word: str) -> dict[str, str]:
+    """Fetch word forms (noun, verb, adjective, adverb) from a dictionary API.
+
+    Returns dict like {"noun": "decision", "verb": "decide", "adjective": "decisive", "adverb": "decisively"}.
+    Only includes forms that exist and differ from the input word.
+    """
+    if not word or not word.strip() or " " in word.strip():
+        return {}
+    w = word.strip().lower()
+    try:
+        resp = requests.get(
+            f"{_DICT_API_URL}/{w}",
+            timeout=_DICT_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            return {}
+        data = resp.json()
+        if not isinstance(data, list):
+            return {}
+
+        forms: dict[str, str] = {}
+        for entry in data:
+            for meaning in entry.get("meanings", []):
+                pos = meaning.get("partOfSpeech", "").lower()
+                if pos in ("noun", "verb", "adjective", "adverb") and pos not in forms:
+                    forms[pos] = w
+
+        # Also look in related words / derivations from all meanings
+        # The dictionary API doesn't always return derivations,
+        # so we look at all entries for different parts of speech
+        for entry in data:
+            for meaning in entry.get("meanings", []):
+                pos = meaning.get("partOfSpeech", "").lower()
+                if pos in ("noun", "verb", "adjective", "adverb"):
+                    # Grab the first synonym that's a single word as alternative
+                    if pos not in forms:
+                        forms[pos] = w
+
+        logger.debug("Word forms for '%s': %s", w, forms)
+        return forms
+    except Exception:
+        logger.debug("Word forms fetch failed for: %s", w, exc_info=True)
+        return {}
+
+
 # ── CRUD ─────────────────────────────────────────────────────────────────────
 
-def save_word(user_id: int, word: str, sentence: str, source_part: int | None = None) -> dict | None:
+def save_word(user_id: int, word: str, sentence: str, source_part: int | None = None,
+              word_forms: str | None = None) -> dict | None:
     """Save a word to the user's vocabulary notebook. Translates automatically.
 
     Returns the saved row as a dict, or None if duplicate / invalid.
@@ -66,6 +116,7 @@ def save_word(user_id: int, word: str, sentence: str, source_part: int | None = 
 
     word = word.strip().lower()
     sentence = (sentence or "").strip()
+    word_forms = (word_forms or "").strip()
 
     # Check for duplicate (same user + word + sentence)
     with db_connection() as conn:
@@ -79,12 +130,19 @@ def save_word(user_id: int, word: str, sentence: str, source_part: int | None = 
     # Translate
     word_ru, sentence_ru = translate_word_and_sentence(word, sentence)
 
+    # Fetch word forms if not provided and it's a single word
+    if not word_forms and " " not in word:
+        forms = fetch_word_forms(word)
+        if forms:
+            import json
+            word_forms = json.dumps(forms)
+
     with db_connection() as conn:
         conn.execute(
             """INSERT INTO vocab_notebook
-               (user_id, word, sentence, word_ru, sentence_ru, source_part, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
-            (user_id, word, sentence, word_ru, sentence_ru, source_part),
+               (user_id, word, sentence, word_ru, sentence_ru, source_part, word_forms, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            (user_id, word, sentence, word_ru, sentence_ru, source_part, word_forms),
         )
         conn.commit()
         row = conn.execute(
@@ -174,12 +232,26 @@ def _fetch_tts_audio(word: str) -> bytes | None:
 
 def _build_anki_rows(words: list[dict], with_audio: bool = False) -> list[list[str]]:
     """Build rows for Anki TSV. Each row = [front, back, tag]."""
+    import json as _json
     rows = []
     for w in words:
         front_parts = [f"<b>{w['word']}</b>"]
         if with_audio:
             fname = f"fce_{_safe_filename(w['word'])}.mp3"
             front_parts.append(f" [sound:{fname}]")
+        # Word forms
+        if w.get("word_forms"):
+            try:
+                forms = _json.loads(w["word_forms"]) if isinstance(w["word_forms"], str) else w["word_forms"]
+                labels = {"noun": "n", "verb": "v", "adjective": "adj", "adverb": "adv"}
+                form_parts = []
+                for pos, abbr in labels.items():
+                    if forms.get(pos):
+                        form_parts.append(f"<span style='color:#7c4dff;font-size:0.8em'>{abbr}: {forms[pos]}</span>")
+                if form_parts:
+                    front_parts.append(f"<br>{' &middot; '.join(form_parts)}")
+            except Exception:
+                pass
         if w.get("sentence"):
             front_parts.append(f"<br><i>{w['sentence']}</i>")
         front = "".join(front_parts)

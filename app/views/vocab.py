@@ -7,6 +7,7 @@ from app.services.vocab import (
     delete_word,
     export_anki_tsv,
     export_anki_zip,
+    fetch_word_forms,
     get_word_count,
     get_words,
     save_word,
@@ -32,8 +33,16 @@ def _api_login_required(f):
 @bp.route("/vocab")
 @login_required
 def vocab_page():
+    import json
     user_id = session["user_id"]
     words = get_words(user_id)
+    for w in words:
+        w["forms_parsed"] = {}
+        if w.get("word_forms"):
+            try:
+                w["forms_parsed"] = json.loads(w["word_forms"]) if isinstance(w["word_forms"], str) else {}
+            except (json.JSONDecodeError, TypeError):
+                pass
     return render_template("vocab.html", words=words, current_part=0)
 
 
@@ -57,7 +66,7 @@ def api_save_word():
         except (ValueError, TypeError):
             source_part = None
 
-    saved = save_word(user_id, word, sentence, source_part)
+    saved = save_word(user_id, word, sentence, source_part, word_forms=data.get("word_forms"))
     if saved is None:
         return jsonify({"error": "Already saved or invalid"}), 409
 
@@ -120,3 +129,12 @@ def export_anki_zip_route():
 def api_word_count():
     user_id = session["user_id"]
     return jsonify({"count": get_word_count(user_id)})
+
+
+@bp.route("/api/vocab/word-forms")
+def api_word_forms():
+    word = (request.args.get("word") or "").strip().lower()
+    if not word or len(word) < 2 or " " in word:
+        return jsonify({"forms": {}})
+    forms = fetch_word_forms(word)
+    return jsonify({"forms": forms})
