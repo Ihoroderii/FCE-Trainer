@@ -3642,11 +3642,30 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
   line-height: 1;
   padding: 0 2px;
 }
-.vocab-popup-word {
+.vocab-popup-word-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 14px 4px;
+}
+.vocab-popup-word {
   font-size: 1.15rem;
   font-weight: 700;
   color: #333;
+}
+.vocab-popup-speak, .vocab-btn-speak {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 6px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+.vocab-popup-speak:hover, .vocab-btn-speak:hover {
+  background: rgba(124,77,255,0.1);
+  border-color: #7c4dff;
 }
 .vocab-popup-sentence {
   padding: 0 14px 10px;
@@ -3914,6 +3933,13 @@ html.dark-mode .vocab-popup {
   border-color: #9c7cff;
 }
 html.dark-mode .vocab-popup-word { color: #e0e0e0; }
+html.dark-mode .vocab-popup-speak, html.dark-mode .vocab-btn-speak {
+  border-color: #555;
+}
+html.dark-mode .vocab-popup-speak:hover, html.dark-mode .vocab-btn-speak:hover {
+  background: rgba(124,77,255,0.15);
+  border-color: #9c7cff;
+}
 html.dark-mode .vocab-popup-sentence { color: #aaa; }
 
 html.dark-mode .vocab-page { color: #e0e0e0; }

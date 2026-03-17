@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, make_response, redirect, render_template, 
 from app.services.vocab import (
     delete_word,
     export_anki_tsv,
+    export_anki_zip,
     get_word_count,
     get_words,
     save_word,
@@ -100,6 +101,17 @@ def export_anki():
     resp = make_response(tsv_content)
     resp.headers["Content-Type"] = "text/tab-separated-values; charset=utf-8"
     resp.headers["Content-Disposition"] = "attachment; filename=fce_vocab_anki.tsv"
+    return resp
+
+
+@bp.route("/vocab/export-anki-zip")
+@login_required
+def export_anki_zip_route():
+    user_id = session["user_id"]
+    zip_bytes = export_anki_zip(user_id)
+    resp = make_response(zip_bytes)
+    resp.headers["Content-Type"] = "application/zip"
+    resp.headers["Content-Disposition"] = "attachment; filename=fce_vocab_anki.zip"
     return resp
 
 

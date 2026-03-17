@@ -9,6 +9,7 @@
       <a href="{{ url_for('home.home') }}" class="btn vocab-btn-back">&larr; Home</a>
       {% if words %}
       <a href="{{ url_for('vocab.export_anki') }}" class="btn vocab-btn-anki" title="Download .tsv file for Anki import">📥 Export to Anki</a>
+      <a href="{{ url_for('vocab.export_anki_zip_route') }}" class="btn vocab-btn-anki" title="Download .zip with audio for Anki">📥 Export to Anki + Audio</a>
       {% endif %}
     </div>
   </div>
@@ -44,7 +45,10 @@
         {% for w in words %}
         <tr class="vocab-row" data-word-id="{{ w.id }}">
           <td class="vocab-td-num">{{ loop.index }}</td>
-          <td class="vocab-td-word">{{ w.word }}</td>
+          <td class="vocab-td-word">
+            <span class="vocab-word-text">{{ w.word }}</span>
+            <button class="vocab-btn-speak" data-word="{{ w.word }}" title="Pronounce">🔊</button>
+          </td>
           <td class="vocab-td-word-ru" data-field="word_ru">{{ w.word_ru or '—' }}</td>
           <td class="vocab-td-sentence">{{ w.sentence or '—' }}</td>
           <td class="vocab-td-sentence-ru" data-field="sentence_ru">{{ w.sentence_ru or '—' }}</td>
@@ -69,7 +73,8 @@
       <li>Map columns: Field 1 = Front, Field 2 = Back, Field 3 = Tags</li>
       <li>Click <strong>Import</strong> — done!</li>
     </ol>
-    <p class="vocab-anki-note">Front side = <strong>English word + sentence</strong>, Back side = <strong>Russian translation</strong>. Tags are auto-set by part number.</p>
+    <p class="vocab-anki-note">Front side = <strong>English word + 🔊 pronunciation + sentence</strong>, Back side = <strong>Russian translation</strong>. Tags are auto-set by part number.</p>
+    <p class="vocab-anki-note"><strong>Export + Audio</strong> downloads a .zip: unzip into your Anki <code>collection.media</code> folder, then import the <code>.tsv</code> file.</p>
   </div>
 
   {% endif %}
@@ -78,6 +83,21 @@
 <script>
 (function() {
   var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  // Pronunciation via browser TTS
+  function speakWord(word) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    var utter = new SpeechSynthesisUtterance(word);
+    utter.lang = 'en-GB';
+    utter.rate = 0.9;
+    window.speechSynthesis.speak(utter);
+  }
+  document.querySelectorAll('.vocab-btn-speak').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      speakWord(this.dataset.word);
+    });
+  });
 
   // Delete word
   document.querySelectorAll('.vocab-btn-delete').forEach(function(btn) {

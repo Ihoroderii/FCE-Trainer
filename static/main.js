@@ -419,7 +419,10 @@
         '<span class="vocab-popup-title">Save word</span>' +
         '<button class="vocab-popup-close" type="button">&times;</button>' +
       '</div>' +
-      '<div class="vocab-popup-word"></div>' +
+      '<div class="vocab-popup-word-row">' +
+        '<span class="vocab-popup-word"></span>' +
+        '<button class="vocab-popup-speak" type="button" title="Pronounce">🔊</button>' +
+      '</div>' +
       '<div class="vocab-popup-sentence"></div>' +
       '<div class="vocab-popup-buttons">' +
         '<button class="btn vocab-popup-save" type="button">📒 Save to notebook</button>' +
@@ -433,6 +436,7 @@
     var popupSave = popup.querySelector('.vocab-popup-save');
     var popupClose = popup.querySelector('.vocab-popup-close');
     var popupStatus = popup.querySelector('.vocab-popup-status');
+    var popupSpeak = popup.querySelector('.vocab-popup-speak');
 
     var selectedWord = '';
     var selectedSentence = '';
@@ -447,18 +451,42 @@
       if (e.key === 'Escape') hidePopup();
     });
 
-    // Find the sentence (closest block element text) containing the selection
-    function getSentenceFromNode(node) {
+    // Browser TTS pronunciation
+    function speakWord(word) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      var utter = new SpeechSynthesisUtterance(word);
+      utter.lang = 'en-GB';
+      utter.rate = 0.9;
+      window.speechSynthesis.speak(utter);
+    }
+    popupSpeak.addEventListener('click', function() {
+      if (selectedWord) speakWord(selectedWord);
+    });
+
+    // Find the single sentence containing the selected word
+    function getSentenceForWord(node, word) {
       var el = node.nodeType === 3 ? node.parentElement : node;
       // Walk up to find a block-level element (p, div, li, h1-h6)
       while (el && el !== document.body) {
         var tag = el.tagName.toLowerCase();
         if (tag === 'p' || tag === 'div' || tag === 'li' || /^h[1-6]$/.test(tag)) {
-          return el.textContent.trim();
+          break;
         }
         el = el.parentElement;
       }
-      return '';
+      if (!el || el === document.body) return '';
+      var text = el.textContent.trim();
+      // Split into sentences (by . ! ? followed by space or end)
+      var sentences = text.match(/[^.!?]*[.!?]+[\s]*/g) || [text];
+      var lw = word.toLowerCase();
+      for (var i = 0; i < sentences.length; i++) {
+        if (sentences[i].toLowerCase().indexOf(lw) !== -1) {
+          return sentences[i].trim();
+        }
+      }
+      // Fallback: return first sentence
+      return sentences[0] ? sentences[0].trim() : text;
     }
 
     function showPopup(word, sentence, x, y) {
@@ -493,7 +521,7 @@
 
         var sentence = '';
         if (sel.anchorNode) {
-          sentence = getSentenceFromNode(sel.anchorNode);
+          sentence = getSentenceForWord(sel.anchorNode, word);
         }
 
         showPopup(word.toLowerCase(), sentence, e.clientX, e.clientY);

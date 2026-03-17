@@ -4,7 +4,10 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
+import zipfile
 from datetime import datetime
+from urllib.parse import quote
 
 import requests
 
@@ -14,6 +17,7 @@ logger = logging.getLogger("fce_trainer")
 
 _MYMEMORY_URL = "https://api.mymemory.translated.net/get"
 _TRANSLATION_TIMEOUT = 5  # seconds
+_TTS_TIMEOUT = 8  # seconds
 
 
 # ── Translation ──────────────────────────────────────────────────────────────
@@ -133,7 +137,64 @@ def update_translation(user_id: int, word_id: int, word_ru: str, sentence_ru: st
     return cur.rowcount > 0
 
 
+# ── TTS Audio ────────────────────────────────────────────────────────────────
+
+def _safe_filename(word: str) -> str:
+    """Create a safe filename from a word."""
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", word.strip().lower())[:50]
+
+
+def _fetch_tts_audio(word: str) -> bytes | None:
+    """Fetch TTS MP3 audio for an English word via Google Translate TTS.
+
+    Returns MP3 bytes, or None on failure.
+    """
+    if not word or not word.strip():
+        return None
+    try:
+        encoded_word = quote(word.strip()[:100])
+        url = (
+            "https://translate.google.com/translate_tts"
+            f"?ie=UTF-8&client=tw-ob&tl=en&q={encoded_word}"
+        )
+        resp = requests.get(
+            url,
+            timeout=_TTS_TIMEOUT,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        if resp.status_code == 200 and len(resp.content) > 100:
+            return resp.content
+        return None
+    except Exception:
+        logger.debug("TTS fetch failed for: %s", word[:30], exc_info=True)
+        return None
+
+
 # ── Anki Export ──────────────────────────────────────────────────────────────
+
+def _build_anki_rows(words: list[dict], with_audio: bool = False) -> list[list[str]]:
+    """Build rows for Anki TSV. Each row = [front, back, tag]."""
+    rows = []
+    for w in words:
+        front_parts = [f"<b>{w['word']}</b>"]
+        if with_audio:
+            fname = f"fce_{_safe_filename(w['word'])}.mp3"
+            front_parts.append(f" [sound:{fname}]")
+        if w.get("sentence"):
+            front_parts.append(f"<br><i>{w['sentence']}</i>")
+        front = "".join(front_parts)
+
+        back_parts = []
+        if w.get("word_ru"):
+            back_parts.append(f"<b>{w['word_ru']}</b>")
+        if w.get("sentence_ru"):
+            back_parts.append(f"<br><i>{w['sentence_ru']}</i>")
+        back = "".join(back_parts) or "—"
+
+        tag = f"fce_part{w['source_part']}" if w.get("source_part") else "fce_vocab"
+        rows.append([front, back, tag])
+    return rows
+
 
 def export_anki_tsv(user_id: int) -> str:
     """Export vocabulary as a tab-separated file for Anki import.
@@ -150,20 +211,49 @@ def export_anki_tsv(user_id: int) -> str:
     output.write("#html:true\n")
     output.write("#tags column:3\n")
 
-    for w in words:
-        front_parts = [f"<b>{w['word']}</b>"]
-        if w.get("sentence"):
-            front_parts.append(f"<br><i>{w['sentence']}</i>")
-        front = "".join(front_parts)
-
-        back_parts = []
-        if w.get("word_ru"):
-            back_parts.append(f"<b>{w['word_ru']}</b>")
-        if w.get("sentence_ru"):
-            back_parts.append(f"<br><i>{w['sentence_ru']}</i>")
-        back = "".join(back_parts) or "—"
-
-        tag = f"fce_part{w['source_part']}" if w.get("source_part") else "fce_vocab"
-        writer.writerow([front, back, tag])
+    for row in _build_anki_rows(words, with_audio=False):
+        writer.writerow(row)
 
     return output.getvalue()
+
+
+def export_anki_zip(user_id: int) -> bytes:
+    """Export vocabulary as a ZIP containing TSV + MP3 audio files.
+
+    The ZIP structure:
+      fce_vocab_anki.tsv   — the card data referencing [sound:fce_word.mp3]
+      fce_word.mp3          — pronunciation audio per word
+
+    User unpacks into Anki's collection.media folder, then imports the TSV.
+    """
+    words = get_words(user_id)
+    rows = _build_anki_rows(words, with_audio=True)
+
+    # Build TSV
+    tsv_io = io.StringIO()
+    writer = csv.writer(tsv_io, delimiter="\t", quoting=csv.QUOTE_MINIMAL)
+    tsv_io.write("#separator:tab\n")
+    tsv_io.write("#html:true\n")
+    tsv_io.write("#tags column:3\n")
+    for row in rows:
+        writer.writerow(row)
+    tsv_bytes = tsv_io.getvalue().encode("utf-8")
+
+    # Build ZIP
+    zip_io = io.BytesIO()
+    with zipfile.ZipFile(zip_io, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("fce_vocab_anki.tsv", tsv_bytes)
+
+        seen = set()
+        for w in words:
+            fname = f"fce_{_safe_filename(w['word'])}.mp3"
+            if fname in seen:
+                continue
+            seen.add(fname)
+            audio = _fetch_tts_audio(w["word"])
+            if audio:
+                zf.writestr(fname, audio)
+            else:
+                logger.debug("Skipped audio for '%s' — TTS unavailable", w["word"])
+
+    return zip_io.getvalue()
