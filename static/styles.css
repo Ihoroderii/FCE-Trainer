@@ -765,22 +765,29 @@ body[data-current-part="6"] .main {
   gap: 0.5rem;
 }
 
-/* Gap drop zone between paragraphs */
+/* Gap drop zone between paragraphs — compact when empty, expands with sentence */
 .part6-gap-inline {
-  display: flex;
-  min-height: 2.2rem;
-  margin: 0.5rem 0;
-  padding: 0.4rem 0.7rem;
+  display: inline-flex;
+  min-height: 1.6rem;
+  margin: 0.2rem 0;
+  padding: 0.25rem 0.6rem;
   border: 2px dashed var(--accent);
   border-radius: 6px;
   background: rgba(0, 102, 204, 0.03);
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.3rem;
   cursor: default;
   font-size: 0.88rem;
-  line-height: 1.45;
-  transition: border-color 0.15s, background 0.15s;
+  line-height: 1.4;
+  transition: border-color 0.15s, background 0.15s, width 0.2s;
+  vertical-align: middle;
+}
+
+/* When a sentence is placed, stretch to full width */
+.part6-gap-inline.part6-gap-has-value {
+  display: flex;
+  padding: 0.35rem 0.7rem;
 }
 
 .part6-gap-num {
@@ -798,10 +805,14 @@ body[data-current-part="6"] .main {
 }
 
 .part6-gap-sentence {
-  flex: 1 1 auto;
   font-size: 0.86rem;
   color: var(--ink);
   font-style: italic;
+}
+
+/* Hide sentence span and clear button when empty */
+.part6-gap-sentence:empty {
+  display: none;
 }
 
 .part6-gap-inline .part6-gap-clear {
