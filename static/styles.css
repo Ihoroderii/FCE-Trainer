@@ -3839,10 +3839,10 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
 }
 .vocab-th-num { width: 34px; }
 .vocab-th-word { width: 13%; }
-.vocab-th-forms { width: 22%; }
-.vocab-th-word-ru { width: 10%; }
-.vocab-th-sentence { width: 20%; }
-.vocab-th-sentence-ru { width: 18%; }
+.vocab-th-forms { width: 20%; }
+.vocab-th-word-ru { width: 12%; }
+.vocab-th-sentence { width: 19%; }
+.vocab-th-sentence-ru { width: 17%; }
 .vocab-th-part { width: 44px; }
 .vocab-th-date { width: 70px; }
 .vocab-th-actions { width: 38px; }
@@ -3872,6 +3872,8 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
   color: #7c4dff;
   font-weight: 600;
   cursor: pointer;
+  overflow: hidden;
+  word-break: break-word;
 }
 .vocab-td-sentence {
   font-style: italic;

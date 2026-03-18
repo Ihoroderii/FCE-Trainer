@@ -56,153 +56,88 @@ def translate_word_and_sentence(word: str, sentence: str) -> tuple[str, str]:
     return word_ru, sentence_ru
 
 
-# ── Word Forms & Synonyms ────────────────────────────────────────────────────
+# ── Word Forms & Synonyms (AI-powered) ───────────────────────────────────────
 
-_DATAMUSE_URL = "https://api.datamuse.com/words"
+_WORD_FORMS_PROMPT = """\
+For the English word "{word}", provide its word family forms and synonyms.
 
-# POS tag mapping: Datamuse abbreviations → our labels
-_DM_POS_MAP = {"n": "noun", "v": "verb", "adj": "adjective", "adv": "adverb"}
+Return ONLY a JSON object with these keys (omit a key if no form exists):
+- "noun": list of noun forms (1-3 words)
+- "verb": list of verb forms (1-3 words)
+- "adjective": list of adjective forms (1-3 words)
+- "adverb": list of adverb forms (1-3 words)
+- "synonyms": list of 3-6 single-word synonyms
 
-# Common derivational suffixes (longest first for greedy stripping)
-_SUFFIXES = [
-    "fulness", "lessly", "iously", "atively", "iveness",
-    "ously", "ively", "fully", "ably", "ibly",
-    "ness", "ment", "tion", "sion", "less", "able", "ible",
-    "ical", "ally", "ence", "ance", "ious", "eous",
-    "ful", "ive", "ous", "ity", "ism", "ist",
-    "ize", "ise", "ate", "ify", "dom", "age",
-    "ing", "ent", "ant", "ual", "ial", "ion", "ure",
-    "ory", "ary", "ery",
-    "al", "ly", "ed", "er", "or", "en", "th", "ty",
-]
+Rules:
+- Only include real, commonly used English words.
+- Only include forms from the SAME word family (sharing the same root).
+- Do NOT include unrelated words that merely start with the same letters.
+- Prefer base/dictionary forms (e.g. "attend" not "attending").
+- Output raw JSON only, no markdown, no explanation.
 
-
-def _extract_root(word: str) -> str:
-    """Iteratively strip derivational suffixes to find the root."""
-    root = word
-    changed = True
-    while changed:
-        changed = False
-        for sfx in _SUFFIXES:
-            if root.endswith(sfx) and len(root) - len(sfx) >= 3:
-                root = root[: -len(sfx)]
-                changed = True
-                break
-    return root
-
-
-def _roots_match(r1: str, r2: str) -> bool:
-    """Check if two roots are the same or one is a prefix of the other."""
-    if r1 == r2:
-        return True
-    shorter, longer = (r1, r2) if len(r1) <= len(r2) else (r2, r1)
-    return len(shorter) >= 3 and longer.startswith(shorter)
-
-
-def _datamuse_query(params: dict) -> list[dict]:
-    """Execute a Datamuse API query, returning the JSON list."""
-    try:
-        resp = requests.get(_DATAMUSE_URL, params=params, timeout=_DICT_TIMEOUT)
-        if resp.status_code == 200:
-            return resp.json()
-    except Exception:
-        logger.debug("Datamuse query failed: %s", params, exc_info=True)
-    return []
+Example for "attention":
+{{"noun":["attention"],"verb":["attend"],"adjective":["attentive"],"adverb":["attentively"],"synonyms":["focus","concentration","awareness","notice","regard"]}}
+"""
 
 
 def fetch_word_forms(word: str) -> dict:
-    """Fetch word family (noun / verb / adjective / adverb forms) and synonyms.
+    """Fetch word family (noun / verb / adjective / adverb) and synonyms via AI.
 
-    Uses Datamuse 'means-like' (ml) query to find semantically related words,
-    then filters to those sharing a morphological root with the input word.
-    Also fetches synonyms from the Free Dictionary API.
+    Returns dict like::
 
-    Returns dict like:
         {
-            "noun": ["purity"],
-            "verb": ["purify"],
-            "adjective": ["pure"],
-            "adverb": ["purely"],
-            "synonyms": ["cleanness", "innocence"]
+            "noun": ["attention"],
+            "verb": ["attend"],
+            "adjective": ["attentive"],
+            "adverb": ["attentively"],
+            "synonyms": ["focus", "concentration"]
         }
+
+    Falls back to empty dict if AI is unavailable or returns bad data.
     """
+    import json as _json
+
     if not word or not word.strip() or " " in word.strip():
         return {}
     w = word.strip().lower()
-    root = _extract_root(w)
-    logger.debug("Word forms: word='%s', root='%s'", w, root)
 
-    # ── 1. Get the word's own POS ────────────────────────────────────────
-    self_info = _datamuse_query({"sp": w, "md": "p", "max": "1"})
-
-    # ── 2. Get semantically related words (means-like) ───────────────────
-    related = _datamuse_query({"ml": w, "md": "p", "max": "150"})
-
-    # ── 3. Also get words that are BOTH semantically similar AND share
-    #        the spelling root (combined ml+sp query) ─────────────────────
-    spelling_related = []
-    if len(root) >= 3:
-        spelling_related = _datamuse_query({
-            "ml": w, "sp": f"{root}*", "md": "p", "max": "50",
-        })
-
-    all_items = self_info + related + spelling_related
-
-    # ── 4. Filter to word family: single words sharing morphological root
-    candidates: dict[str, set[str]] = {
-        "noun": set(), "verb": set(), "adjective": set(), "adverb": set(),
-    }
-    seen: set[str] = set()
-
-    for item in all_items:
-        cand = item.get("word", "").lower()
-        if cand in seen:
-            continue
-        seen.add(cand)
-        tags = item.get("tags", [])
-        if " " in cand or not cand.isalpha():
-            continue
-        cand_root = _extract_root(cand)
-        if not _roots_match(root, cand_root):
-            continue
-        for tag in tags:
-            pos = _DM_POS_MAP.get(tag)
-            if pos:
-                candidates[pos].add(cand)
-
-    # ── 5. Build forms dict (sorted, max 3 per POS) ─────────────────────
-    forms: dict[str, list[str]] = {}
-    for pos in ("noun", "verb", "adjective", "adverb"):
-        words_set = candidates[pos]
-        if words_set:
-            forms[pos] = sorted(words_set)[:3]
-
-    # ── 6. Fetch synonyms from Free Dictionary API ──────────────────────
-    synonyms: set[str] = set()
     try:
-        resp = requests.get(f"{_DICT_API_URL}/{w}", timeout=_DICT_TIMEOUT)
-        if resp.status_code == 200:
-            data = resp.json()
-            if isinstance(data, list):
-                for entry in data:
-                    for meaning in entry.get("meanings", []):
-                        for syn in meaning.get("synonyms", []):
-                            s = syn.strip().lower()
-                            if s and s != w and " " not in s:
-                                synonyms.add(s)
-                        for defn in meaning.get("definitions", []):
-                            for syn in defn.get("synonyms", []):
-                                s = syn.strip().lower()
-                                if s and s != w and " " not in s:
-                                    synonyms.add(s)
+        from app.ai import ai_available, chat_create
+        if not ai_available:
+            logger.debug("Word forms: AI not available, skipping for '%s'", w)
+            return {}
+
+        resp = chat_create(
+            messages=[
+                {"role": "system", "content": "You are a helpful English linguistics assistant. Respond with valid JSON only."},
+                {"role": "user", "content": _WORD_FORMS_PROMPT.format(word=w)},
+            ],
+            temperature=0.1,
+        )
+        raw = resp.choices[0].message.content.strip()
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+        forms = _json.loads(raw)
+        if not isinstance(forms, dict):
+            return {}
+
+        # Validate & sanitize: keep only expected keys with list-of-string values
+        clean: dict[str, list[str]] = {}
+        for key in ("noun", "verb", "adjective", "adverb", "synonyms"):
+            val = forms.get(key)
+            if isinstance(val, list):
+                items = [s.strip().lower() for s in val if isinstance(s, str) and s.strip()]
+                if items:
+                    clean[key] = items[:6] if key == "synonyms" else items[:3]
+
+        logger.debug("Word forms (AI) for '%s': %s", w, clean)
+        return clean
+
     except Exception:
-        logger.debug("Synonym fetch failed for: %s", w, exc_info=True)
-
-    if synonyms:
-        forms["synonyms"] = sorted(synonyms)[:6]
-
-    logger.debug("Word forms for '%s': %s", w, forms)
-    return forms
+        logger.debug("AI word forms failed for: %s", w, exc_info=True)
+        return {}
 
 
 # ── CRUD ─────────────────────────────────────────────────────────────────────
