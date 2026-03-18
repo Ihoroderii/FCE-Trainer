@@ -101,18 +101,19 @@ def build_part6_text(item, check_result=None):
                     explanation_html = f'<span class="answer-explanation">{_e(exp)}</span>'
             gap_num = gap_i + 1
             out.append(
-                f' <span class="part6-gap-drop part6-gap-inline{cls}" data-gap-index="{gap_i}" data-droppable="true">'
+                f'<span class="part6-gap-drop part6-gap-inline{cls}" data-gap-index="{gap_i}" data-droppable="true">'
                 f'<span class="part6-gap-num">{gap_num}</span>'
                 f'<span class="part6-gap-label">{letter}</span>'
+                f'<span class="part6-gap-sentence"></span>'
                 f'<button type="button" class="part6-gap-clear" title="Clear gap" aria-label="Clear gap">x</button>'
                 f'<input type="hidden" name="p6_{gap_i}" value="{val_attr}" aria-label="Gap {gap_num}">'
                 f'{correct_hint}{explanation_html}'
-                f'</span> '
+                f'</span>'
             )
             gap_i += 1
         else:
-            out.append(f'{_e(para)} ')
-    return f'<div class="part6-text-flow">{" ".join("".join(out).split())}</div>'
+            out.append(f'<p class="part6-para">{_e(para)}</p>')
+    return '\n'.join(out)
 
 
 def build_part6_questions(item):

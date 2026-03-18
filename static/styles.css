@@ -737,12 +737,8 @@ body[data-current-part="6"] .main {
 
 .part6-text-col .part6-para {
   text-indent: 1.5em;
-}
-
-/* Flowing text container for Part 6 */
-.part6-text-flow {
-  line-height: 1.85;
-  font-size: 0.95rem;
+  margin-bottom: 0.6em;
+  line-height: 1.7;
 }
 
 .part6-questions-col {
@@ -769,48 +765,58 @@ body[data-current-part="6"] .main {
   gap: 0.5rem;
 }
 
-/* Inline gap within flowing text */
+/* Gap drop zone between paragraphs */
 .part6-gap-inline {
-  display: inline-flex;
-  min-height: 1.6rem;
-  min-width: 2.8rem;
-  margin: 1px 2px;
-  padding: 1px 8px;
+  display: flex;
+  min-height: 2.2rem;
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.7rem;
   border: 2px dashed var(--accent);
-  border-radius: 5px;
-  background: rgba(0, 102, 204, 0.04);
-  vertical-align: middle;
+  border-radius: 6px;
+  background: rgba(0, 102, 204, 0.03);
   align-items: center;
-  gap: 0.3rem;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   cursor: default;
   font-size: 0.88rem;
-  line-height: 1.3;
+  line-height: 1.45;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .part6-gap-num {
   font-weight: 700;
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   color: var(--accent);
-  margin-right: 1px;
+  flex-shrink: 0;
 }
 
 .part6-gap-inline .part6-gap-label {
-  flex: 0 0 auto;
+  flex-shrink: 0;
   font-weight: 700;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.part6-gap-sentence {
+  flex: 1 1 auto;
+  font-size: 0.86rem;
+  color: var(--ink);
+  font-style: italic;
 }
 
 .part6-gap-inline .part6-gap-clear {
-  width: 1.1rem;
-  height: 1.1rem;
-  font-size: 0.8rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .part6-gap-inline .correct-answer-hint,
 .part6-gap-inline .answer-explanation {
   display: block;
+  width: 100%;
   font-size: 0.78rem;
-  margin-top: 0.1rem;
+  margin-top: 0.15rem;
 }
 
 .part6-gap-drop.part6-drop-over,

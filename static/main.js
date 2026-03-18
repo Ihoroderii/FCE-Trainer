@@ -261,6 +261,14 @@
     var drops = document.querySelectorAll('.part6-gap-drop[data-droppable="true"]');
     var drags = document.querySelectorAll('.part6-sentence-drag');
     if (!drops.length || !drags.length) return;
+
+    // Build a lookup: index → sentence text (strip leading "A) " prefix)
+    var sentenceTexts = {};
+    drags.forEach(function(el) {
+      var idx = el.getAttribute('data-sentence-index');
+      var text = el.textContent.replace(/^[A-G]\)\s*/, '').trim();
+      sentenceTexts[idx] = text;
+    });
     function getUsedIndices() {
       var used = {};
       drops.forEach(function(drop) {
@@ -284,14 +292,18 @@
       var gapIndex = drop.getAttribute('data-gap-index');
       var input = drop.querySelector('input[name="p6_' + gapIndex + '"]');
       var label = drop.querySelector('.part6-gap-label');
+      var sentSpan = drop.querySelector('.part6-gap-sentence');
       if (!input || !label) return;
       if (idx === '' || idx === null || idx === undefined) {
         input.value = '';
         label.textContent = '—';
+        if (sentSpan) sentSpan.textContent = '';
         drop.classList.remove('part6-gap-has-value');
       } else {
         input.value = idx;
-        label.textContent = letters[parseInt(idx, 10)] || '—';
+        var letterStr = letters[parseInt(idx, 10)] || '—';
+        label.textContent = letterStr;
+        if (sentSpan) sentSpan.textContent = sentenceTexts[idx] || '';
         drop.classList.add('part6-gap-has-value');
       }
       updateSentencesVisibility();
@@ -308,8 +320,18 @@
       el.addEventListener('dragend', function() { el.classList.remove('part6-dragging'); });
     });
     drops.forEach(function(drop) {
-      if (drop.querySelector('input[name^="p6_"]').value !== '') {
+      var inp = drop.querySelector('input[name^="p6_"]');
+      if (inp && inp.value !== '') {
         drop.classList.add('part6-gap-has-value');
+        // Restore sentence text on page load (e.g. after check)
+        var sentSpan = drop.querySelector('.part6-gap-sentence');
+        var label = drop.querySelector('.part6-gap-label');
+        if (sentSpan && sentenceTexts[inp.value]) {
+          sentSpan.textContent = sentenceTexts[inp.value];
+        }
+        if (label) {
+          label.textContent = letters[parseInt(inp.value, 10)] || '—';
+        }
       }
       drop.addEventListener('dragover', function(e) {
         e.preventDefault();
