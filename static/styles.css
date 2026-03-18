@@ -3831,11 +3831,21 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
   width: 100%;
   border-collapse: collapse;
   font-size: 0.88rem;
+  table-layout: fixed;
 }
 .vocab-table thead {
   background: linear-gradient(135deg, #7c4dff, #651fff);
   color: #fff;
 }
+.vocab-th-num { width: 34px; }
+.vocab-th-word { width: 13%; }
+.vocab-th-forms { width: 22%; }
+.vocab-th-word-ru { width: 10%; }
+.vocab-th-sentence { width: 20%; }
+.vocab-th-sentence-ru { width: 18%; }
+.vocab-th-part { width: 44px; }
+.vocab-th-date { width: 70px; }
+.vocab-th-actions { width: 38px; }
 .vocab-table th {
   padding: 10px 12px;
   text-align: left;
@@ -3866,16 +3876,18 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
 .vocab-td-sentence {
   font-style: italic;
   color: #555;
-  max-width: 280px;
   font-size: 0.82rem;
   line-height: 1.4;
+  overflow: hidden;
+  word-break: break-word;
 }
 .vocab-td-sentence-ru {
   color: #888;
   font-style: italic;
-  max-width: 260px;
   font-size: 0.82rem;
   cursor: pointer;
+  overflow: hidden;
+  word-break: break-word;
 }
 .vocab-td-sentence-ru:hover, .vocab-td-word-ru:hover {
   background: rgba(124,77,255,0.06);
@@ -3928,7 +3940,8 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
   font-size: 0.72rem;
   font-weight: 600;
   margin: 1px 2px;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 .vocab-form-noun       { background: #e3f2fd; color: #1565c0; }
 .vocab-form-verb       { background: #fce4ec; color: #c62828; }
@@ -3940,7 +3953,10 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
   display: none;
 }
 .vocab-td-forms {
-  max-width: 180px;
+  width: 200px;
+  max-width: 200px;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 /* Anki help section */
