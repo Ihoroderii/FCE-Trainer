@@ -537,9 +537,14 @@
             var html = '';
             var labels = {noun: 'noun', verb: 'verb', adjective: 'adj', adverb: 'adv'};
             for (var pos in labels) {
-              if (data.forms[pos]) {
-                html += '<span class="vocab-form-tag vocab-form-' + pos + '">' + labels[pos] + ': ' + data.forms[pos] + '</span> ';
+              if (data.forms[pos] && data.forms[pos].length) {
+                var vals = Array.isArray(data.forms[pos]) ? data.forms[pos].join(', ') : data.forms[pos];
+                html += '<span class="vocab-form-tag vocab-form-' + pos + '">' + labels[pos] + ': ' + vals + '</span> ';
               }
+            }
+            if (data.forms.synonyms && data.forms.synonyms.length) {
+              var syns = Array.isArray(data.forms.synonyms) ? data.forms.synonyms.join(', ') : data.forms.synonyms;
+              html += '<span class="vocab-form-tag vocab-form-synonym">syn: ' + syns + '</span> ';
             }
             popupForms.innerHTML = html;
             popupForms.style.display = 'block';

@@ -56,51 +56,132 @@ def translate_word_and_sentence(word: str, sentence: str) -> tuple[str, str]:
     return word_ru, sentence_ru
 
 
-# ── Word Forms ──────────────────────────────────────────────────────────────────
+# ── Word Forms & Synonyms ────────────────────────────────────────────────────
 
-def fetch_word_forms(word: str) -> dict[str, str]:
-    """Fetch word forms (noun, verb, adjective, adverb) from a dictionary API.
+_DATAMUSE_URL = "https://api.datamuse.com/words"
 
-    Returns dict like {"noun": "decision", "verb": "decide", "adjective": "decisive", "adverb": "decisively"}.
-    Only includes forms that exist and differ from the input word.
+# POS tag mapping: Datamuse abbreviations → our labels
+_DM_POS_MAP = {"n": "noun", "v": "verb", "adj": "adjective", "adv": "adverb"}
+
+# Common derivational suffixes (longest first for greedy stripping)
+_SUFFIXES = [
+    "fulness", "lessly", "iously", "atively", "iveness",
+    "ously", "ively", "fully", "ably", "ibly",
+    "ness", "ment", "tion", "sion", "less", "able", "ible",
+    "ical", "ally", "ence", "ance", "ious", "eous",
+    "ful", "ive", "ous", "ity", "ism", "ist",
+    "ize", "ise", "ate", "ify", "dom", "age",
+    "ing", "ent", "ant", "ual", "ial", "ion", "ure",
+    "ory", "ary", "ery",
+    "al", "ly", "ed", "er", "or", "en", "th", "ty",
+]
+
+
+def _extract_root(word: str) -> str:
+    """Iteratively strip derivational suffixes to find the root."""
+    root = word
+    changed = True
+    while changed:
+        changed = False
+        for sfx in _SUFFIXES:
+            if root.endswith(sfx) and len(root) - len(sfx) >= 3:
+                root = root[: -len(sfx)]
+                changed = True
+                break
+    return root
+
+
+def _datamuse_query(params: dict) -> list[dict]:
+    """Execute a Datamuse API query, returning the JSON list."""
+    try:
+        resp = requests.get(_DATAMUSE_URL, params=params, timeout=_DICT_TIMEOUT)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        logger.debug("Datamuse query failed: %s", params, exc_info=True)
+    return []
+
+
+def fetch_word_forms(word: str) -> dict:
+    """Fetch word family (noun / verb / adjective / adverb forms) and synonyms.
+
+    Uses Datamuse API to find morphologically related words, grouped by POS.
+    Also fetches synonyms from the Free Dictionary API.
+
+    Returns dict like:
+        {
+            "noun": ["hope", "hopelessness"],
+            "verb": ["hope"],
+            "adjective": ["hopeful", "hopeless"],
+            "adverb": ["hopefully", "hopelessly"],
+            "synonyms": ["wish", "desire"]
+        }
     """
     if not word or not word.strip() or " " in word.strip():
         return {}
     w = word.strip().lower()
+    root = _extract_root(w)
+    logger.debug("Word forms: word='%s', root='%s'", w, root)
+
+    # ── 1. Gather candidates from Datamuse (prefix match on root) ────────
+    candidates: dict[str, set[str]] = {
+        "noun": set(), "verb": set(), "adjective": set(), "adverb": set(),
+    }
+
+    raw = _datamuse_query({"sp": f"{root}*", "md": "p", "max": "80"})
+    for item in raw:
+        cand = item.get("word", "").lower()
+        tags = item.get("tags", [])
+        # Only keep words that share the root prefix
+        if not cand.startswith(root):
+            continue
+        for tag in tags:
+            pos = _DM_POS_MAP.get(tag)
+            if pos:
+                candidates[pos].add(cand)
+
+    # Also add the input word itself to the correct category
+    raw_self = _datamuse_query({"sp": w, "md": "p", "max": "1"})
+    for item in raw_self:
+        if item.get("word", "").lower() == w:
+            for tag in item.get("tags", []):
+                pos = _DM_POS_MAP.get(tag)
+                if pos:
+                    candidates[pos].add(w)
+
+    # ── 2. Build forms dict (sorted, non-empty only) ────────────────────
+    forms: dict[str, list[str]] = {}
+    for pos in ("noun", "verb", "adjective", "adverb"):
+        words_set = candidates[pos]
+        if words_set:
+            forms[pos] = sorted(words_set)
+
+    # ── 3. Fetch synonyms from Free Dictionary API ──────────────────────
+    synonyms: set[str] = set()
     try:
-        resp = requests.get(
-            f"{_DICT_API_URL}/{w}",
-            timeout=_DICT_TIMEOUT,
-        )
-        if resp.status_code != 200:
-            return {}
-        data = resp.json()
-        if not isinstance(data, list):
-            return {}
-
-        forms: dict[str, str] = {}
-        for entry in data:
-            for meaning in entry.get("meanings", []):
-                pos = meaning.get("partOfSpeech", "").lower()
-                if pos in ("noun", "verb", "adjective", "adverb") and pos not in forms:
-                    forms[pos] = w
-
-        # Also look in related words / derivations from all meanings
-        # The dictionary API doesn't always return derivations,
-        # so we look at all entries for different parts of speech
-        for entry in data:
-            for meaning in entry.get("meanings", []):
-                pos = meaning.get("partOfSpeech", "").lower()
-                if pos in ("noun", "verb", "adjective", "adverb"):
-                    # Grab the first synonym that's a single word as alternative
-                    if pos not in forms:
-                        forms[pos] = w
-
-        logger.debug("Word forms for '%s': %s", w, forms)
-        return forms
+        resp = requests.get(f"{_DICT_API_URL}/{w}", timeout=_DICT_TIMEOUT)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list):
+                for entry in data:
+                    for meaning in entry.get("meanings", []):
+                        for syn in meaning.get("synonyms", []):
+                            s = syn.strip().lower()
+                            if s and s != w and " " not in s:
+                                synonyms.add(s)
+                        for defn in meaning.get("definitions", []):
+                            for syn in defn.get("synonyms", []):
+                                s = syn.strip().lower()
+                                if s and s != w and " " not in s:
+                                    synonyms.add(s)
     except Exception:
-        logger.debug("Word forms fetch failed for: %s", w, exc_info=True)
-        return {}
+        logger.debug("Synonym fetch failed for: %s", w, exc_info=True)
+
+    if synonyms:
+        forms["synonyms"] = sorted(synonyms)[:8]  # limit to 8 synonyms
+
+    logger.debug("Word forms for '%s': %s", w, forms)
+    return forms
 
 
 # ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -247,7 +328,15 @@ def _build_anki_rows(words: list[dict], with_audio: bool = False) -> list[list[s
                 form_parts = []
                 for pos, abbr in labels.items():
                     if forms.get(pos):
-                        form_parts.append(f"<span style='color:#7c4dff;font-size:0.8em'>{abbr}: {forms[pos]}</span>")
+                        vals = forms[pos]
+                        if isinstance(vals, list):
+                            vals = ", ".join(vals)
+                        form_parts.append(f"<span style='color:#7c4dff;font-size:0.8em'>{abbr}: {vals}</span>")
+                if forms.get("synonyms"):
+                    syns = forms["synonyms"]
+                    if isinstance(syns, list):
+                        syns = ", ".join(syns)
+                    form_parts.append(f"<span style='color:#2e7d32;font-size:0.8em'>syn: {syns}</span>")
                 if form_parts:
                     front_parts.append(f"<br>{' &middot; '.join(form_parts)}")
             except Exception:
