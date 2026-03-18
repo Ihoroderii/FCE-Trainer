@@ -91,6 +91,14 @@ def _extract_root(word: str) -> str:
     return root
 
 
+def _roots_match(r1: str, r2: str) -> bool:
+    """Check if two roots are the same or one is a prefix of the other."""
+    if r1 == r2:
+        return True
+    shorter, longer = (r1, r2) if len(r1) <= len(r2) else (r2, r1)
+    return len(shorter) >= 3 and longer.startswith(shorter)
+
+
 def _datamuse_query(params: dict) -> list[dict]:
     """Execute a Datamuse API query, returning the JSON list."""
     try:
@@ -105,16 +113,17 @@ def _datamuse_query(params: dict) -> list[dict]:
 def fetch_word_forms(word: str) -> dict:
     """Fetch word family (noun / verb / adjective / adverb forms) and synonyms.
 
-    Uses Datamuse API to find morphologically related words, grouped by POS.
+    Uses Datamuse 'means-like' (ml) query to find semantically related words,
+    then filters to those sharing a morphological root with the input word.
     Also fetches synonyms from the Free Dictionary API.
 
     Returns dict like:
         {
-            "noun": ["hope", "hopelessness"],
-            "verb": ["hope"],
-            "adjective": ["hopeful", "hopeless"],
-            "adverb": ["hopefully", "hopelessly"],
-            "synonyms": ["wish", "desire"]
+            "noun": ["purity"],
+            "verb": ["purify"],
+            "adjective": ["pure"],
+            "adverb": ["purely"],
+            "synonyms": ["cleanness", "innocence"]
         }
     """
     if not word or not word.strip() or " " in word.strip():
@@ -123,40 +132,52 @@ def fetch_word_forms(word: str) -> dict:
     root = _extract_root(w)
     logger.debug("Word forms: word='%s', root='%s'", w, root)
 
-    # ── 1. Gather candidates from Datamuse (prefix match on root) ────────
+    # ── 1. Get the word's own POS ────────────────────────────────────────
+    self_info = _datamuse_query({"sp": w, "md": "p", "max": "1"})
+
+    # ── 2. Get semantically related words (means-like) ───────────────────
+    related = _datamuse_query({"ml": w, "md": "p", "max": "150"})
+
+    # ── 3. Also get words that are BOTH semantically similar AND share
+    #        the spelling root (combined ml+sp query) ─────────────────────
+    spelling_related = []
+    if len(root) >= 3:
+        spelling_related = _datamuse_query({
+            "ml": w, "sp": f"{root}*", "md": "p", "max": "50",
+        })
+
+    all_items = self_info + related + spelling_related
+
+    # ── 4. Filter to word family: single words sharing morphological root
     candidates: dict[str, set[str]] = {
         "noun": set(), "verb": set(), "adjective": set(), "adverb": set(),
     }
+    seen: set[str] = set()
 
-    raw = _datamuse_query({"sp": f"{root}*", "md": "p", "max": "80"})
-    for item in raw:
+    for item in all_items:
         cand = item.get("word", "").lower()
+        if cand in seen:
+            continue
+        seen.add(cand)
         tags = item.get("tags", [])
-        # Only keep words that share the root prefix
-        if not cand.startswith(root):
+        if " " in cand or not cand.isalpha():
+            continue
+        cand_root = _extract_root(cand)
+        if not _roots_match(root, cand_root):
             continue
         for tag in tags:
             pos = _DM_POS_MAP.get(tag)
             if pos:
                 candidates[pos].add(cand)
 
-    # Also add the input word itself to the correct category
-    raw_self = _datamuse_query({"sp": w, "md": "p", "max": "1"})
-    for item in raw_self:
-        if item.get("word", "").lower() == w:
-            for tag in item.get("tags", []):
-                pos = _DM_POS_MAP.get(tag)
-                if pos:
-                    candidates[pos].add(w)
-
-    # ── 2. Build forms dict (sorted, non-empty only) ────────────────────
+    # ── 5. Build forms dict (sorted, max 3 per POS) ─────────────────────
     forms: dict[str, list[str]] = {}
     for pos in ("noun", "verb", "adjective", "adverb"):
         words_set = candidates[pos]
         if words_set:
-            forms[pos] = sorted(words_set)
+            forms[pos] = sorted(words_set)[:3]
 
-    # ── 3. Fetch synonyms from Free Dictionary API ──────────────────────
+    # ── 6. Fetch synonyms from Free Dictionary API ──────────────────────
     synonyms: set[str] = set()
     try:
         resp = requests.get(f"{_DICT_API_URL}/{w}", timeout=_DICT_TIMEOUT)
@@ -178,7 +199,7 @@ def fetch_word_forms(word: str) -> dict:
         logger.debug("Synonym fetch failed for: %s", w, exc_info=True)
 
     if synonyms:
-        forms["synonyms"] = sorted(synonyms)[:8]  # limit to 8 synonyms
+        forms["synonyms"] = sorted(synonyms)[:6]
 
     logger.debug("Word forms for '%s': %s", w, forms)
     return forms
