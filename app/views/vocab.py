@@ -7,6 +7,7 @@ from app.services.vocab import (
     delete_word,
     export_anki_tsv,
     export_anki_zip,
+    export_quizlet_tsv,
     fetch_word_forms,
     get_word_count,
     get_words,
@@ -121,6 +122,17 @@ def export_anki_zip_route():
     resp = make_response(zip_bytes)
     resp.headers["Content-Type"] = "application/zip"
     resp.headers["Content-Disposition"] = "attachment; filename=fce_vocab_anki.zip"
+    return resp
+
+
+@bp.route("/vocab/export-quizlet")
+@login_required
+def export_quizlet():
+    user_id = session["user_id"]
+    tsv_content = export_quizlet_tsv(user_id)
+    resp = make_response(tsv_content)
+    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+    resp.headers["Content-Disposition"] = "attachment; filename=fce_vocab_quizlet.txt"
     return resp
 
 

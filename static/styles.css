@@ -3762,6 +3762,17 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
   box-shadow: 0 2px 8px rgba(124,77,255,0.25);
 }
 .vocab-btn-anki:hover { opacity: 0.9; }
+.vocab-btn-quizlet {
+  background: linear-gradient(135deg, #4255ff, #3b4ce0);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(66,85,255,0.25);
+}
+.vocab-btn-quizlet:hover { opacity: 0.9; }
 .vocab-btn-refresh-all {
   background: linear-gradient(135deg, #43a047, #2e7d32);
   color: #fff;

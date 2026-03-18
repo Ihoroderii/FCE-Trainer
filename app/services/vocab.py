@@ -417,3 +417,53 @@ def export_anki_zip(user_id: int) -> bytes:
                 logger.debug("Skipped audio for '%s' — TTS unavailable", w["word"])
 
     return zip_io.getvalue()
+
+
+def export_quizlet_tsv(user_id: int) -> str:
+    """Export vocabulary as tab-separated text for Quizlet import.
+
+    Quizlet format: term \t definition  (one card per line).
+    Term  = English word + word forms.
+    Definition = Russian translation + sentence.
+    """
+    import json as _json
+    words = get_words(user_id)
+    lines: list[str] = []
+    for w in words:
+        # Term side: word + forms
+        term_parts = [w["word"]]
+        if w.get("word_forms"):
+            try:
+                forms = _json.loads(w["word_forms"]) if isinstance(w["word_forms"], str) else w["word_forms"]
+                labels = {"noun": "n", "verb": "v", "adjective": "adj", "adverb": "adv"}
+                for pos, abbr in labels.items():
+                    if forms.get(pos):
+                        vals = forms[pos]
+                        if isinstance(vals, list):
+                            vals = ", ".join(vals)
+                        term_parts.append(f"{abbr}: {vals}")
+                if forms.get("synonyms"):
+                    syns = forms["synonyms"]
+                    if isinstance(syns, list):
+                        syns = ", ".join(syns)
+                    term_parts.append(f"syn: {syns}")
+            except Exception:
+                pass
+        if w.get("sentence"):
+            term_parts.append(w["sentence"])
+        term = " | ".join(term_parts)
+
+        # Definition side: Russian translation + sentence translation
+        def_parts: list[str] = []
+        if w.get("word_ru"):
+            def_parts.append(w["word_ru"])
+        if w.get("sentence_ru"):
+            def_parts.append(w["sentence_ru"])
+        definition = " | ".join(def_parts) or "\u2014"
+
+        # Escape tabs and newlines (Quizlet uses them as delimiters)
+        term = term.replace("\t", " ").replace("\n", " ")
+        definition = definition.replace("\t", " ").replace("\n", " ")
+        lines.append(f"{term}\t{definition}")
+
+    return "\n".join(lines)

@@ -10,6 +10,7 @@
       {% if words %}
       <a href="{{ url_for('vocab.export_anki') }}" class="btn vocab-btn-anki" title="Download .tsv file for Anki import">📥 Export to Anki</a>
       <a href="{{ url_for('vocab.export_anki_zip_route') }}" class="btn vocab-btn-anki" title="Download .zip with audio for Anki">📥 Export to Anki + Audio</a>
+      <a href="{{ url_for('vocab.export_quizlet') }}" class="btn vocab-btn-quizlet" title="Download .txt file for Quizlet import">📥 Export to Quizlet</a>
       <button class="btn vocab-btn-refresh-all" id="refreshAllForms" title="Re-fetch word forms &amp; synonyms for all words">🔄 Refresh Forms</button>
       {% endif %}
     </div>
@@ -91,6 +92,20 @@
     </ol>
     <p class="vocab-anki-note">Front side = <strong>English word + 🔊 pronunciation + sentence</strong>, Back side = <strong>Russian translation</strong>. Tags are auto-set by part number.</p>
     <p class="vocab-anki-note"><strong>Export + Audio</strong> downloads a .zip: unzip into your Anki <code>collection.media</code> folder, then import the <code>.tsv</code> file.</p>
+  </div>
+
+  <div class="vocab-anki-help vocab-quizlet-help">
+    <h3>📥 How to import into Quizlet</h3>
+    <ol>
+      <li>Click <strong>Export to Quizlet</strong> above to download the <code>.txt</code> file</li>
+      <li>Go to <a href="https://quizlet.com/create-set" target="_blank" rel="noopener">quizlet.com/create-set</a></li>
+      <li>Click <strong>+ Import</strong> (top-right)</li>
+      <li>Open the downloaded <code>fce_vocab_quizlet.txt</code> in a text editor, select all, copy</li>
+      <li>Paste into the Quizlet import box</li>
+      <li>Set <strong>Between term and definition</strong> = Tab, <strong>Between rows</strong> = New line</li>
+      <li>Click <strong>Import</strong> — done!</li>
+    </ol>
+    <p class="vocab-anki-note">Term = <strong>English word + forms + sentence</strong>, Definition = <strong>Russian translation</strong>.</p>
   </div>
 
   {% endif %}
