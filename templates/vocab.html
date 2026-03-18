@@ -1,0 +1,278 @@
+{% extends "base_minimal.html" %}
+{% block title %}Vocabulary Notebook{% endblock %}
+{% block content %}
+<div class="vocab-page">
+  <div class="vocab-header">
+    <h1 class="vocab-title">📒 Vocabulary Notebook</h1>
+    <p class="vocab-subtitle">Words saved from reading texts &mdash; with Russian translations</p>
+    <div class="vocab-actions-top">
+      <a href="{{ url_for('home.home') }}" class="btn vocab-btn-back">&larr; Home</a>
+      {% if words %}
+      <a href="{{ url_for('vocab.export_anki') }}" class="btn vocab-btn-anki" title="Download .tsv file for Anki import">📥 Export to Anki</a>
+      <a href="{{ url_for('vocab.export_anki_zip_route') }}" class="btn vocab-btn-anki" title="Download .zip with audio for Anki">📥 Export to Anki + Audio</a>
+      <a href="{{ url_for('vocab.export_quizlet') }}" class="btn vocab-btn-quizlet" title="Download .txt file for Quizlet import">📥 Export to Quizlet</a>
+      <button class="btn vocab-btn-refresh-all" id="refreshAllForms" title="Re-fetch word forms &amp; synonyms for all words">🔄 Refresh Forms</button>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not words %}
+  <div class="vocab-empty">
+    <span class="vocab-empty-icon">📖</span>
+    <h2>No words saved yet</h2>
+    <p>Go to <strong>Part 5, 6 or 7</strong>: <strong>double-click</strong> a word or <strong>highlight a phrase</strong> to save it here.</p>
+    <a href="{{ url_for('use_of_english.use_of_english', part=5) }}" class="btn vocab-btn-start">Start reading &rarr;</a>
+  </div>
+  {% else %}
+
+  <div class="vocab-stats-bar">
+    <span class="vocab-count">{{ words|length }} word{{ 's' if words|length != 1 else '' }} saved</span>
+  </div>
+
+  <div class="vocab-table-wrap">
+    <table class="vocab-table">
+      <thead>
+        <tr>
+          <th class="vocab-th-num">#</th>
+          <th class="vocab-th-word">Word / Phrase</th>
+          <th class="vocab-th-forms">Forms</th>
+          <th class="vocab-th-word-ru">Перевод</th>
+          <th class="vocab-th-sentence">Sentence</th>
+          <th class="vocab-th-sentence-ru">Предложение</th>
+          <th class="vocab-th-part">Part</th>
+          <th class="vocab-th-date">Date</th>
+          <th class="vocab-th-actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in words %}
+        <tr class="vocab-row" data-word-id="{{ w.id }}">
+          <td class="vocab-td-num">{{ loop.index }}</td>
+          <td class="vocab-td-word">
+            <span class="vocab-word-text">{{ w.word }}</span>
+            <button class="vocab-btn-speak" data-word="{{ w.word }}" title="Pronounce">🔊</button>
+          </td>
+          <td class="vocab-td-forms">
+            {% if w.forms_parsed %}
+              {% for pos, val in w.forms_parsed.items() %}
+                {% if pos == 'synonyms' %}
+                  <span class="vocab-form-tag vocab-form-synonym">syn: {{ val if val is string else val | join(', ') }}</span>
+                {% else %}
+                  <span class="vocab-form-tag vocab-form-{{ pos }}">{{ {'noun':'n','verb':'v','adjective':'adj','adverb':'adv'}.get(pos, pos) }}: {{ val if val is string else val | join(', ') }}</span>
+                {% endif %}
+              {% endfor %}
+            {% else %}—{% endif %}
+            {% if ' ' not in w.word %}
+            <button class="vocab-btn-refresh" data-id="{{ w.id }}" title="Refresh word forms">🔄</button>
+            {% endif %}
+          </td>
+          <td class="vocab-td-word-ru" data-field="word_ru">{{ w.word_ru or '—' }}</td>
+          <td class="vocab-td-sentence">{{ w.sentence or '—' }}</td>
+          <td class="vocab-td-sentence-ru" data-field="sentence_ru">{{ w.sentence_ru or '—' }}</td>
+          <td class="vocab-td-part">{% if w.source_part %}<span class="vocab-part-badge">P{{ w.source_part }}</span>{% else %}—{% endif %}</td>
+          <td class="vocab-td-date">{{ w.created_at[:10] if w.created_at else '' }}</td>
+          <td class="vocab-td-actions">
+            <button class="vocab-btn-delete" data-id="{{ w.id }}" title="Delete">✕</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="vocab-anki-help">
+    <h3>📥 How to import into Anki</h3>
+    <ol>
+      <li>Click <strong>Export to Anki</strong> above to download the <code>.tsv</code> file</li>
+      <li>Open Anki &rarr; <strong>File &rarr; Import</strong></li>
+      <li>Select the downloaded <code>fce_vocab_anki.tsv</code> file</li>
+      <li>Set <strong>Field separator</strong> = Tab, <strong>Allow HTML</strong> = checked</li>
+      <li>Map columns: Field 1 = Front, Field 2 = Back, Field 3 = Tags</li>
+      <li>Click <strong>Import</strong> — done!</li>
+    </ol>
+    <p class="vocab-anki-note">Front side = <strong>English word + 🔊 pronunciation + sentence</strong>, Back side = <strong>Russian translation</strong>. Tags are auto-set by part number.</p>
+    <p class="vocab-anki-note"><strong>Export + Audio</strong> downloads a .zip: unzip into your Anki <code>collection.media</code> folder, then import the <code>.tsv</code> file.</p>
+  </div>
+
+  <div class="vocab-anki-help vocab-quizlet-help">
+    <h3>📥 How to import into Quizlet</h3>
+    <ol>
+      <li>Click <strong>Export to Quizlet</strong> above to download the <code>.txt</code> file</li>
+      <li>Go to <a href="https://quizlet.com/create-set" target="_blank" rel="noopener">quizlet.com/create-set</a></li>
+      <li>Click <strong>+ Import</strong> (top-right)</li>
+      <li>Open the downloaded <code>fce_vocab_quizlet.txt</code> in a text editor, select all, copy</li>
+      <li>Paste into the Quizlet import box</li>
+      <li>Set <strong>Between term and definition</strong> = Tab, <strong>Between rows</strong> = New line</li>
+      <li>Click <strong>Import</strong> — done!</li>
+    </ol>
+    <p class="vocab-anki-note">Term = <strong>English word + forms + sentence</strong>, Definition = <strong>Russian translation</strong>.</p>
+  </div>
+
+  {% endif %}
+</div>
+
+<script>
+(function() {
+  var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  // Pronunciation via browser TTS
+  function speakWord(word) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    var utter = new SpeechSynthesisUtterance(word);
+    utter.lang = 'en-GB';
+    utter.rate = 0.9;
+    window.speechSynthesis.speak(utter);
+  }
+  document.querySelectorAll('.vocab-btn-speak').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      speakWord(this.dataset.word);
+    });
+  });
+
+  // Delete word
+  document.querySelectorAll('.vocab-btn-delete').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = this.dataset.id;
+      var row = this.closest('.vocab-row');
+      if (!confirm('Delete this word?')) return;
+
+      fetch('/api/vocab/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({ id: parseInt(id) }),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          row.style.transition = 'opacity 0.3s';
+          row.style.opacity = '0';
+          setTimeout(function() { row.remove(); }, 300);
+        }
+      });
+    });
+  });
+
+  // Inline edit translations on double-click
+  document.querySelectorAll('[data-field]').forEach(function(cell) {
+    cell.addEventListener('dblclick', function() {
+      var field = this.dataset.field;
+      var row = this.closest('.vocab-row');
+      var wordId = row.dataset.wordId;
+      var currentText = this.textContent.trim();
+      if (currentText === '—') currentText = '';
+
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentText;
+      input.className = 'vocab-inline-edit';
+      this.textContent = '';
+      this.appendChild(input);
+      input.focus();
+
+      var self = this;
+      function save() {
+        var newVal = input.value.trim();
+        self.textContent = newVal || '—';
+        var body = { id: parseInt(wordId) };
+        // Send both fields, fill the one not edited with existing value
+        var otherField = field === 'word_ru' ? 'sentence_ru' : 'word_ru';
+        var otherCell = row.querySelector('[data-field="' + otherField + '"]');
+        body[field] = newVal;
+        body[otherField] = (otherCell.textContent.trim() === '—') ? '' : otherCell.textContent.trim();
+
+        fetch('/api/vocab/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body),
+        });
+      }
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { self.textContent = currentText || '—'; }
+      });
+    });
+  });
+
+  // Helper: render forms HTML for a cell
+  function renderFormsHtml(forms, wordId) {
+    var html = '';
+    var labels = {noun: 'n', verb: 'v', adjective: 'adj', adverb: 'adv'};
+    for (var pos in labels) {
+      if (forms[pos] && forms[pos].length) {
+        var vals = Array.isArray(forms[pos]) ? forms[pos].join(', ') : forms[pos];
+        html += '<span class="vocab-form-tag vocab-form-' + pos + '">' + labels[pos] + ': ' + vals + '</span> ';
+      }
+    }
+    if (forms.synonyms && forms.synonyms.length) {
+      var syns = Array.isArray(forms.synonyms) ? forms.synonyms.join(', ') : forms.synonyms;
+      html += '<span class="vocab-form-tag vocab-form-synonym">syn: ' + syns + '</span> ';
+    }
+    if (wordId) {
+      html += '<button class="vocab-btn-refresh" data-id="' + wordId + '" title="Refresh word forms">🔄</button>';
+    }
+    return html || '—';
+  }
+
+  // Refresh single word forms
+  function refreshForms(btn) {
+    var id = btn.dataset.id;
+    var row = btn.closest('.vocab-row');
+    var cell = row.querySelector('.vocab-td-forms');
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    fetch('/api/vocab/refresh-forms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ id: parseInt(id) }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        cell.innerHTML = renderFormsHtml(data.forms, id);
+        // Re-attach listener to new refresh button
+        var newBtn = cell.querySelector('.vocab-btn-refresh');
+        if (newBtn) newBtn.addEventListener('click', function() { refreshForms(this); });
+      } else {
+        btn.textContent = '🔄';
+        btn.disabled = false;
+      }
+    })
+    .catch(function() { btn.textContent = '🔄'; btn.disabled = false; });
+  }
+  document.querySelectorAll('.vocab-btn-refresh').forEach(function(btn) {
+    btn.addEventListener('click', function() { refreshForms(this); });
+  });
+
+  // Refresh ALL word forms
+  var refreshAllBtn = document.getElementById('refreshAllForms');
+  if (refreshAllBtn) {
+    refreshAllBtn.addEventListener('click', function() {
+      if (!confirm('Re-fetch word forms & synonyms for all words? This may take a moment.')) return;
+      refreshAllBtn.disabled = true;
+      refreshAllBtn.textContent = '⏳ Refreshing…';
+      fetch('/api/vocab/refresh-all-forms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: '{}',
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          refreshAllBtn.textContent = '✓ Updated ' + data.updated + ' words';
+          setTimeout(function() { location.reload(); }, 1200);
+        } else {
+          refreshAllBtn.textContent = '🔄 Refresh Forms';
+          refreshAllBtn.disabled = false;
+        }
+      })
+      .catch(function() { refreshAllBtn.textContent = '🔄 Refresh Forms'; refreshAllBtn.disabled = false; });
+    });
+  }
+})();
+</script>
+{% endblock %}

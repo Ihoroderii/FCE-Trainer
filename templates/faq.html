@@ -1,0 +1,244 @@
+{% extends "base_minimal.html" %}
+{% block title %}FCE Exam Trainer — FAQ & How It Works{% endblock %}
+{% block content %}
+<div class="faq-page">
+  <h1 class="faq-title">FAQ & How It Works</h1>
+  <p class="faq-intro">Everything you need to know about the FCE Trainer, the study methods behind it, and how to get the most out of your practice.</p>
+
+  <nav class="faq-nav">
+    <a href="#features" class="faq-nav-link">Features</a>
+    <a href="#spaced-repetition" class="faq-nav-link">Spaced Repetition</a>
+    <a href="#how-it-helps" class="faq-nav-link">How It Helps</a>
+    <a href="#parts-guide" class="faq-nav-link">Parts Guide</a>
+    <a href="#tips" class="faq-nav-link">Study Tips</a>
+  </nav>
+
+  {# ── Features ── #}
+  <section id="features" class="faq-section">
+    <h2 class="faq-section-title"><span class="faq-section-icon">⚡</span> Features</h2>
+
+    <div class="faq-item">
+      <h3 class="faq-q">What is FCE Trainer?</h3>
+      <p class="faq-a">A free web app for practicing the <strong>Cambridge B2 First (FCE)</strong> exam. It covers all 7 Use of English & Reading parts and the Writing section, with AI-generated tasks and instant feedback.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">What exam parts are included?</h3>
+      <div class="faq-a">
+        <table class="faq-parts-table">
+          <thead><tr><th>Part</th><th>Type</th><th>Questions</th></tr></thead>
+          <tbody>
+            <tr><td><span class="faq-part-badge">1</span></td><td>Multiple-choice cloze</td><td>8 gaps</td></tr>
+            <tr><td><span class="faq-part-badge">2</span></td><td>Open cloze</td><td>8 gaps</td></tr>
+            <tr><td><span class="faq-part-badge">3</span></td><td>Word formation</td><td>8 gaps</td></tr>
+            <tr><td><span class="faq-part-badge">4</span></td><td>Key word transformations</td><td>6 items</td></tr>
+            <tr><td><span class="faq-part-badge">5</span></td><td>Reading comprehension</td><td>6 questions</td></tr>
+            <tr><td><span class="faq-part-badge">6</span></td><td>Gapped text</td><td>6 gaps</td></tr>
+            <tr><td><span class="faq-part-badge">7</span></td><td>Multiple matching</td><td>10 questions</td></tr>
+          </tbody>
+        </table>
+        <p>Plus <strong>Writing Part 1</strong> (compulsory essay) with AI evaluation, and <strong>Get Phrases</strong> for collocations with "get".</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How are tasks generated?</h3>
+      <p class="faq-a">Tasks are created by AI (OpenAI or Google Gemini) and stored in a database. You can generate new tasks at <strong>B2</strong> or <strong>B2+</strong> difficulty level. The app avoids showing you the same task twice within the last 100 shown tasks.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How do answer explanations work?</h3>
+      <p class="faq-a">After you check your answers, AI analyses each gap and provides an explanation: why the correct answer fits, and what makes your answer wrong (if it was). For Part 3, you also get the full <strong>word family</strong> (e.g. happy → happily, unhappy, happiness).</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Do I need an account?</h3>
+      <p class="faq-a">You can practice without an account, but <strong>signing in</strong> (Google or email) saves your statistics, tracks your progress across devices, and enables spaced repetition reviews.</p>
+    </div>
+  </section>
+
+  {# ── Spaced Repetition ── #}
+  <section id="spaced-repetition" class="faq-section">
+    <h2 class="faq-section-title"><span class="faq-section-icon">🧠</span> Spaced Repetition</h2>
+
+    <div class="faq-item">
+      <h3 class="faq-q">What is spaced repetition?</h3>
+      <p class="faq-a">Spaced repetition is a learning technique based on the <strong>"forgetting curve"</strong> — the scientific finding that we forget information at a predictable rate. By reviewing material just as you're about to forget it, you strengthen the memory with minimal effort.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How does the SM-2 algorithm work?</h3>
+      <div class="faq-a">
+        <p>FCE Trainer uses the <strong>SM-2 algorithm</strong> (the same algorithm that powers Anki). Here's how it works:</p>
+        <div class="faq-algo-visual">
+          <div class="faq-algo-step">
+            <span class="faq-algo-num">1</span>
+            <div>
+              <strong>You practice a task and get some answers wrong</strong>
+              <p>The system records this task and schedules your first review for <strong>tomorrow</strong>.</p>
+            </div>
+          </div>
+          <div class="faq-algo-step">
+            <span class="faq-algo-num">2</span>
+            <div>
+              <strong>You review and get it right</strong>
+              <p>The interval grows: next review in <strong>3 days</strong>.</p>
+            </div>
+          </div>
+          <div class="faq-algo-step">
+            <span class="faq-algo-num">3</span>
+            <div>
+              <strong>You get it right again</strong>
+              <p>The interval grows more: next review in <strong>~8 days</strong>, then <strong>~20 days</strong>, then <strong>~50 days</strong>…</p>
+            </div>
+          </div>
+          <div class="faq-algo-step faq-algo-step--fail">
+            <span class="faq-algo-num">✗</span>
+            <div>
+              <strong>You get it wrong again?</strong>
+              <p>The card resets — you'll see it again <strong>tomorrow</strong>. The cycle restarts.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How does quality scoring work?</h3>
+      <div class="faq-a">
+        <p>Your score on each task is mapped to a quality grade (0–5):</p>
+        <div class="faq-quality-grid">
+          <div class="faq-quality faq-quality--5"><span>100%</span> Perfect recall</div>
+          <div class="faq-quality faq-quality--4"><span>80%+</span> Correct with hesitation</div>
+          <div class="faq-quality faq-quality--3"><span>60%+</span> Correct with difficulty</div>
+          <div class="faq-quality faq-quality--2"><span>40%+</span> Incorrect — card resets</div>
+          <div class="faq-quality faq-quality--1"><span>20%+</span> Incorrect — card resets</div>
+          <div class="faq-quality faq-quality--0"><span>&lt;20%</span> Blackout — card resets</div>
+        </div>
+        <p>Scoring <strong>60% or above</strong> advances the card to a longer interval. Below 60% resets it back to the start.</p>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How do I know when a task is a review?</h3>
+      <p class="faq-a">When you click <strong>"Next task"</strong> and there's a due review, the system automatically loads that task instead of a new one. You'll see a purple <strong>"🔁 Spaced Repetition Review"</strong> banner at the top of the task. The part tabs also show small badges with the number of due reviews.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Does it work for Part 4 (Key word transformations)?</h3>
+      <p class="faq-a">Yes! Part 4 is special because each practice set has 6 individual sentences. The system tracks <strong>each sentence separately</strong>, so only the specific sentences you got wrong come back for review — not the entire set.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">What if I get a perfect score on the first try?</h3>
+      <p class="faq-a">No review card is created. The system assumes you already know this material well. Review cards are only created when you make mistakes.</p>
+    </div>
+  </section>
+
+  {# ── How It Helps ── #}
+  <section id="how-it-helps" class="faq-section">
+    <h2 class="faq-section-title"><span class="faq-section-icon">📈</span> How It Helps Your Study</h2>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Why is spaced repetition effective?</h3>
+      <div class="faq-a">
+        <p>Research shows that spaced practice is <strong>2-3x more effective</strong> than massed practice (cramming). Here's why:</p>
+        <ul class="faq-benefits">
+          <li><strong>Fights the forgetting curve</strong> — You review at the optimal moment, just before you'd forget. This strengthens long-term memory.</li>
+          <li><strong>Focuses on weaknesses</strong> — You spend time on the grammar and vocabulary you struggle with, not what you already know.</li>
+          <li><strong>Saves time</strong> — Easy items space out to weeks or months. Difficult items stay frequent. You study less but remember more.</li>
+          <li><strong>Builds confidence</strong> — Seeing your intervals grow proves you're actually learning, not just recognizing answers temporarily.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How does this compare to re-reading textbooks?</h3>
+      <p class="faq-a">Re-reading gives a false sense of familiarity. It feels easy because you recognize the material, but recognition ≠ recall. Active retrieval (answering questions, filling gaps) forces your brain to actually reconstruct the knowledge — which is what the exam demands.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How should I use this for exam preparation?</h3>
+      <div class="faq-a">
+        <ol class="faq-steps">
+          <li><strong>Practice daily</strong> — Even 15–20 minutes a day is more effective than a 3-hour cram session once a week.</li>
+          <li><strong>Do all 7 parts</strong> — Don't just focus on what's easy. The exam tests everything.</li>
+          <li><strong>Read the explanations</strong> — Don't just check right/wrong. Read <em>why</em> the correct answer works.</li>
+          <li><strong>Let reviews come to you</strong> — When a review task appears, take it seriously. That's the system targeting your weak spots.</li>
+          <li><strong>Track your stats</strong> — Watch your accuracy improve over time. Aim for 70%+ across all parts.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  {# ── Parts Guide ── #}
+  <section id="parts-guide" class="faq-section">
+    <h2 class="faq-section-title"><span class="faq-section-icon">📝</span> Exam Parts Guide</h2>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Part 1 — Multiple-choice cloze</h3>
+      <p class="faq-a">A text with 8 gaps. For each gap you choose from A, B, C, or D. Tests <strong>vocabulary</strong>: collocations, phrasal verbs, fixed expressions, and meaning in context. <em>Tip: Read the whole sentence, not just the gap.</em></p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Part 2 — Open cloze</h3>
+      <p class="faq-a">A text with 8 gaps. You write <strong>exactly one word</strong> in each gap. Tests <strong>grammar</strong>: articles, prepositions, pronouns, linking words, auxiliary verbs. <em>Tip: The answer is almost always a "small" grammar word, not a content word.</em></p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Part 3 — Word formation</h3>
+      <p class="faq-a">A text with 8 gaps. You're given a "stem" word and must form the correct word (noun, adjective, adverb, verb, negative prefix, etc.). Tests <strong>word building</strong>. <em>Tip: Read around the gap to determine the word class needed (adjective? noun? negative?).</em></p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Part 4 — Key word transformations</h3>
+      <p class="faq-a">6 pairs of sentences. You rewrite the second sentence using a given keyword (3–5 words). Tests <strong>grammar structures</strong>: passives, conditionals, reported speech, wish, phrasal verbs. <em>Tip: The keyword must appear exactly as given — don't change its form.</em></p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Part 5 — Reading comprehension</h3>
+      <p class="faq-a">A long text with 6 multiple-choice questions. Tests <strong>detailed understanding</strong>: opinion, attitude, purpose, main idea, text organisation. <em>Tip: For each question, find the relevant paragraph first, then compare options carefully.</em></p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Part 6 — Gapped text</h3>
+      <p class="faq-a">A text with 6 sentences removed. You put them back in the right gaps (7 options, 1 is extra). Tests <strong>text coherence</strong>: reference words, logical flow, linking. <em>Tip: Look for pronouns (he, this, such) and linking phrases that connect to surrounding text.</em></p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Part 7 — Multiple matching</h3>
+      <p class="faq-a">4–6 short texts and 10 statements. You match each statement to the correct text. Tests <strong>scanning and paraphrasing</strong>. <em>Tip: The statements use different words from the text — look for paraphrases, not exact matches.</em></p>
+    </div>
+  </section>
+
+  {# ── Tips ── #}
+  <section id="tips" class="faq-section">
+    <h2 class="faq-section-title"><span class="faq-section-icon">💡</span> Study Tips</h2>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How many tasks should I do per day?</h3>
+      <p class="faq-a">Quality over quantity. <strong>2–3 tasks per part</strong> with careful review of explanations is better than rushing through 20. Aim for 20–30 minutes of focused practice daily.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">Which parts should I focus on?</h3>
+      <p class="faq-a">Check your <a href="{{ url_for('home.stats') }}">statistics page</a>. Focus on parts where your accuracy is below 50%. Don't ignore reading (Parts 5–7) — they carry the most marks in the real exam.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">How do I improve my vocabulary?</h3>
+      <p class="faq-a">After each practice, <strong>read the explanations carefully</strong>. For Part 3, review the word families shown after checking. The spaced repetition system will bring back the tasks you struggled with, reinforcing the vocabulary over time.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3 class="faq-q">What about Writing?</h3>
+      <p class="faq-a">The Writing section generates Part 1 essay tasks. Write your answer (140–190 words), then submit for <strong>AI evaluation</strong> that scores your essay on content, communicative achievement, organisation, and language — the same criteria used by real Cambridge examiners.</p>
+    </div>
+  </section>
+
+  <div class="faq-footer">
+    <a href="{{ url_for('home.home') }}" class="btn btn-hero">Back to Home</a>
+    <a href="{{ url_for('use_of_english.use_of_english') }}" class="btn btn-next">Start Practicing</a>
+  </div>
+</div>
+{% endblock %}

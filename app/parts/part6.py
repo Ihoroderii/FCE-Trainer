@@ -70,6 +70,8 @@ def build_part6_text(item, check_result=None):
     answers = item.get("answers", [])
     out = []
     gap_i = 0
+    # Group consecutive text paragraphs/gaps into flowing sections.
+    # A gap is rendered as an inline-block span within surrounding text.
     for para in item.get("paragraphs", []):
         if para.startswith("GAP"):
             user_val = None
@@ -92,23 +94,26 @@ def build_part6_text(item, check_result=None):
                 correct_idx = answers[gap_i] if gap_i < len(answers) else -1
                 correct_letter = letters_g[correct_idx] if 0 <= correct_idx < len(letters_g) else "?"
                 correct_sentence = sentences[correct_idx][:80] if 0 <= correct_idx < len(sentences) else ""
-                correct_hint = f'<p class="correct-answer-hint">Correct: {correct_letter}) {_e(correct_sentence)}...</p>'
+                correct_hint = f'<span class="correct-answer-hint">Correct: {correct_letter}) {_e(correct_sentence)}...</span>'
             if detail:
                 exp = detail.get("explanation")
                 if exp:
-                    explanation_html = f'<p class="answer-explanation">{_e(exp)}</p>'
+                    explanation_html = f'<span class="answer-explanation">{_e(exp)}</span>'
+            gap_num = gap_i + 1
             out.append(
-                f'<div class="part6-gap-drop{cls}" data-gap-index="{gap_i}" data-droppable="true">'
+                f'<span class="part6-gap-drop part6-gap-inline{cls}" data-gap-index="{gap_i}" data-droppable="true">'
+                f'<span class="part6-gap-num">{gap_num}</span>'
                 f'<span class="part6-gap-label">{letter}</span>'
+                f'<span class="part6-gap-sentence"></span>'
                 f'<button type="button" class="part6-gap-clear" title="Clear gap" aria-label="Clear gap">x</button>'
-                f'<input type="hidden" name="p6_{gap_i}" value="{val_attr}" aria-label="Gap {gap_i + 1}">'
+                f'<input type="hidden" name="p6_{gap_i}" value="{val_attr}" aria-label="Gap {gap_num}">'
                 f'{correct_hint}{explanation_html}'
-                f'</div>'
+                f'</span>'
             )
             gap_i += 1
         else:
             out.append(f'<p class="part6-para">{_e(para)}</p>')
-    return "".join(out)
+    return '\n'.join(out)
 
 
 def build_part6_questions(item):

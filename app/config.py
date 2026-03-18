@@ -26,6 +26,7 @@ WRITING_MAX_WORDS = 190
 WRITING_TOTAL_MINUTES = 80
 
 # Gamification
+GAMIFICATION_ENABLED = False  # Set to True to re-enable XP, levels, streaks, achievements
 XP_PER_CORRECT = 10          # base XP per correct answer
 XP_PERFECT_BONUS = 25        # bonus XP for a perfect score (all correct)
 XP_STREAK_MULTIPLIER = 0.1   # extra % per day of streak (e.g. 5-day streak = +50%)

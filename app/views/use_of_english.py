@@ -90,6 +90,7 @@ def _handle_check_action(form):
     checker = CHECKERS.get(part)
     if not checker:
         return redirect(url_for("use_of_english.use_of_english", part=part))
+    logger.debug("Checking part %d answers", part)
     result = checker(None, form)
     if result:
         record_check_result(result)
@@ -108,6 +109,7 @@ def _handle_check_action(form):
 
 def _handle_next(current_part):
     _inc_idx(current_part)
+    logger.debug("_handle_next: part=%d", current_part)
     review_served = _try_serve_review(current_part)
     if not review_served:
         if current_part == 1:
@@ -138,6 +140,7 @@ def _try_serve_review(part: int) -> bool:
     if part == 4:
         due_ids = get_due_task_ids_for_part4(user_id)
         if due_ids:
+            logger.debug("Serving Part 4 SR review: %s", due_ids)
             session["part4_task_ids"] = due_ids
             session["sr_review"] = True
             return True
@@ -156,6 +159,7 @@ def _try_serve_review(part: int) -> bool:
     else:
         key = f"part{part}_task_id"
         session[key] = due_tid
+    logger.debug("Serving Part %d SR review: task_id=%d", part, due_tid)
     session["sr_review"] = True
     return True
 

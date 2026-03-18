@@ -16,9 +16,12 @@ Quality < 3 resets the card to the start (interval = 0).
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from app.db import db_connection
+
+logger = logging.getLogger("fce_trainer")
 
 
 # ── SM-2 helpers ─────────────────────────────────────────────────────────────
@@ -29,35 +32,44 @@ def _quality_from_score(score: int, total: int) -> int:
         return 0
     ratio = score / total
     if ratio >= 1.0:
-        return 5
-    if ratio >= 0.8:
-        return 4
-    if ratio >= 0.6:
-        return 3
-    if ratio >= 0.4:
-        return 2
-    if ratio >= 0.2:
-        return 1
-    return 0
+        q = 5
+    elif ratio >= 0.8:
+        q = 4
+    elif ratio >= 0.6:
+        q = 3
+    elif ratio >= 0.4:
+        q = 2
+    elif ratio >= 0.2:
+        q = 1
+    else:
+        q = 0
+    logger.debug("  _quality_from_score: score=%d/%d ratio=%.2f → quality=%d", score, total, ratio, q)
+    return q
 
 
 def _sm2_update(ease: float, interval: int, reps: int, quality: int) -> tuple[float, int, int]:
     """Apply one SM-2 iteration.  Returns (new_ease, new_interval_days, new_reps)."""
+    logger.debug("  _sm2_update INPUT:  ease=%.2f interval=%dd reps=%d quality=%d", ease, interval, reps, quality)
     if quality < 3:
         # Failed — reset to beginning
+        logger.debug("  _sm2_update: quality < 3 → RESET (interval=0, reps=0, ease kept ≥ 1.3)")
         return max(ease, 1.3), 0, 0
 
     # Successful recall
     reps += 1
     if reps == 1:
         new_interval = 1
+        logger.debug("  _sm2_update: 1st success → interval=1 day")
     elif reps == 2:
         new_interval = 3
+        logger.debug("  _sm2_update: 2nd success → interval=3 days")
     else:
         new_interval = round(interval * ease)
+        logger.debug("  _sm2_update: rep #%d → interval = round(%d × %.2f) = %d days", reps, interval, ease, new_interval)
 
     new_ease = ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
     new_ease = max(new_ease, 1.3)
+    logger.debug("  _sm2_update OUTPUT: ease=%.2f interval=%dd reps=%d", new_ease, new_interval, reps)
 
     return new_ease, new_interval, reps
 
@@ -75,19 +87,25 @@ def record_review(user_id: int, part: int, task_id: int, score: int, total: int)
 
     quality = _quality_from_score(score, total)
     today = date.today().isoformat()
+    logger.debug("═══ record_review START ═══")
+    logger.debug("  user=%d  part=%d  task_id=%d  score=%d/%d  today=%s", user_id, part, task_id, score, total, today)
 
     with db_connection() as conn:
         row = conn.execute(
-            "SELECT ease_factor, interval_days, repetitions FROM spaced_repetition "
+            "SELECT ease_factor, interval_days, repetitions, next_review FROM spaced_repetition "
             "WHERE user_id = ? AND part = ? AND task_id = ?",
             (user_id, part, task_id),
         ).fetchone()
 
         if row:
+            logger.debug("  DB row FOUND — existing card: ease=%.2f interval=%dd reps=%d next_review=%s",
+                         row["ease_factor"], row["interval_days"], row["repetitions"], row["next_review"])
             ease, interval, reps = _sm2_update(
                 row["ease_factor"], row["interval_days"], row["repetitions"], quality,
             )
             next_review = _add_days(today, interval)
+            logger.debug("  → UPDATING DB: ease=%.2f interval=%dd reps=%d next_review=%s last_review=%s",
+                         ease, interval, reps, next_review, today)
             conn.execute(
                 """UPDATE spaced_repetition
                    SET ease_factor = ?, interval_days = ?, repetitions = ?,
@@ -97,11 +115,15 @@ def record_review(user_id: int, part: int, task_id: int, score: int, total: int)
                  user_id, part, task_id),
             )
         else:
+            logger.debug("  DB row NOT found — this is a new card")
             # Only create a card if the user didn't get a perfect score
             if quality >= 5:
-                return  # no need to schedule — user knows this
+                logger.debug("  Perfect score (quality=5) → no card created, user knows this")
+                return
             ease, interval, reps = _sm2_update(2.5, 0, 0, quality)
             next_review = _add_days(today, interval)
+            logger.debug("  → INSERTING into DB: ease=%.2f interval=%dd reps=%d next_review=%s last_review=%s",
+                         ease, interval, reps, next_review, today)
             conn.execute(
                 """INSERT OR IGNORE INTO spaced_repetition
                    (user_id, part, task_id, ease_factor, interval_days, repetitions,
@@ -111,6 +133,7 @@ def record_review(user_id: int, part: int, task_id: int, score: int, total: int)
                  next_review, today, score / total),
             )
         conn.commit()
+    logger.debug("═══ record_review END ═══")
 
 
 def get_due_task_id(user_id: int, part: int) -> int | None:
@@ -122,15 +145,21 @@ def get_due_task_id(user_id: int, part: int) -> int | None:
         return None
 
     today = date.today().isoformat()
+    logger.debug("get_due_task_id: user=%d part=%d today=%s", user_id, part, today)
+    logger.debug("  SQL: SELECT task_id FROM spaced_repetition WHERE user_id=%d AND part=%d AND next_review<='%s' ORDER BY next_review ASC, last_score ASC LIMIT 1", user_id, part, today)
     with db_connection() as conn:
         row = conn.execute(
-            """SELECT task_id FROM spaced_repetition
+            """SELECT task_id, next_review, last_score FROM spaced_repetition
                WHERE user_id = ? AND part = ? AND next_review <= ?
                ORDER BY next_review ASC, last_score ASC
                LIMIT 1""",
             (user_id, part, today),
         ).fetchone()
-    return row["task_id"] if row else None
+    if row:
+        logger.debug("  → FOUND due task_id=%d  next_review=%s  last_score=%.2f", row["task_id"], row["next_review"], row["last_score"])
+        return row["task_id"]
+    logger.debug("  → No due reviews for part %d", part)
+    return None
 
 
 def get_due_task_ids_for_part4(user_id: int) -> list[int] | None:
@@ -139,15 +168,21 @@ def get_due_task_ids_for_part4(user_id: int) -> list[int] | None:
         return None
 
     today = date.today().isoformat()
+    logger.debug("get_due_task_ids_for_part4: user=%d today=%s", user_id, today)
     with db_connection() as conn:
         rows = conn.execute(
-            """SELECT task_id FROM spaced_repetition
+            """SELECT task_id, next_review, last_score FROM spaced_repetition
                WHERE user_id = ? AND part = 4 AND next_review <= ?
                ORDER BY next_review ASC, last_score ASC
                LIMIT 6""",
             (user_id, today),
         ).fetchall()
-    return [r["task_id"] for r in rows] if rows else None
+    if rows:
+        for r in rows:
+            logger.debug("  due Part4 task_id=%d  next_review=%s  last_score=%.2f", r["task_id"], r["next_review"], r["last_score"])
+        return [r["task_id"] for r in rows]
+    logger.debug("  → No due Part 4 reviews")
+    return None
 
 
 def get_due_counts(user_id: int) -> dict[int, int]:
@@ -163,7 +198,10 @@ def get_due_counts(user_id: int) -> dict[int, int]:
                GROUP BY part""",
             (user_id, today),
         ).fetchall()
-    return {r["part"]: r["cnt"] for r in rows}
+    counts = {r["part"]: r["cnt"] for r in rows}
+    if counts:
+        logger.debug("get_due_counts: user=%d today=%s → %s", user_id, today, counts)
+    return counts
 
 
 # ── Internal ─────────────────────────────────────────────────────────────────

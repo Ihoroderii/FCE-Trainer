@@ -6,10 +6,11 @@ from datetime import datetime
 
 from flask import session
 
-from app.config import GET_PHRASE_PART, PARTS_RANGE
+from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE
 from app.db import db_connection
-from app.services.gamification import award_xp
 from app.services.repetition import record_review
+
+logger = logging.getLogger("fce_trainer")
 
 
 def _user_filter_sql(user_id: int | None) -> tuple[str, tuple]:
@@ -78,6 +79,7 @@ def record_check_result(result: dict) -> dict | None:
     if part not in PARTS_RANGE and part != GET_PHRASE_PART:
         return None
     user_id = session.get("user_id")
+    logger.debug("record_check_result: part=%s score=%d/%d user=%s", part, score, total, user_id)
     details = result.get("details") or []
     with db_connection() as conn:
         cur = conn.execute(
@@ -104,13 +106,15 @@ def record_check_result(result: dict) -> dict | None:
         conn.commit()
 
     # Award XP & check achievements for logged-in users
-    try:
-        reward = award_xp(user_id, score, total, part)
-    except Exception:
-        logging.getLogger("fce_trainer").warning("award_xp failed", exc_info=True)
-        reward = None
-    if reward and reward.get("xp_gained"):
-        session["last_reward"] = reward
+    reward = None
+    if GAMIFICATION_ENABLED:
+        try:
+            from app.services.gamification import award_xp
+            reward = award_xp(user_id, score, total, part)
+        except Exception:
+            logging.getLogger("fce_trainer").warning("award_xp failed", exc_info=True)
+        if reward and reward.get("xp_gained"):
+            session["last_reward"] = reward
 
     # Schedule spaced repetition review for the task
     try:
