@@ -739,6 +739,12 @@ body[data-current-part="6"] .main {
   text-indent: 1.5em;
 }
 
+/* Flowing text container for Part 6 */
+.part6-text-flow {
+  line-height: 1.85;
+  font-size: 0.95rem;
+}
+
 .part6-questions-col {
   flex: 1 1 0;
   margin-bottom: 0;
@@ -763,9 +769,54 @@ body[data-current-part="6"] .main {
   gap: 0.5rem;
 }
 
-.part6-gap-drop.part6-drop-over {
+/* Inline gap within flowing text */
+.part6-gap-inline {
+  display: inline-flex;
+  min-height: 1.6rem;
+  min-width: 2.8rem;
+  margin: 1px 2px;
+  padding: 1px 8px;
+  border: 2px dashed var(--accent);
+  border-radius: 5px;
+  background: rgba(0, 102, 204, 0.04);
+  vertical-align: middle;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: default;
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.part6-gap-num {
+  font-weight: 700;
+  font-size: 0.76rem;
+  color: var(--accent);
+  margin-right: 1px;
+}
+
+.part6-gap-inline .part6-gap-label {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.part6-gap-inline .part6-gap-clear {
+  width: 1.1rem;
+  height: 1.1rem;
+  font-size: 0.8rem;
+}
+
+.part6-gap-inline .correct-answer-hint,
+.part6-gap-inline .answer-explanation {
+  display: block;
+  font-size: 0.78rem;
+  margin-top: 0.1rem;
+}
+
+.part6-gap-drop.part6-drop-over,
+.part6-gap-inline.part6-drop-over {
   border-color: var(--accent);
-  background: rgba(0, 102, 204, 0.06);
+  background: rgba(0, 102, 204, 0.1);
 }
 
 .part6-gap-label {
