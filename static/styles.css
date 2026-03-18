@@ -3762,6 +3762,30 @@ html.dark-mode .faq-quality--0 { background: rgba(229,57,53,0.15); }
   box-shadow: 0 2px 8px rgba(124,77,255,0.25);
 }
 .vocab-btn-anki:hover { opacity: 0.9; }
+.vocab-btn-refresh-all {
+  background: linear-gradient(135deg, #43a047, #2e7d32);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(46,125,50,0.25);
+}
+.vocab-btn-refresh-all:hover { opacity: 0.9; }
+.vocab-btn-refresh-all:disabled { opacity: 0.6; cursor: default; }
+.vocab-btn-refresh {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 1px 4px;
+  opacity: 0.5;
+  vertical-align: middle;
+}
+.vocab-btn-refresh:hover { opacity: 1; }
+.vocab-btn-refresh:disabled { opacity: 0.3; cursor: default; }
 
 /* Empty state */
 .vocab-empty {

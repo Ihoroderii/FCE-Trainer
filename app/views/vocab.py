@@ -138,3 +138,27 @@ def api_word_forms():
         return jsonify({"forms": {}})
     forms = fetch_word_forms(word)
     return jsonify({"forms": forms})
+
+
+@bp.route("/api/vocab/refresh-forms", methods=["POST"])
+@_api_login_required
+def api_refresh_forms():
+    user_id = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    word_id = data.get("id")
+    if not word_id:
+        return jsonify({"error": "No id provided"}), 400
+    from app.services.vocab import refresh_word_forms_for_entry
+    forms = refresh_word_forms_for_entry(user_id, int(word_id))
+    if forms is None:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"ok": True, "forms": forms})
+
+
+@bp.route("/api/vocab/refresh-all-forms", methods=["POST"])
+@_api_login_required
+def api_refresh_all_forms():
+    user_id = session["user_id"]
+    from app.services.vocab import refresh_all_word_forms
+    count = refresh_all_word_forms(user_id)
+    return jsonify({"ok": True, "updated": count})

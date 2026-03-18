@@ -10,6 +10,7 @@
       {% if words %}
       <a href="{{ url_for('vocab.export_anki') }}" class="btn vocab-btn-anki" title="Download .tsv file for Anki import">📥 Export to Anki</a>
       <a href="{{ url_for('vocab.export_anki_zip_route') }}" class="btn vocab-btn-anki" title="Download .zip with audio for Anki">📥 Export to Anki + Audio</a>
+      <button class="btn vocab-btn-refresh-all" id="refreshAllForms" title="Re-fetch word forms &amp; synonyms for all words">🔄 Refresh Forms</button>
       {% endif %}
     </div>
   </div>
@@ -60,6 +61,9 @@
                 {% endif %}
               {% endfor %}
             {% else %}—{% endif %}
+            {% if ' ' not in w.word %}
+            <button class="vocab-btn-refresh" data-id="{{ w.id }}" title="Refresh word forms">🔄</button>
+            {% endif %}
           </td>
           <td class="vocab-td-word-ru" data-field="word_ru">{{ w.word_ru or '—' }}</td>
           <td class="vocab-td-sentence">{{ w.sentence or '—' }}</td>
@@ -178,6 +182,82 @@
       });
     });
   });
+
+  // Helper: render forms HTML for a cell
+  function renderFormsHtml(forms, wordId) {
+    var html = '';
+    var labels = {noun: 'n', verb: 'v', adjective: 'adj', adverb: 'adv'};
+    for (var pos in labels) {
+      if (forms[pos] && forms[pos].length) {
+        var vals = Array.isArray(forms[pos]) ? forms[pos].join(', ') : forms[pos];
+        html += '<span class="vocab-form-tag vocab-form-' + pos + '">' + labels[pos] + ': ' + vals + '</span> ';
+      }
+    }
+    if (forms.synonyms && forms.synonyms.length) {
+      var syns = Array.isArray(forms.synonyms) ? forms.synonyms.join(', ') : forms.synonyms;
+      html += '<span class="vocab-form-tag vocab-form-synonym">syn: ' + syns + '</span> ';
+    }
+    if (wordId) {
+      html += '<button class="vocab-btn-refresh" data-id="' + wordId + '" title="Refresh word forms">🔄</button>';
+    }
+    return html || '—';
+  }
+
+  // Refresh single word forms
+  function refreshForms(btn) {
+    var id = btn.dataset.id;
+    var row = btn.closest('.vocab-row');
+    var cell = row.querySelector('.vocab-td-forms');
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    fetch('/api/vocab/refresh-forms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ id: parseInt(id) }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        cell.innerHTML = renderFormsHtml(data.forms, id);
+        // Re-attach listener to new refresh button
+        var newBtn = cell.querySelector('.vocab-btn-refresh');
+        if (newBtn) newBtn.addEventListener('click', function() { refreshForms(this); });
+      } else {
+        btn.textContent = '🔄';
+        btn.disabled = false;
+      }
+    })
+    .catch(function() { btn.textContent = '🔄'; btn.disabled = false; });
+  }
+  document.querySelectorAll('.vocab-btn-refresh').forEach(function(btn) {
+    btn.addEventListener('click', function() { refreshForms(this); });
+  });
+
+  // Refresh ALL word forms
+  var refreshAllBtn = document.getElementById('refreshAllForms');
+  if (refreshAllBtn) {
+    refreshAllBtn.addEventListener('click', function() {
+      if (!confirm('Re-fetch word forms & synonyms for all words? This may take a moment.')) return;
+      refreshAllBtn.disabled = true;
+      refreshAllBtn.textContent = '⏳ Refreshing…';
+      fetch('/api/vocab/refresh-all-forms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: '{}',
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          refreshAllBtn.textContent = '✓ Updated ' + data.updated + ' words';
+          setTimeout(function() { location.reload(); }, 1200);
+        } else {
+          refreshAllBtn.textContent = '🔄 Refresh Forms';
+          refreshAllBtn.disabled = false;
+        }
+      })
+      .catch(function() { refreshAllBtn.textContent = '🔄 Refresh Forms'; refreshAllBtn.disabled = false; });
+    });
+  }
 })();
 </script>
 {% endblock %}

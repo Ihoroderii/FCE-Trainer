@@ -276,6 +276,49 @@ def update_translation(user_id: int, word_id: int, word_ru: str, sentence_ru: st
     return cur.rowcount > 0
 
 
+def refresh_word_forms_for_entry(user_id: int, word_id: int) -> dict | None:
+    """Re-fetch word forms for an existing vocab entry. Returns updated forms dict or None."""
+    import json as _json
+    with db_connection() as conn:
+        row = conn.execute(
+            "SELECT id, word FROM vocab_notebook WHERE id = ? AND user_id = ?",
+            (word_id, user_id),
+        ).fetchone()
+        if not row:
+            return None
+        word = row["word"]
+        if " " in word:
+            return {}  # no forms for phrases
+        forms = fetch_word_forms(word)
+        forms_json = _json.dumps(forms) if forms else ""
+        conn.execute(
+            "UPDATE vocab_notebook SET word_forms = ? WHERE id = ? AND user_id = ?",
+            (forms_json, word_id, user_id),
+        )
+        conn.commit()
+    return forms
+
+
+def refresh_all_word_forms(user_id: int) -> int:
+    """Re-fetch word forms for all single-word entries. Returns count of updated entries."""
+    import json as _json
+    words = get_words(user_id)
+    updated = 0
+    for w in words:
+        if " " in w["word"]:
+            continue
+        forms = fetch_word_forms(w["word"])
+        forms_json = _json.dumps(forms) if forms else ""
+        with db_connection() as conn:
+            conn.execute(
+                "UPDATE vocab_notebook SET word_forms = ? WHERE id = ? AND user_id = ?",
+                (forms_json, w["id"], user_id),
+            )
+            conn.commit()
+        updated += 1
+    return updated
+
+
 # ── TTS Audio ────────────────────────────────────────────────────────────────
 
 def _safe_filename(word: str) -> str:
