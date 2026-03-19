@@ -117,13 +117,27 @@ Use a DIFFERENT grammar_topic for each item—vary the grammar (passive, conditi
 Return ONLY a valid JSON array of objects with keys: sentence1, keyword, sentence2, answer, grammar_topic. No other text."""
 
 
-def get_task_prompt_part5(topic: str) -> str:
+def get_task_prompt_part5(topic: str, level: str = "b2") -> str:
+    level = (level or "b2").strip().lower()
+    if level != "b2plus":
+        level = "b2"
+    if level == "b2plus":
+        level_instruction = (
+            "1. A single continuous text. Length: between 550 and 650 words. B2+ level: use more sophisticated "
+            "vocabulary, complex sentence structures (e.g. participle clauses, inversion, subjunctive), "
+            "nuanced arguments, and subtle tone shifts. The text should challenge advanced upper-intermediate readers."
+        )
+    else:
+        level_instruction = (
+            "1. A single continuous text. Length: between 550 and 650 words. Upper-Intermediate (B2) level. "
+            "The text should test understanding of the writer's opinion, attitude, purpose, tone, and implied meaning—not just surface facts."
+        )
     return f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 5 task.
 
 The text MUST be clearly about this topic: "{topic}". Write a single continuous text (e.g. magazine article, report, or extract from a modern novel) that is obviously on this theme. Use a specific angle or situation so the text feels fresh and varied.
 
 Part 5 consists of:
-1. A single continuous text. Length: between 550 and 650 words. Upper-Intermediate (B2) level. The text should test understanding of the writer's opinion, attitude, purpose, tone, and implied meaning—not just surface facts.
+{level_instruction}
 2. Exactly 6 multiple-choice questions. Each question has four options (A, B, C, D). Questions must follow the chronological order of the text: question 1 relates to the beginning, question 6 may relate to the end or the text as a whole. Each correct answer is worth 2 marks.
 
 QUESTION QUALITY REQUIREMENTS:
@@ -143,13 +157,30 @@ Example shape:
 No other text or markdown."""
 
 
-def get_task_prompt_part6(topic: str) -> str:
+def get_task_prompt_part6(topic: str, level: str = "b2") -> str:
+    level = (level or "b2").strip().lower()
+    if level != "b2plus":
+        level = "b2"
+    if level == "b2plus":
+        level_instruction = (
+            "- A single continuous text of 500-600 words (B2+ level): use more sophisticated vocabulary, "
+            "complex sentence structures, and nuanced argumentation. The removed sentences should require "
+            "careful analysis of cohesion devices, reference words, and logical flow to place correctly. "
+            "The text must contain exactly 6 numbered gaps where a sentence has been removed. "
+            "Use the exact placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 in order where each gap appears."
+        )
+    else:
+        level_instruction = (
+            "- A single continuous text of 500-600 words (B2 level). The text must contain exactly 6 numbered gaps "
+            "where a sentence has been removed. Use the exact placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 "
+            "in order where each gap appears."
+        )
     return f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 6 (gapped text) task.
 
 The text MUST be about this topic: "{topic}". Use a specific angle to make the text engaging and varied.
 
 Part 6 consists of:
-- A single continuous text of 500-600 words (B2 level). The text must contain exactly 6 numbered gaps where a sentence has been removed. Use the exact placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 in order where each gap appears.
+{level_instruction}
 - 7 sentences labeled A-G. Exactly 6 of these fit into the gaps (one per gap); one sentence is a distractor.
 
 Return ONLY a valid JSON object with these exact keys:

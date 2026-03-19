@@ -29,9 +29,11 @@
         <span class="logo-text"><strong>CAMBRIDGE</strong><br />English</span>
       </a>
       <div class="header-center">
+        {% if mock_mode %}
         <span class="test-taker-label">Test taker ID</span>
         <span class="timer-display" id="timer">75:00</span>
         <button type="button" class="timer-btn" id="timer-toggle" title="Start/Pause">▶</button>
+        {% endif %}
       </div>
       <div class="header-actions">
         <button type="button" class="dark-mode-btn" id="dark-mode-btn" title="Toggle dark mode" aria-label="Toggle dark mode">

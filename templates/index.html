@@ -195,7 +195,7 @@
     {% if part5_generated is not none and part5_generated > 0 %}
       <div class="feedback success">Generated new reading comprehension text.</div>
     {% endif %}
-    {{ generate_buttons("generate_part5", "Generate Part 5 (multiple choice reading):", show_b2plus=false, part_num=5) }}
+    {{ generate_buttons("generate_part5", "Generate Part 5 (multiple choice reading):", show_b2plus=true, part_num=5) }}
     {% if part5_error %}
       <div class="feedback error">{{ part5_error }}</div>
     {% else %}
@@ -223,7 +223,7 @@
     {% if part6_generated is not none and part6_generated > 0 %}
       <div class="feedback success">Generated new gapped text.</div>
     {% endif %}
-    {{ generate_buttons("generate_part6", "Generate Part 6 (gapped text):", show_b2plus=false, part_num=6) }}
+    {{ generate_buttons("generate_part6", "Generate Part 6 (gapped text):", show_b2plus=true, part_num=6) }}
     {% if part6_error %}
       <div class="feedback error">{{ part6_error }}</div>
     {% else %}

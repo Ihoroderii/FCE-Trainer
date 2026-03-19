@@ -73,7 +73,7 @@ def _handle_generate_action(action):
                 session.pop(key, None)
             session.pop("check_result", None)
             params = {"part": part_num, f"part{part_num}_generated": 1}
-            if part_num in (1, 2, 3):
+            if part_num in (1, 2, 3, 5, 6):
                 params[f"part{part_num}_level"] = level
             return redirect(url_for("use_of_english.use_of_english", **params))
         return redirect(url_for("use_of_english.use_of_english", part=part_num))

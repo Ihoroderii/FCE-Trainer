@@ -11,17 +11,17 @@ from app.ai.prompts import get_task_prompt_part5
 from app.ai.explanations import fetch_explanations_part5
 from app.config import LETTERS, MAX_EXPLANATION_LEN
 from app.db import _generic_get_or_create, get_part5_task_by_id, db_connection
-from app.parts.topics import PART3_TOPICS
+from app.parts.topics import PART5_TOPICS
 from app.utils import e as _e, extract_json_object, validate_part5_data
 
 logger = logging.getLogger("fce_trainer")
 
 
-def generate_part5_with_openai():
+def generate_part5_with_openai(level="b2"):
     if not ai_available:
         return None
-    topic = random.choice(PART3_TOPICS)
-    prompt = get_task_prompt_part5(topic)
+    topic = random.choice(PART5_TOPICS)
+    prompt = get_task_prompt_part5(topic, level=level)
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
