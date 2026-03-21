@@ -57,10 +57,44 @@ def _translate_en_ru(text: str) -> str:
         return ""
 
 
+def _translate_en_ru_ai(word: str, sentence: str) -> tuple[str, str]:
+    """Translate word and sentence using the AI client as fallback."""
+    from app.ai import chat_create, ai_available
+    if not ai_available:
+        return "", ""
+    prompt = f'Translate the English word "{word}" to Russian.'
+    if sentence:
+        prompt += f' Context sentence: "{sentence}". Also translate the full sentence to Russian.'
+    prompt += '\nReturn ONLY a JSON object: {"word_ru": "...", "sentence_ru": "..."}'
+    prompt += '\nIf there is no sentence, set sentence_ru to empty string.'
+    try:
+        import json
+        comp = chat_create([{"role": "user", "content": prompt}], temperature=0.1)
+        content = (comp.choices[0].message.content or "").strip()
+        m = re.search(r'\{[\s\S]*\}', content)
+        if not m:
+            return "", ""
+        data = json.loads(m.group(0))
+        word_ru = (data.get("word_ru") or "").strip()
+        sentence_ru = (data.get("sentence_ru") or "").strip()
+        logger.debug("AI translated '%s' → '%s'", word[:30], word_ru[:30])
+        return word_ru, sentence_ru
+    except Exception:
+        logger.warning("AI translation failed for: %s", word[:30], exc_info=True)
+        return "", ""
+
+
 def translate_word_and_sentence(word: str, sentence: str) -> tuple[str, str]:
-    """Return (word_ru, sentence_ru)."""
+    """Return (word_ru, sentence_ru). Tries MyMemory first, falls back to AI."""
     word_ru = _translate_en_ru(word)
     sentence_ru = _translate_en_ru(sentence) if sentence else ""
+    # Fallback to AI if MyMemory failed for the word
+    if not word_ru:
+        logger.info("MyMemory failed for '%s', trying AI fallback", word[:30])
+        ai_word_ru, ai_sentence_ru = _translate_en_ru_ai(word, sentence)
+        word_ru = ai_word_ru
+        if not sentence_ru and ai_sentence_ru:
+            sentence_ru = ai_sentence_ru
     return word_ru, sentence_ru
 
 
