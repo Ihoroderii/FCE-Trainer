@@ -254,6 +254,10 @@ def _ensure_vocab_word_forms_column():
     _run_migration("add_vocab_word_forms_column", _migrate_vocab_word_forms_column)
 
 
+def _ensure_part3_word_repetition_table():
+    _run_migration("add_part3_word_repetition_table", _migrate_part3_word_repetition_table)
+
+
 # --- Migration infrastructure ---
 
 def _run_migration(name: str, fn):
@@ -387,6 +391,25 @@ def _migrate_vocab_word_forms_column(conn):
     cols = [r["name"] for r in cur.fetchall()]
     if "word_forms" not in cols:
         conn.execute("ALTER TABLE vocab_notebook ADD COLUMN word_forms TEXT NOT NULL DEFAULT ''")
+
+
+def _migrate_part3_word_repetition_table(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS part3_word_repetition (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            stem TEXT NOT NULL,
+            answer TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'learning',
+            wrong_count INTEGER NOT NULL DEFAULT 0,
+            correct_count INTEGER NOT NULL DEFAULT 0,
+            next_review TEXT NOT NULL DEFAULT (date('now')),
+            last_seen TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, stem)
+        );
+        CREATE INDEX IF NOT EXISTS idx_p3wr_user_status ON part3_word_repetition(user_id, status, next_review);
+    """)
 
 
 def seed_db() -> None:

@@ -61,7 +61,7 @@ Return ONLY a valid JSON object with these exact keys:
 No other text or markdown."""
 
 
-def get_task_prompt_part3(topic: str, level: str = "b2") -> str:
+def get_task_prompt_part3(topic: str, level: str = "b2", required_stems: list[str] | None = None) -> str:
     level = (level or "b2").strip().lower()
     if level != "b2plus":
         level = "b2"
@@ -75,6 +75,16 @@ def get_task_prompt_part3(topic: str, level: str = "b2") -> str:
             "Use B2-level vocabulary and grammar. Test common suffixes (-tion, -ness, -ly, -ful, -less, -able), "
             "prefixes (un-, in-, im-), and word class changes."
         )
+
+    required_instruction = ""
+    if required_stems:
+        stems_str = ", ".join(s.upper() for s in required_stems)
+        required_instruction = (
+            f"\n- REQUIRED STEMS: You MUST use these stem words among the 8 gaps: {stems_str}. "
+            f"Weave them naturally into the text. The remaining gaps can use any appropriate stems. "
+            f"Each required stem must appear as one of the 8 gaps with a different word form as the answer."
+        )
+
     return f"""You are an FCE (B2 First) Use of English exam expert. Generate exactly ONE Part 3 (Word formation) task.
 
 The text MUST be clearly about this topic: "{topic}". Write one continuous passage (150-200 words) that is obviously on this theme.
@@ -86,7 +96,7 @@ Requirements:
 - Each gap must be written as (1)_____, (2)_____, (3)_____, (4)_____, (5)_____, (6)_____, (7)_____, (8)_____ in order.
 - At the end of the sentence or clause that contains each gap, put the STEM WORD in CAPITAL LETTERS (e.g. "...has been delayed. COMPLETE" or "...looked at him. SUSPECT"). So the reader sees the stem word in capitals after each gap.
 - The stem word is the base form; the student must change it (prefix, suffix, plural, etc.) to fit the gap.
-- IMPORTANT: In real FCE Part 3, the correct answer is almost always a DIFFERENT form from the stem (different word class or with prefix/suffix). Only very rarely (about 1 in 20 gaps) may the answer be the stem word unchanged (e.g. DANGER → danger). So for this task: at most ONE gap in the entire 8-gap passage may have the correct answer identical to the stem word (no transformation). All other gaps MUST require a clear word formation change (e.g. COMPLETE → completion, SUSPECT → suspiciously). Prefer having all 8 gaps require a transformation.
+- IMPORTANT: In real FCE Part 3, the correct answer is almost always a DIFFERENT form from the stem (different word class or with prefix/suffix). Only very rarely (about 1 in 20 gaps) may the answer be the stem word unchanged (e.g. DANGER → danger). So for this task: at most ONE gap in the entire 8-gap passage may have the correct answer identical to the stem word (no transformation). All other gaps MUST require a clear word formation change (e.g. COMPLETE → completion, SUSPECT → suspiciously). Prefer having all 8 gaps require a transformation.{required_instruction}
 
 Return ONLY a valid JSON object with these exact keys:
 - "text": the full passage (150-200 words) with (1)_____ through (8)_____ and each stem word in CAPITALS at the end of its sentence/clause. Example fragment: "The (1)_____ of the centre has been delayed. COMPLETE She looked at him (2)_____ when he told the joke. SUSPECT"

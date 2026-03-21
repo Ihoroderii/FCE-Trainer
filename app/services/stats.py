@@ -127,6 +127,16 @@ def record_check_result(result: dict) -> dict | None:
     except Exception:
         logging.getLogger("fce_trainer").warning("record_review failed", exc_info=True)
 
+    # Per-word repetition tracking for Part 3
+    if part == 3:
+        try:
+            from app.services.word_repetition import record_part3_word_results
+            stems = result.get("stems") or []
+            if stems and details:
+                record_part3_word_results(details, stems)
+        except Exception:
+            logging.getLogger("fce_trainer").warning("record_part3_word_results failed", exc_info=True)
+
     return reward
 
 
