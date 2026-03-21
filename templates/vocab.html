@@ -291,17 +291,28 @@
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      console.log('translate response', id, data);
       if (data.ok) {
         wordRuCell.textContent = data.word_ru || '—';
         sentRuCell.textContent = data.sentence_ru || '—';
-        btn.textContent = '🌐';
+        btn.textContent = '✓';
+        btn.style.color = 'green';
+        setTimeout(function() { btn.textContent = '🌐'; btn.style.color = ''; }, 1500);
         btn.disabled = false;
       } else {
-        btn.textContent = '🌐';
+        btn.textContent = '✗';
+        btn.style.color = 'red';
+        setTimeout(function() { btn.textContent = '🌐'; btn.style.color = ''; }, 1500);
         btn.disabled = false;
       }
     })
-    .catch(function() { btn.textContent = '🌐'; btn.disabled = false; });
+    .catch(function(err) {
+      console.error('translate error', err);
+      btn.textContent = '✗';
+      btn.style.color = 'red';
+      setTimeout(function() { btn.textContent = '🌐'; btn.style.color = ''; }, 1500);
+      btn.disabled = false;
+    });
   }
   document.querySelectorAll('.vocab-btn-translate').forEach(function(btn) {
     btn.addEventListener('click', function() { translateWord(this); });

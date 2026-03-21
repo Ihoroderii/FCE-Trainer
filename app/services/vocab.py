@@ -228,9 +228,12 @@ def retranslate_entry(user_id: int, word_id: int) -> dict | None:
             "SELECT id, word, sentence FROM vocab_notebook WHERE id = ? AND user_id = ?",
             (word_id, user_id),
         ).fetchone()
-        if not row:
-            return None
-        word_ru, sentence_ru = translate_word_and_sentence(row["word"], row["sentence"] or "")
+    if not row:
+        return None
+    word_ru, sentence_ru = translate_word_and_sentence(row["word"], row["sentence"] or "")
+    logger.info("retranslate id=%s word='%s' → word_ru='%s' sentence_ru='%s'",
+                word_id, row["word"][:30], word_ru[:30] if word_ru else '', sentence_ru[:30] if sentence_ru else '')
+    with db_connection() as conn:
         conn.execute(
             "UPDATE vocab_notebook SET word_ru = ?, sentence_ru = ? WHERE id = ? AND user_id = ?",
             (word_ru, sentence_ru, word_id, user_id),
