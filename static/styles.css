@@ -751,57 +751,85 @@ body[data-current-part="6"] .main {
   overflow-y: auto;
 }
 
-.part6-gap-drop {
-  min-height: 2.5rem;
-  margin: 0.5rem 0;
-  padding: 0.5rem 0.75rem;
-  border: 2px dashed var(--border);
-  border-radius: 6px;
-  flex-wrap: wrap;
-  background: rgba(0, 0, 0, 0.02);
-  transition: border-color 0.15s, background 0.15s;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 /* Gap drop zone — inline within paragraph text */
-.part6-gap-inline {
+.part6-gap-drop.part6-gap-inline {
+  display: inline;
+  min-height: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  flex-wrap: initial;
+  gap: 0;
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+.part6-gap-drop.part6-gap-inline .part6-gap-num {
   display: inline-flex;
-  min-height: 1.6rem;
-  margin: 0.15rem 0;
-  padding: 0.2rem 0.5rem;
-  border: 2px dashed var(--accent);
-  border-radius: 6px;
-  background: rgba(0, 102, 204, 0.03);
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  cursor: default;
-  font-size: 0.88rem;
-  line-height: 1.4;
-  transition: border-color 0.15s, background 0.15s;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  border: 2px dashed var(--accent);
+  border-radius: 4px;
+  background: rgba(0, 102, 204, 0.06);
+  font-weight: 700;
+  font-size: 0.85em;
+  color: var(--accent);
   vertical-align: middle;
+  margin: 0 0.15em;
+  cursor: default;
 }
 
-/* When a sentence is placed, show as block within paragraph flow */
-.part6-gap-inline.part6-gap-has-value {
+/* Hide label/sentence/clear when no value — only the number badge shows */
+.part6-gap-drop.part6-gap-inline .part6-gap-label,
+.part6-gap-drop.part6-gap-inline .part6-gap-sentence,
+.part6-gap-drop.part6-gap-inline .part6-gap-clear {
+  display: none;
+}
+
+/* When a sentence is placed, show the letter badge + sentence inline */
+.part6-gap-drop.part6-gap-inline.part6-gap-has-value .part6-gap-label {
+  display: inline;
+  font-weight: 700;
+  font-size: 0.9em;
+  color: var(--accent);
+  margin-left: 0.2em;
+}
+.part6-gap-drop.part6-gap-inline.part6-gap-has-value .part6-gap-sentence {
+  display: inline;
+  font-style: italic;
+  font-size: 0.92em;
+  color: var(--ink);
+  margin-left: 0.2em;
+}
+.part6-gap-drop.part6-gap-inline.part6-gap-has-value .part6-gap-clear {
   display: inline-flex;
-  padding: 0.3rem 0.6rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  font-size: 0.75rem;
+  vertical-align: middle;
+  margin-left: 0.2em;
 }
 
-.part6-gap-num {
+.part6-gap-drop.part6-gap-inline .part6-gap-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  border: 2px dashed var(--accent);
+  border-radius: 4px;
+  background: rgba(0, 102, 204, 0.06);
   font-weight: 700;
-  font-size: 0.82rem;
+  font-size: 0.85em;
   color: var(--accent);
-  flex-shrink: 0;
-}
-
-.part6-gap-inline .part6-gap-label {
-  flex-shrink: 0;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--accent);
+  vertical-align: middle;
+  margin: 0 0.15em;
+  cursor: default;
 }
 
 .part6-gap-sentence {
@@ -816,24 +844,22 @@ body[data-current-part="6"] .main {
 }
 
 .part6-gap-inline .part6-gap-clear {
-  width: 1.2rem;
-  height: 1.2rem;
-  font-size: 0.85rem;
-  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  font-size: 0.75rem;
 }
 
-.part6-gap-inline .correct-answer-hint,
-.part6-gap-inline .answer-explanation {
-  display: block;
-  width: 100%;
-  font-size: 0.78rem;
-  margin-top: 0.15rem;
+.part6-gap-drop.part6-gap-inline .correct-answer-hint,
+.part6-gap-drop.part6-gap-inline .answer-explanation {
+  display: inline;
+  font-size: 0.82em;
+  margin-left: 0.3em;
 }
 
-.part6-gap-drop.part6-drop-over,
-.part6-gap-inline.part6-drop-over {
+.part6-gap-drop.part6-drop-over .part6-gap-num,
+.part6-gap-drop.part6-gap-inline.part6-drop-over .part6-gap-num {
   border-color: var(--accent);
-  background: rgba(0, 102, 204, 0.1);
+  background: rgba(0, 102, 204, 0.15);
 }
 
 .part6-gap-label {

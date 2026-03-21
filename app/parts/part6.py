@@ -73,7 +73,21 @@ def build_part6_text(item, check_result=None):
     out = []
     gap_i = 0
     gap_pattern = re.compile(r'(GAP[1-6])')
-    for para in item.get("paragraphs", []):
+    # Normalise old data where gaps are standalone array entries:
+    # merge them into the previous paragraph so they render inline.
+    raw = item.get("paragraphs", [])
+    paragraphs = []
+    gap_only = re.compile(r'^GAP[1-6]$')
+    for entry in raw:
+        entry = str(entry).strip()
+        if gap_only.match(entry):
+            if paragraphs:
+                paragraphs[-1] = paragraphs[-1] + ' ' + entry
+            else:
+                paragraphs.append(entry)
+        else:
+            paragraphs.append(entry)
+    for para in paragraphs:
         parts = gap_pattern.split(para)
         para_html = []
         for part in parts:
