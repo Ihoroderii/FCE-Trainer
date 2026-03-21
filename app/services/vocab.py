@@ -221,6 +221,24 @@ def delete_word(user_id: int, word_id: int) -> bool:
     return cur.rowcount > 0
 
 
+def retranslate_entry(user_id: int, word_id: int) -> dict | None:
+    """Re-translate word and sentence via MyMemory API. Returns {word_ru, sentence_ru} or None."""
+    with db_connection() as conn:
+        row = conn.execute(
+            "SELECT id, word, sentence FROM vocab_notebook WHERE id = ? AND user_id = ?",
+            (word_id, user_id),
+        ).fetchone()
+        if not row:
+            return None
+        word_ru, sentence_ru = translate_word_and_sentence(row["word"], row["sentence"] or "")
+        conn.execute(
+            "UPDATE vocab_notebook SET word_ru = ?, sentence_ru = ? WHERE id = ? AND user_id = ?",
+            (word_ru, sentence_ru, word_id, user_id),
+        )
+        conn.commit()
+    return {"word_ru": word_ru, "sentence_ru": sentence_ru}
+
+
 def update_translation(user_id: int, word_id: int, word_ru: str, sentence_ru: str) -> bool:
     """Manually update translations for a word."""
     with db_connection() as conn:

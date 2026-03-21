@@ -11,6 +11,7 @@ from app.services.vocab import (
     fetch_word_forms,
     get_word_count,
     get_words,
+    retranslate_entry,
     save_word,
     update_translation,
 )
@@ -142,6 +143,20 @@ def export_quizlet():
     resp.headers["Content-Type"] = "text/plain; charset=utf-8"
     resp.headers["Content-Disposition"] = "attachment; filename=fce_vocab_quizlet.txt"
     return resp
+
+
+@bp.route("/api/vocab/translate", methods=["POST"])
+@_api_login_required
+def api_translate_word():
+    user_id = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    word_id = data.get("id")
+    if not word_id:
+        return jsonify({"error": "No id provided"}), 400
+    result = retranslate_entry(user_id, int(word_id))
+    if result is None:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"ok": True, "word_ru": result["word_ru"], "sentence_ru": result["sentence_ru"]})
 
 
 @bp.route("/api/vocab/count")

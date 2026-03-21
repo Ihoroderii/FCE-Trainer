@@ -11,6 +11,7 @@
       <a href="{{ url_for('vocab.export_anki') }}" class="btn vocab-btn-anki" title="Download .tsv file for Anki import">📥 Export to Anki</a>
       <a href="{{ url_for('vocab.export_anki_zip_route') }}" class="btn vocab-btn-anki" title="Download .zip with audio for Anki">📥 Export to Anki + Audio</a>
       <a href="{{ url_for('vocab.export_quizlet') }}" class="btn vocab-btn-quizlet" title="Download .txt file for Quizlet import">📥 Export to Quizlet</a>
+      <button class="btn vocab-btn-translate-all" id="translateAll" title="Re-translate all words missing translations">🌐 Translate All</button>
       <button class="btn vocab-btn-refresh-all" id="refreshAllForms" title="Re-fetch word forms &amp; synonyms for all words">🔄 Refresh Forms</button>
       {% endif %}
     </div>
@@ -72,6 +73,7 @@
           <td class="vocab-td-part">{% if w.source_part %}<span class="vocab-part-badge">P{{ w.source_part }}</span>{% else %}—{% endif %}</td>
           <td class="vocab-td-date">{{ w.created_at[:10] if w.created_at else '' }}</td>
           <td class="vocab-td-actions">
+            <button class="vocab-btn-translate" data-id="{{ w.id }}" title="Re-translate">🌐</button>
             <button class="vocab-btn-delete" data-id="{{ w.id }}" title="Delete">✕</button>
           </td>
         </tr>
@@ -271,6 +273,69 @@
         }
       })
       .catch(function() { refreshAllBtn.textContent = '🔄 Refresh Forms'; refreshAllBtn.disabled = false; });
+    });
+  }
+
+  // Re-translate a single word
+  function translateWord(btn) {
+    var id = btn.dataset.id;
+    var row = btn.closest('.vocab-row');
+    var wordRuCell = row.querySelector('[data-field="word_ru"]');
+    var sentRuCell = row.querySelector('[data-field="sentence_ru"]');
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    return fetch('/api/vocab/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ id: parseInt(id) }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        wordRuCell.textContent = data.word_ru || '—';
+        sentRuCell.textContent = data.sentence_ru || '—';
+        btn.textContent = '🌐';
+        btn.disabled = false;
+      } else {
+        btn.textContent = '🌐';
+        btn.disabled = false;
+      }
+    })
+    .catch(function() { btn.textContent = '🌐'; btn.disabled = false; });
+  }
+  document.querySelectorAll('.vocab-btn-translate').forEach(function(btn) {
+    btn.addEventListener('click', function() { translateWord(this); });
+  });
+
+  // Translate All — iterate rows missing translations
+  var translateAllBtn = document.getElementById('translateAll');
+  if (translateAllBtn) {
+    translateAllBtn.addEventListener('click', function() {
+      var btns = [];
+      document.querySelectorAll('.vocab-btn-translate').forEach(function(btn) {
+        var row = btn.closest('.vocab-row');
+        var wordRu = row.querySelector('[data-field="word_ru"]').textContent.trim();
+        if (!wordRu || wordRu === '—') btns.push(btn);
+      });
+      if (!btns.length) {
+        translateAllBtn.textContent = '✓ All translated';
+        setTimeout(function() { translateAllBtn.textContent = '🌐 Translate All'; }, 1500);
+        return;
+      }
+      translateAllBtn.disabled = true;
+      translateAllBtn.textContent = '⏳ 0/' + btns.length;
+      var i = 0;
+      function next() {
+        if (i >= btns.length) {
+          translateAllBtn.textContent = '✓ Done (' + btns.length + ')';
+          translateAllBtn.disabled = false;
+          setTimeout(function() { translateAllBtn.textContent = '🌐 Translate All'; }, 2000);
+          return;
+        }
+        translateAllBtn.textContent = '⏳ ' + (i + 1) + '/' + btns.length;
+        translateWord(btns[i]).then(function() { i++; next(); });
+      }
+      next();
     });
   }
 })();
