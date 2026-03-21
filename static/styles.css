@@ -720,7 +720,7 @@ body[data-current-part="6"] .main {
 
 .part6-layout {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   margin-bottom: 1.25rem;
   width: 100%;
   min-height: 400px;
@@ -753,35 +753,25 @@ body[data-current-part="6"] .main {
 
 /* Gap drop zone — inline within paragraph text */
 .part6-gap-drop.part6-gap-inline {
-  display: inline;
+  display: inline-block;
   min-height: auto;
-  margin: 0;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: none;
-  flex-wrap: initial;
-  gap: 0;
+  margin: 0 0.1em;
+  padding: 0.1em 0.4em;
+  border: 2px dashed var(--accent);
+  border-radius: 5px;
+  background: rgba(0, 102, 204, 0.04);
   font-size: inherit;
   line-height: inherit;
   vertical-align: baseline;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .part6-gap-drop.part6-gap-inline .part6-gap-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.5em;
-  height: 1.5em;
-  border: 2px dashed var(--accent);
-  border-radius: 4px;
-  background: rgba(0, 102, 204, 0.06);
+  display: inline;
   font-weight: 700;
   font-size: 0.85em;
   color: var(--accent);
-  vertical-align: middle;
-  margin: 0 0.15em;
-  cursor: default;
+  margin-right: 0.2em;
 }
 
 /* Hide label/sentence/clear when no value — only the number badge shows */
@@ -792,19 +782,23 @@ body[data-current-part="6"] .main {
 }
 
 /* When a sentence is placed, show the letter badge + sentence inline */
+.part6-gap-drop.part6-gap-inline.part6-gap-has-value {
+  background: rgba(0, 102, 204, 0.07);
+  border-style: solid;
+}
 .part6-gap-drop.part6-gap-inline.part6-gap-has-value .part6-gap-label {
   display: inline;
   font-weight: 700;
   font-size: 0.9em;
   color: var(--accent);
-  margin-left: 0.2em;
+  margin-left: 0.15em;
 }
 .part6-gap-drop.part6-gap-inline.part6-gap-has-value .part6-gap-sentence {
   display: inline;
   font-style: italic;
   font-size: 0.92em;
   color: var(--ink);
-  margin-left: 0.2em;
+  margin-left: 0.25em;
 }
 .part6-gap-drop.part6-gap-inline.part6-gap-has-value .part6-gap-clear {
   display: inline-flex;
@@ -812,24 +806,7 @@ body[data-current-part="6"] .main {
   height: 1.1rem;
   font-size: 0.75rem;
   vertical-align: middle;
-  margin-left: 0.2em;
-}
-
-.part6-gap-drop.part6-gap-inline .part6-gap-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.5em;
-  height: 1.5em;
-  border: 2px dashed var(--accent);
-  border-radius: 4px;
-  background: rgba(0, 102, 204, 0.06);
-  font-weight: 700;
-  font-size: 0.85em;
-  color: var(--accent);
-  vertical-align: middle;
-  margin: 0 0.15em;
-  cursor: default;
+  margin-left: 0.25em;
 }
 
 .part6-gap-sentence {
@@ -856,10 +833,10 @@ body[data-current-part="6"] .main {
   margin-left: 0.3em;
 }
 
-.part6-gap-drop.part6-drop-over .part6-gap-num,
-.part6-gap-drop.part6-gap-inline.part6-drop-over .part6-gap-num {
+.part6-gap-drop.part6-drop-over,
+.part6-gap-drop.part6-gap-inline.part6-drop-over {
   border-color: var(--accent);
-  background: rgba(0, 102, 204, 0.15);
+  background: rgba(0, 102, 204, 0.12);
 }
 
 .part6-gap-label {
