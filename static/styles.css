@@ -765,12 +765,12 @@ body[data-current-part="6"] .main {
   gap: 0.5rem;
 }
 
-/* Gap drop zone between paragraphs — compact when empty, expands with sentence */
+/* Gap drop zone — inline within paragraph text */
 .part6-gap-inline {
   display: inline-flex;
   min-height: 1.6rem;
-  margin: 0.2rem 0;
-  padding: 0.25rem 0.6rem;
+  margin: 0.15rem 0;
+  padding: 0.2rem 0.5rem;
   border: 2px dashed var(--accent);
   border-radius: 6px;
   background: rgba(0, 102, 204, 0.03);
@@ -780,14 +780,14 @@ body[data-current-part="6"] .main {
   cursor: default;
   font-size: 0.88rem;
   line-height: 1.4;
-  transition: border-color 0.15s, background 0.15s, width 0.2s;
+  transition: border-color 0.15s, background 0.15s;
   vertical-align: middle;
 }
 
-/* When a sentence is placed, stretch to full width */
+/* When a sentence is placed, show as block within paragraph flow */
 .part6-gap-inline.part6-gap-has-value {
-  display: flex;
-  padding: 0.35rem 0.7rem;
+  display: inline-flex;
+  padding: 0.3rem 0.6rem;
 }
 
 .part6-gap-num {

@@ -203,8 +203,10 @@ Part 6 consists of:
 {level_instruction}
 - 7 sentences labeled A-G. Exactly 6 of these fit into the gaps (one per gap); one sentence is a distractor.
 
+IMPORTANT: Each gap replaces a sentence that was PART OF a paragraph, not a separate paragraph. A gap can appear at the beginning, middle, or end of a paragraph — wherever the removed sentence originally was. The text around the gap in the same paragraph must remain.
+
 Return ONLY a valid JSON object with these exact keys:
-- "paragraphs": an array of strings. Each string is either a paragraph or exactly "GAP1", "GAP2", "GAP3", "GAP4", "GAP5", "GAP6" where that gap appears.
+- "paragraphs": an array of strings. Each string is one paragraph. Embed the placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 directly within the paragraph text where a sentence was removed. For example: "The old house had many rooms. GAP1 Its walls were made of stone." or "GAP2 The garden stretched far beyond the fence." or "She left without saying a word. GAP3"
 - "sentences": an array of exactly 7 strings: the sentence for A, then B, then C, D, E, F, G. Give only the sentence text (no "A)" prefix).
 - "answers": an array of exactly 6 integers (0-6). answers[i] is the index into "sentences" (0=A, 1=B, ... 6=G) that correctly fills gap i+1.
 
