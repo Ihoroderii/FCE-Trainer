@@ -40,10 +40,18 @@ def _translate_en_ru(text: str) -> str:
         resp.raise_for_status()
         data = resp.json()
         translated = data.get("responseData", {}).get("translatedText", "")
-        if translated and translated.upper() != text.strip().upper():
-            logger.debug("Translated '%s' → '%s'", text.strip()[:60], translated[:60])
-            return translated
-        return ""
+        if not translated:
+            return ""
+        # Strip punctuation for comparison — API sometimes echoes input with a dot
+        clean_src = re.sub(r'[^\w\s]', '', text.strip()).upper()
+        clean_tgt = re.sub(r'[^\w\s]', '', translated).upper()
+        if clean_tgt == clean_src:
+            return ""  # API just echoed the input
+        # Check that the result actually contains Cyrillic characters
+        if not re.search(r'[\u0400-\u04FF]', translated):
+            return ""  # Not a Russian translation
+        logger.debug("Translated '%s' → '%s'", text.strip()[:60], translated[:60])
+        return translated
     except Exception:
         logger.warning("Translation failed for: %s", text[:60], exc_info=True)
         return ""
