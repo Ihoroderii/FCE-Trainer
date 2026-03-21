@@ -1,0 +1,202 @@
+{% extends "base_minimal.html" %}
+{% block title %}Collocations — Part 2{% endblock %}
+{% block content %}
+<div class="vocab-page">
+  <div class="vocab-header">
+    <h1 class="vocab-title">📝 Collocations (Part 2)</h1>
+    <p class="vocab-subtitle">Words you got wrong in Part 2 open cloze &mdash; with context sentences</p>
+    <div class="vocab-actions-top">
+      <a href="{{ url_for('home.home') }}" class="btn vocab-btn-back">&larr; Home</a>
+      {% if collocations %}
+      <a href="{{ url_for('vocab.export_collocations_anki') }}" class="btn vocab-btn-anki" title="Download .tsv file for Anki import">📥 Export to Anki</a>
+      <button class="btn vocab-btn-translate-all" id="translateAll" title="Auto-translate all untranslated entries">🌐 Translate All</button>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not collocations %}
+  <div class="vocab-empty">
+    <span class="vocab-empty-icon">📖</span>
+    <h2>No collocations yet</h2>
+    <p>Practice <strong>Part 2 (Open Cloze)</strong> and check your answers. Words you get wrong will appear here with their context sentences.</p>
+    <a href="{{ url_for('use_of_english.use_of_english', part=2) }}" class="btn vocab-btn-start">Go to Part 2 &rarr;</a>
+  </div>
+  {% else %}
+
+  <div class="vocab-stats-bar">
+    <span class="vocab-count">{{ collocations|length }} collocation{{ 's' if collocations|length != 1 else '' }}</span>
+  </div>
+
+  <div class="vocab-table-wrap">
+    <table class="vocab-table collocations-table">
+      <thead>
+        <tr>
+          <th class="vocab-th-num">#</th>
+          <th class="coll-th-word">Word</th>
+          <th class="coll-th-word-ru">Перевод</th>
+          <th class="coll-th-context">Context sentence</th>
+          <th class="coll-th-context-ru">Предложение</th>
+          <th class="coll-th-date">Date</th>
+          <th class="vocab-th-actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in collocations %}
+        <tr class="vocab-row coll-row" data-coll-id="{{ c.id }}">
+          <td class="vocab-td-num">{{ loop.index }}</td>
+          <td class="coll-td-word">
+            <strong>{{ c.word }}</strong>
+            <button class="vocab-btn-speak" data-word="{{ c.word }}" title="Pronounce">🔊</button>
+          </td>
+          <td class="coll-td-word-ru" data-field="word_ru">{{ c.word_ru or '—' }}</td>
+          <td class="coll-td-context">{{ c.context or '—' }}</td>
+          <td class="coll-td-context-ru" data-field="context_ru">{{ c.context_ru or '—' }}</td>
+          <td class="coll-td-date">{{ c.created_at[:10] if c.created_at else '' }}</td>
+          <td class="vocab-td-actions">
+            <button class="coll-btn-translate" data-id="{{ c.id }}" title="Translate">🌐</button>
+            <button class="vocab-btn-delete coll-btn-delete" data-id="{{ c.id }}" title="Delete">✕</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="vocab-help-section">
+    <h3>How to import into Anki</h3>
+    <ol>
+      <li>Click <strong>📥 Export to Anki</strong> to download a <code>.tsv</code> file.</li>
+      <li>Open Anki → File → Import → select the downloaded file.</li>
+      <li>Set separator to <strong>Tab</strong>, enable <strong>Allow HTML</strong>.</li>
+      <li>Map fields: Field 1 = Front, Field 2 = Back, Field 3 = Tags.</li>
+      <li>Click Import. Cards are tagged <code>fce_part2_collocations</code>.</li>
+    </ol>
+  </div>
+
+  {% endif %}
+</div>
+
+<script>
+(function() {
+  // Pronounce word
+  document.querySelectorAll('.vocab-btn-speak').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var word = this.dataset.word;
+      if (window.speechSynthesis && word) {
+        var u = new SpeechSynthesisUtterance(word);
+        u.lang = 'en-GB';
+        speechSynthesis.speak(u);
+      }
+    });
+  });
+
+  // Delete collocation
+  document.querySelectorAll('.coll-btn-delete').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = this.dataset.id;
+      var row = this.closest('tr');
+      if (!confirm('Delete this collocation?')) return;
+      fetch('/api/collocations/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+        body: JSON.stringify({id: parseInt(id)})
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) row.remove();
+      });
+    });
+  });
+
+  // Translate single collocation
+  document.querySelectorAll('.coll-btn-translate').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = this.dataset.id;
+      var row = this.closest('tr');
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = '⏳';
+      fetch('/api/collocations/translate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+        body: JSON.stringify({id: parseInt(id)})
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.word_ru) row.querySelector('.coll-td-word-ru').textContent = d.word_ru;
+        if (d.context_ru) row.querySelector('.coll-td-context-ru').textContent = d.context_ru;
+        btn.disabled = false;
+        btn.textContent = '🌐';
+      }).catch(function() { btn.disabled = false; btn.textContent = '🌐'; });
+    });
+  });
+
+  // Translate all untranslated
+  var translateAllBtn = document.getElementById('translateAll');
+  if (translateAllBtn) {
+    translateAllBtn.addEventListener('click', function() {
+      var rows = document.querySelectorAll('.coll-row');
+      var pending = [];
+      rows.forEach(function(row) {
+        var wordRu = row.querySelector('.coll-td-word-ru').textContent.trim();
+        if (wordRu === '—' || wordRu === '') {
+          pending.push(row);
+        }
+      });
+      if (pending.length === 0) { alert('All entries are already translated.'); return; }
+      translateAllBtn.disabled = true;
+      translateAllBtn.textContent = '⏳ Translating...';
+      var idx = 0;
+      function next() {
+        if (idx >= pending.length) {
+          translateAllBtn.disabled = false;
+          translateAllBtn.textContent = '🌐 Translate All';
+          return;
+        }
+        var row = pending[idx++];
+        var id = row.dataset.collId;
+        fetch('/api/collocations/translate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+          body: JSON.stringify({id: parseInt(id)})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d.word_ru) row.querySelector('.coll-td-word-ru').textContent = d.word_ru;
+          if (d.context_ru) row.querySelector('.coll-td-context-ru').textContent = d.context_ru;
+          next();
+        }).catch(function() { next(); });
+      }
+      next();
+    });
+  }
+
+  // Editable translation cells (double-click to edit)
+  document.querySelectorAll('.coll-td-word-ru, .coll-td-context-ru').forEach(function(cell) {
+    cell.addEventListener('dblclick', function() {
+      if (cell.querySelector('input')) return;
+      var currentVal = cell.textContent.trim();
+      if (currentVal === '—') currentVal = '';
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentVal;
+      input.className = 'vocab-edit-input';
+      cell.textContent = '';
+      cell.appendChild(input);
+      input.focus();
+      function save() {
+        var newVal = input.value.trim();
+        cell.textContent = newVal || '—';
+        var row = cell.closest('tr');
+        var id = row.dataset.collId;
+        var wordRu = row.querySelector('.coll-td-word-ru').textContent.trim();
+        var contextRu = row.querySelector('.coll-td-context-ru').textContent.trim();
+        if (wordRu === '—') wordRu = '';
+        if (contextRu === '—') contextRu = '';
+        fetch('/api/collocations/update', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || ''},
+          body: JSON.stringify({id: parseInt(id), word_ru: wordRu, context_ru: contextRu})
+        });
+      }
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+    });
+  });
+})();
+</script>
+{% endblock %}

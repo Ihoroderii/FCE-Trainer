@@ -1,4 +1,4 @@
-"""Vocabulary notebook routes — save, list, delete, export."""
+"""Vocabulary notebook & collocations routes — save, list, delete, export."""
 import logging
 
 from flask import Blueprint, jsonify, make_response, redirect, render_template, request, session, url_for
@@ -13,6 +13,14 @@ from app.services.vocab import (
     get_words,
     save_word,
     update_translation,
+)
+from app.services.word_repetition import (
+    delete_collocation,
+    export_collocations_anki_tsv,
+    get_collocation_count,
+    get_collocations,
+    translate_collocation,
+    update_collocation_translation,
 )
 from app.utils import login_required
 
@@ -174,3 +182,71 @@ def api_refresh_all_forms():
     from app.services.vocab import refresh_all_word_forms
     count = refresh_all_word_forms(user_id)
     return jsonify({"ok": True, "updated": count})
+
+
+# ---------------------------------------------------------------------------
+# Collocations (from Part 2)
+# ---------------------------------------------------------------------------
+
+@bp.route("/collocations")
+@login_required
+def collocations_page():
+    user_id = session["user_id"]
+    collocations = get_collocations(user_id)
+    return render_template("collocations.html", collocations=collocations)
+
+
+@bp.route("/api/collocations/delete", methods=["POST"])
+@_api_login_required
+def api_delete_collocation():
+    user_id = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    cid = data.get("id")
+    if not cid:
+        return jsonify({"error": "No id"}), 400
+    ok = delete_collocation(int(cid), user_id)
+    return jsonify({"ok": ok})
+
+
+@bp.route("/api/collocations/update", methods=["POST"])
+@_api_login_required
+def api_update_collocation():
+    user_id = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    cid = data.get("id")
+    if not cid:
+        return jsonify({"error": "No id"}), 400
+    word_ru = data.get("word_ru", "")
+    context_ru = data.get("context_ru", "")
+    ok = update_collocation_translation(int(cid), user_id, word_ru, context_ru)
+    return jsonify({"ok": ok})
+
+
+@bp.route("/api/collocations/translate", methods=["POST"])
+@_api_login_required
+def api_translate_collocation():
+    user_id = session["user_id"]
+    data = request.get_json(silent=True) or {}
+    cid = data.get("id")
+    if not cid:
+        return jsonify({"error": "No id"}), 400
+    result = translate_collocation(int(cid), user_id)
+    return jsonify(result)
+
+
+@bp.route("/collocations/export-anki")
+@login_required
+def export_collocations_anki():
+    user_id = session["user_id"]
+    tsv_content = export_collocations_anki_tsv(user_id)
+    resp = make_response(tsv_content)
+    resp.headers["Content-Type"] = "text/tab-separated-values; charset=utf-8"
+    resp.headers["Content-Disposition"] = "attachment; filename=fce_collocations_anki.tsv"
+    return resp
+
+
+@bp.route("/api/collocations/count")
+@_api_login_required
+def api_collocation_count():
+    user_id = session["user_id"]
+    return jsonify({"count": get_collocation_count(user_id)})

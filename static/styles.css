@@ -4130,3 +4130,74 @@ html.dark-mode .vocab-anki-note { color: #888; }
   .vocab-title { font-size: 1.4rem; }
   .vocab-popup { min-width: 220px; max-width: 300px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Collocations (Part 2) — extends vocab styles
+   ═══════════════════════════════════════════════════════════════════════════ */
+.home-section-collocations {
+  border-left: 4px solid #ff7043;
+}
+.home-section-collocations .home-section-icon {
+  color: #ff7043;
+}
+.collocations-table { table-layout: fixed; }
+.coll-th-word      { width: 12%; }
+.coll-th-word-ru   { width: 12%; }
+.coll-th-context    { width: 30%; }
+.coll-th-context-ru { width: 25%; }
+.coll-th-date       { width: 8%; }
+.coll-td-word { font-weight: 700; color: #333; }
+.coll-td-word-ru {
+  color: #7c4dff;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  word-break: break-word;
+}
+.coll-td-context {
+  font-style: italic;
+  color: #555;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  overflow: hidden;
+  word-break: break-word;
+}
+.coll-td-context-ru {
+  color: #888;
+  font-style: italic;
+  font-size: 0.85rem;
+  cursor: pointer;
+  overflow: hidden;
+  word-break: break-word;
+}
+.coll-td-word-ru:hover, .coll-td-context-ru:hover {
+  background: rgba(124,77,255,0.06);
+  border-radius: 4px;
+}
+.coll-btn-translate {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+}
+.coll-btn-translate:hover { background: rgba(124,77,255,0.08); }
+.vocab-btn-translate-all {
+  background: linear-gradient(135deg, #ff7043, #e64a19);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vocab-btn-translate-all:hover { opacity: 0.9; }
+html.dark-mode .coll-td-word { color: #eee; }
+html.dark-mode .coll-td-context { color: #bbb; }
+html.dark-mode .coll-td-context-ru { color: #999; }
+html.dark-mode .coll-btn-translate { border-color: #555; color: #aaa; }
+@media (max-width: 768px) {
+  .coll-th-context-ru, .coll-td-context-ru { display: none; }
+}

@@ -137,6 +137,18 @@ def record_check_result(result: dict) -> dict | None:
         except Exception:
             logging.getLogger("fce_trainer").warning("record_part3_word_results failed", exc_info=True)
 
+    # Per-word repetition + collocation tracking for Part 2
+    if part == 2:
+        try:
+            from app.services.word_repetition import record_part2_word_results, record_part2_collocations
+            p2_answers = result.get("answers") or []
+            p2_text = result.get("text") or ""
+            if p2_answers and details:
+                record_part2_word_results(details, p2_answers)
+                record_part2_collocations(details, p2_answers, p2_text)
+        except Exception:
+            logging.getLogger("fce_trainer").warning("record_part2_word_results failed", exc_info=True)
+
     return reward
 
 

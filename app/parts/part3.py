@@ -216,7 +216,7 @@ def check_part3(data, form):
     for i in range(8):
         user_val = (form.get(f"p3_{i}") or "").strip()
         expected = answers[i] if i < len(answers) else ""
-        correct = answers_match(user_val, expected)
+        correct = answers_match(user_val, expected, strict=True)
         if correct:
             score += 1
         details.append({"correct": correct, "user_val": user_val, "expected": expected})

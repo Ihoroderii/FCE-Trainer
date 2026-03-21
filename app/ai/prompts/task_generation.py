@@ -30,7 +30,7 @@ Return ONLY a valid JSON object with keys "text" and "gaps". No other text. Exam
 {{"text": "Some text with (1)_____ and (2)_____ ...", "gaps": [{{"options": ["a","b","c","d"], "correct": 0}}, ...]}}"""
 
 
-def get_task_prompt_part2(topic: str, level: str = "b2") -> str:
+def get_task_prompt_part2(topic: str, level: str = "b2", required_words: list[str] | None = None) -> str:
     level = (level or "b2").strip().lower()
     if level != "b2plus":
         level = "b2"
@@ -45,6 +45,16 @@ def get_task_prompt_part2(topic: str, level: str = "b2") -> str:
         level_instruction = (
             "- A short text (about 150-200 words) at B2 level. Standard FCE open-cloze difficulty."
         )
+
+    required_instruction = ""
+    if required_words:
+        words_str = ", ".join(w.lower() for w in required_words)
+        required_instruction = (
+            f"\n- REQUIRED WORDS: You MUST use these words as correct answers for some of the 8 gaps: {words_str}. "
+            f"Weave them naturally into the text so each appears as the answer to one gap. "
+            f"The remaining gaps can test any appropriate words."
+        )
+
     return f"""You are an FCE (B2 First) Use of English exam expert. Generate exactly ONE Part 2 (Open cloze) task.
 
 The text must be about this topic: {topic}. Use a different angle or situation (e.g. a personal story, a news-style piece, advice, or a description). Do NOT write about working from home or remote work unless the chosen topic is "work and careers" and you pick that angle.
@@ -52,7 +62,7 @@ The text must be about this topic: {topic}. Use a different angle or situation (
 Part 2 consists of:
 {level_instruction}
 - The text must contain exactly 8 gaps marked (1)_____, (2)_____, (3)_____, (4)_____, (5)_____, (6)_____, (7)_____, (8)_____ in order. Each gap needs ONE word (articles, prepositions, auxiliaries, pronouns, conjunctions, phrasal verb particles, linkers, etc.).
-- The 8 correct answers (one word per gap).
+- The 8 correct answers (one word per gap).{required_instruction}
 
 Return ONLY a valid JSON object with these exact keys:
 - "text": the full text with the exact placeholders (1)_____, (2)_____, ... (8)_____ where the gaps are. No other placeholder format.
