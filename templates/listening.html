@@ -44,7 +44,8 @@
   </div>
   {% else %}
   <div class="listening-no-audio">
-    <p>⚠ Audio not yet generated for this task.</p>
+    <p>⚠ Audio not yet generated for this task. Make sure <code>edge-tts</code> is installed (<code>pip install edge-tts</code>).</p>
+    <a href="{{ url_for('listening.listening', part=part, action='regenerate_audio') }}" class="btn btn-generate" style="margin-top:8px">🔄 Retry audio generation</a>
   </div>
   {% endif %}
 

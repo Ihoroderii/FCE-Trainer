@@ -23,6 +23,7 @@ from app.db import (
     pick_listening_task_id,
     record_listening_show,
     save_listening_task,
+    update_listening_audio_path,
 )
 from app.services.tts import generate_listening_audio
 from app.utils import extract_json_object
@@ -227,7 +228,32 @@ def get_or_create_listening_task(part: int, exclude_id: int | None = None) -> tu
         return None, None
 
     record_listening_show(part, task_id)
-    return get_listening_task(part, task_id), task_id
+    task = get_listening_task(part, task_id)
+
+    # Auto-retry audio generation for tasks saved without audio
+    if task and not task.get("audio_path"):
+        task = retry_audio_generation(part, task)
+
+    return task, task_id
+
+
+def retry_audio_generation(part: int, task: dict) -> dict:
+    """Try to generate audio for a task that was saved without it."""
+    collector = _SEGMENT_COLLECTORS.get(part)
+    if not collector or not task.get("data"):
+        return task
+    try:
+        segments = collector(task["data"])
+        import time
+        filename = f"listening_p{part}_{int(time.time())}"
+        audio_url = generate_listening_audio(segments, filename)
+        if audio_url:
+            update_listening_audio_path(part, task["id"], audio_url)
+            task["audio_path"] = audio_url
+            logger.info("Retry audio OK for listening part %d task %d", part, task["id"])
+    except Exception:
+        logger.exception("Retry audio failed for listening part %d task %d", part, task.get("id"))
+    return task
 
 
 # ── Check answers ────────────────────────────────────────────────────────────

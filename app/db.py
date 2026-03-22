@@ -723,6 +723,18 @@ def save_listening_task(part: int, data_json: str, audio_path: str | None) -> in
         return cur.lastrowid
 
 
+def update_listening_audio_path(part: int, task_id: int, audio_path: str) -> None:
+    schema = _LISTENING_DB_SCHEMA.get(part)
+    if not schema:
+        return
+    with db_connection() as conn:
+        conn.execute(
+            f"UPDATE {schema['table']} SET audio_path = ? WHERE id = ?",
+            (audio_path, task_id),
+        )
+        conn.commit()
+
+
 def get_task_by_id_for_part(part: int, task_id: int | None) -> dict[str, Any] | None:
     schema = _PART_DB_SCHEMA.get(part)
     if not schema or not task_id:

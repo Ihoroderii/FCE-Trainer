@@ -1,11 +1,11 @@
 """Text-to-Speech service — edge-tts (free, default) + OpenAI TTS (optional).
 
 Generates MP3 audio for listening exercises with multi-voice support.
+Uses raw MP3 byte concatenation (no pydub/audioop dependency).
 """
 from __future__ import annotations
 
 import asyncio
-import io
 import logging
 import os
 import re
@@ -32,6 +32,7 @@ OPENAI_VOICES = {
 }
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "listening"
+_SILENCE_PATH: Path | None = None  # cached silence MP3
 
 
 def _ensure_dir():
@@ -42,14 +43,32 @@ def _use_openai_tts() -> bool:
     return os.environ.get("OPENAI_TTS", "").lower() in ("1", "true", "yes")
 
 
-# ── Edge-TTS (free) ─────────────────────────────────────────────────────────
+# ── Silence generation (no pydub) ───────────────────────────────────────────
 
-async def _edge_tts_segment(text: str, voice: str, output_path: Path):
-    """Generate a single audio segment with edge-tts."""
+async def _generate_silence_edge(duration_ms: int = 1500) -> Path:
+    """Generate a short silence MP3 using edge-tts SSML <break> tag."""
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(str(output_path))
+    _ensure_dir()
+    silence_file = _STATIC_DIR / "_silence.mp3"
+    if silence_file.exists() and silence_file.stat().st_size > 0:
+        return silence_file
+    ssml = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-GB"><break time="{duration_ms}ms"/></speak>'
+    communicate = edge_tts.Communicate(ssml, EDGE_VOICES["narrator"])
+    await communicate.save(str(silence_file))
+    return silence_file
 
+
+def _concat_mp3_files(file_paths: list[Path], output_path: Path, silence_path: Path | None = None) -> bool:
+    """Concatenate MP3 files by appending raw bytes (MP3 is frame-based)."""
+    with open(output_path, "wb") as out:
+        for i, fp in enumerate(file_paths):
+            if i > 0 and silence_path and silence_path.exists():
+                out.write(silence_path.read_bytes())
+            out.write(fp.read_bytes())
+    return output_path.stat().st_size > 0
+
+
+# ── Edge-TTS (free) ─────────────────────────────────────────────────────────
 
 async def _edge_tts_multi(segments: list[dict], output_path: Path):
     """Generate multi-voice audio: list of {voice, text} dicts → single MP3."""
@@ -71,26 +90,17 @@ async def _edge_tts_multi(segments: list[dict], output_path: Path):
     if not temp_files:
         return False
 
-    # Concatenate segments with pydub
+    # Generate silence segment for gaps between speakers
+    silence_path = await _generate_silence_edge(1500)
+
     try:
-        from pydub import AudioSegment
-        combined = AudioSegment.empty()
-        # 1.5s silence between segments
-        silence = AudioSegment.silent(duration=1500)
-        for j, tmp in enumerate(temp_files):
-            seg_audio = AudioSegment.from_file(str(tmp), format="mp3")
-            if j > 0:
-                combined += silence
-            combined += seg_audio
-        combined.export(str(output_path), format="mp3")
+        return _concat_mp3_files(temp_files, output_path, silence_path)
     finally:
         for tmp in temp_files:
             try:
                 tmp.unlink(missing_ok=True)
             except Exception:
                 pass
-
-    return True
 
 
 def generate_audio_edge(segments: list[dict], output_path: Path) -> bool:
@@ -117,11 +127,8 @@ def generate_audio_openai(segments: list[dict], output_path: Path) -> bool:
         client = OpenAI(api_key=api_key)
         model = os.environ.get("OPENAI_TTS_MODEL", "tts-1-hd")
 
-        from pydub import AudioSegment
-        combined = AudioSegment.empty()
-        silence = AudioSegment.silent(duration=1500)
-
         _ensure_dir()
+        temp_files = []
         for i, seg in enumerate(segments):
             voice = OPENAI_VOICES.get(seg.get("voice", "narrator"), OPENAI_VOICES["narrator"])
             text = seg.get("text", "").strip()
@@ -132,19 +139,28 @@ def generate_audio_openai(segments: list[dict], output_path: Path) -> bool:
                 model=model, voice=voice, input=text[:4096],
             ) as response:
                 response.stream_to_file(str(tmp))
-            seg_audio = AudioSegment.from_file(str(tmp), format="mp3")
-            if i > 0:
-                combined += silence
-            combined += seg_audio
-            try:
-                tmp.unlink(missing_ok=True)
-            except Exception:
-                pass
+            temp_files.append(tmp)
 
-        if len(combined) == 0:
+        if not temp_files:
             return False
-        combined.export(str(output_path), format="mp3")
-        return True
+
+        # Generate a tiny silence via edge-tts if available, else just concat without gaps
+        silence_path = None
+        try:
+            loop = asyncio.new_event_loop()
+            silence_path = loop.run_until_complete(_generate_silence_edge(1500))
+            loop.close()
+        except Exception:
+            pass  # edge-tts not available — concat without silence
+
+        try:
+            return _concat_mp3_files(temp_files, output_path, silence_path)
+        finally:
+            for tmp in temp_files:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except Exception:
+                    pass
     except Exception:
         logger.exception("OpenAI TTS audio generation failed")
         return False
