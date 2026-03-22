@@ -263,6 +263,21 @@ def _ensure_part2_word_repetition_tables():
     _run_migration("add_part2_collocations_table", _migrate_part2_collocations_table)
 
 
+def _ensure_user_settings_table():
+    _run_migration("add_user_settings_table", _migrate_user_settings_table)
+
+
+def _migrate_user_settings_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id    INTEGER PRIMARY KEY REFERENCES users(id),
+            target_lang TEXT NOT NULL DEFAULT 'ru',
+            translator  TEXT NOT NULL DEFAULT 'google',
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+
 # --- Migration infrastructure ---
 
 def _run_migration(name: str, fn):
