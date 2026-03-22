@@ -224,8 +224,31 @@ def generate_audio_openai(segments: list[dict], output_path: Path) -> bool:
 
 # ── ElevenLabs TTS ───────────────────────────────────────────────────────────
 
+def _merge_segments(segments: list[dict]) -> list[dict]:
+    """Merge consecutive segments that share the same voice into one.
+
+    This reduces the number of API calls (avoids rate-limiting) and produces
+    more natural-sounding speech.
+    """
+    if not segments:
+        return []
+    merged: list[dict] = []
+    for seg in segments:
+        role = seg.get("voice", "narrator")
+        text = seg.get("text", "").strip()
+        if not text:
+            continue
+        if merged and merged[-1]["voice"] == role:
+            merged[-1]["text"] += " " + text
+        else:
+            merged.append({"voice": role, "text": text})
+    return merged
+
+
 def generate_audio_elevenlabs(segments: list[dict], output_path: Path) -> bool:
     """Generate multi-voice audio using ElevenLabs API. Returns True on success."""
+    import time
+
     try:
         import requests as _requests
 
@@ -236,14 +259,17 @@ def generate_audio_elevenlabs(segments: list[dict], output_path: Path) -> bool:
 
         model_id = os.environ.get("ELEVENLABS_MODEL", "eleven_turbo_v2_5")
 
+        # Merge consecutive same-voice segments to reduce API calls
+        merged = _merge_segments(segments)
+        logger.info("ElevenLabs: %d raw segments → %d merged chunks", len(segments), len(merged))
+
         _ensure_dir()
         temp_files = []
-        for i, seg in enumerate(segments):
-            role = seg.get("voice", "narrator")
+        errors = 0
+        for i, seg in enumerate(merged):
+            role = seg["voice"]
             voice_id = ELEVENLABS_VOICES.get(role, ELEVENLABS_VOICES["narrator"])
-            text = seg.get("text", "").strip()
-            if not text:
-                continue
+            text = seg["text"]
 
             url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
             headers = {
@@ -252,7 +278,7 @@ def generate_audio_elevenlabs(segments: list[dict], output_path: Path) -> bool:
                 "Accept": "audio/mpeg",
             }
             payload = {
-                "text": text,
+                "text": text[:5000],
                 "model_id": model_id,
                 "voice_settings": {
                     "stability": 0.5,
@@ -261,15 +287,37 @@ def generate_audio_elevenlabs(segments: list[dict], output_path: Path) -> bool:
                     "use_speaker_boost": True,
                 },
             }
-            resp = _requests.post(url, json=payload, headers=headers, timeout=60)
+
+            # Respect rate limits — pause between requests
+            if i > 0:
+                time.sleep(1.0)
+
+            resp = _requests.post(url, json=payload, headers=headers, timeout=120)
             if resp.status_code != 200:
-                logger.error("ElevenLabs API error %d: %s", resp.status_code, resp.text[:200])
-                continue
+                errors += 1
+                logger.error(
+                    "ElevenLabs API error on chunk %d/%d (voice=%s, %d chars): HTTP %d — %s",
+                    i + 1, len(merged), role, len(text), resp.status_code, resp.text[:500],
+                )
+                # On rate limit (429), wait longer and retry once
+                if resp.status_code == 429:
+                    wait = 5.0
+                    logger.info("Rate limited — waiting %.0fs and retrying chunk %d", wait, i + 1)
+                    time.sleep(wait)
+                    resp = _requests.post(url, json=payload, headers=headers, timeout=120)
+                    if resp.status_code == 200:
+                        errors -= 1  # recovered
+                    else:
+                        logger.error("Retry failed for chunk %d: HTTP %d", i + 1, resp.status_code)
+                        continue
+                else:
+                    continue
 
             tmp = output_path.parent / f"_tmp_el_{output_path.stem}_{i}.mp3"
             tmp.write_bytes(resp.content)
             temp_files.append(tmp)
 
+        logger.info("ElevenLabs: %d/%d chunks succeeded", len(temp_files), len(merged))
         if not temp_files:
             return False
         try:
