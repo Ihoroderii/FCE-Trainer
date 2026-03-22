@@ -42,6 +42,10 @@ def generate_part2_with_openai(level="b2"):
         return None
     topic = random.choice(PART2_TOPICS)
 
+    # RAG: retrieve similar examples for style reference
+    from app.rag.helpers import get_rag_examples_text
+    ref_examples = get_rag_examples_text(part=2, topic=topic)
+
     # Fetch words the user previously got wrong that are due for repetition
     required_words = []
     try:
@@ -51,7 +55,7 @@ def generate_part2_with_openai(level="b2"):
     except Exception:
         logger.debug("get_due_words_part2 failed, generating without required words", exc_info=True)
 
-    prompt = get_task_prompt_part2(topic, level, required_words=required_words)
+    prompt = get_task_prompt_part2(topic, level, required_words=required_words, ref_examples=ref_examples)
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()

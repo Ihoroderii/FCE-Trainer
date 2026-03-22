@@ -9,6 +9,7 @@ from flask_wtf.csrf import CSRFProtect
 
 from app.config import PARTS_RANGE
 from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_check_history_created_index, _ensure_spaced_repetition_table, _ensure_orphaned_stats_claimed, _ensure_vocab_notebook_table, _ensure_vocab_word_forms_column, _ensure_part3_word_repetition_table, _ensure_part2_word_repetition_tables, _ensure_user_settings_table, _ensure_listening_tables
+from app.rag.store import ensure_rag_tables
 from app.views.home import bp as home_bp
 from app.views.use_of_english import bp as uoe_bp
 from app.views.writing import bp as writing_bp
@@ -122,6 +123,7 @@ def create_app(config=None):
         _ensure_part2_word_repetition_tables()
         _ensure_user_settings_table()
         _ensure_listening_tables()
+        ensure_rag_tables()
         seed_db()
         logger.debug("Database ready")
 

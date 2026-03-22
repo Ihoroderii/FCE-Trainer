@@ -21,7 +21,9 @@ def generate_part6_with_openai(level="b2"):
     if not ai_available:
         return None
     topic = random.choice(PART6_TOPICS)
-    prompt = get_task_prompt_part6(topic, level=level)
+    from app.rag.helpers import get_rag_examples_text
+    ref_examples = get_rag_examples_text(part=6, topic=topic)
+    prompt = get_task_prompt_part6(topic, level=level, ref_examples=ref_examples)
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()

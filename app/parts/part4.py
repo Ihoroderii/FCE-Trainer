@@ -80,7 +80,10 @@ def _generate_tasks_with_openai(count: int, level: str = "b2plus", recent_gramma
         need = count - len(result)
         if need <= 0:
             break
-        prompt = get_task_prompt_part4(need, level, recent_avoid)
+        # RAG: retrieve similar examples for style reference
+        from app.rag.helpers import get_rag_examples_text
+        ref_examples = get_rag_examples_text(part=4)
+        prompt = get_task_prompt_part4(need, level, recent_avoid, ref_examples=ref_examples)
         try:
             comp = chat_create([{"role": "user", "content": prompt}], temperature=0.8)
             content = (comp.choices[0].message.content or "").strip()

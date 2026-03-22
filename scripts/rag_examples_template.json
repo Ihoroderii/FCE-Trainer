@@ -1,0 +1,79 @@
+[
+  {
+    "paper": "use_of_english",
+    "part": 1,
+    "task_type": "multiple_choice_cloze",
+    "topic": "sample topic",
+    "level": "b2",
+    "prompt_text": "PASTE THE FULL EXAM TASK TEXT HERE — including the passage with (1)_____ gaps and the multiple-choice options A/B/C/D for each gap.",
+    "metadata": {
+      "source": "Cambridge B2 First Practice Test X"
+    }
+  },
+  {
+    "paper": "use_of_english",
+    "part": 2,
+    "task_type": "open_cloze",
+    "topic": "sample topic",
+    "level": "b2",
+    "prompt_text": "PASTE THE FULL OPEN CLOZE TASK TEXT HERE — the passage with (1)_____ through (8)_____ gaps.",
+    "metadata": {
+      "source": "Cambridge B2 First Practice Test X"
+    }
+  },
+  {
+    "paper": "use_of_english",
+    "part": 3,
+    "task_type": "word_formation",
+    "topic": "sample topic",
+    "level": "b2",
+    "prompt_text": "PASTE THE FULL WORD FORMATION TASK — passage with gaps and STEM words in CAPITALS.",
+    "metadata": {
+      "source": "Cambridge B2 First Practice Test X"
+    }
+  },
+  {
+    "paper": "use_of_english",
+    "part": 4,
+    "task_type": "key_word_transformation",
+    "topic": "",
+    "level": "b2",
+    "prompt_text": "1. I regret not studying harder for the exam.\nHARDER\nI wish _____ for the exam.\nAnswer: I had studied harder\n\n2. 'Don't touch the wet paint,' he said.\nWARNED\nHe _____ the wet paint.\nAnswer: warned us not to touch",
+    "metadata": {
+      "source": "Cambridge B2 First Practice Test X"
+    }
+  },
+  {
+    "paper": "reading",
+    "part": 5,
+    "task_type": "multiple_choice",
+    "topic": "sample topic",
+    "level": "b2",
+    "prompt_text": "PASTE THE FULL READING PASSAGE + 6 MULTIPLE CHOICE QUESTIONS with options A-D.",
+    "metadata": {
+      "source": "Cambridge B2 First Practice Test X"
+    }
+  },
+  {
+    "paper": "reading",
+    "part": 6,
+    "task_type": "gapped_text",
+    "topic": "sample topic",
+    "level": "b2",
+    "prompt_text": "PASTE THE FULL GAPPED TEXT TASK — passage with 6 gaps + 7 sentences A-G.",
+    "metadata": {
+      "source": "Cambridge B2 First Practice Test X"
+    }
+  },
+  {
+    "paper": "reading",
+    "part": 7,
+    "task_type": "multiple_matching",
+    "topic": "sample topic",
+    "level": "b2",
+    "prompt_text": "PASTE THE FULL MULTIPLE MATCHING TASK — text sections A-F + 10 statements to match.",
+    "metadata": {
+      "source": "Cambridge B2 First Practice Test X"
+    }
+  }
+]

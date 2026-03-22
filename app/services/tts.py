@@ -245,8 +245,22 @@ def _merge_segments(segments: list[dict]) -> list[dict]:
     return merged
 
 
+def _edge_tts_single(text: str, voice: str, output_path: Path) -> bool:
+    """Generate a single segment with edge-tts (fallback for failed ElevenLabs chunks)."""
+    try:
+        import edge_tts
+        loop = asyncio.new_event_loop()
+        communicate = edge_tts.Communicate(text, voice)
+        loop.run_until_complete(communicate.save(str(output_path)))
+        loop.close()
+        return output_path.exists() and output_path.stat().st_size > 100
+    except Exception:
+        logger.exception("edge-tts fallback failed for %s", output_path.name)
+        return False
+
+
 def generate_audio_elevenlabs(segments: list[dict], output_path: Path) -> bool:
-    """Generate multi-voice audio using ElevenLabs API. Returns True on success."""
+    """Generate multi-voice audio using ElevenLabs API with edge-tts fallback."""
     import time
 
     try:
@@ -257,7 +271,7 @@ def generate_audio_elevenlabs(segments: list[dict], output_path: Path) -> bool:
             logger.error("ELEVENLABS_API_KEY not set")
             return False
 
-        model_id = os.environ.get("ELEVENLABS_MODEL", "eleven_turbo_v2_5")
+        model_id = os.environ.get("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 
         # Merge consecutive same-voice segments to reduce API calls
         merged = _merge_segments(segments)
@@ -265,6 +279,7 @@ def generate_audio_elevenlabs(segments: list[dict], output_path: Path) -> bool:
 
         _ensure_dir()
         temp_files = []
+        gen_log = []  # debug log saved next to audio
         errors = 0
         for i, seg in enumerate(merged):
             role = seg["voice"]
@@ -290,34 +305,51 @@ def generate_audio_elevenlabs(segments: list[dict], output_path: Path) -> bool:
 
             # Respect rate limits — pause between requests
             if i > 0:
-                time.sleep(1.0)
+                time.sleep(1.5)
 
             resp = _requests.post(url, json=payload, headers=headers, timeout=120)
-            if resp.status_code != 200:
+
+            # On rate limit (429), wait and retry once
+            if resp.status_code == 429:
+                wait = 8.0
+                logger.info("Rate limited — waiting %.0fs and retrying chunk %d/%d", wait, i + 1, len(merged))
+                gen_log.append(f"[{i}] {role}: 429 rate limited, retrying after {wait}s")
+                time.sleep(wait)
+                resp = _requests.post(url, json=payload, headers=headers, timeout=120)
+
+            if resp.status_code == 200:
+                tmp = output_path.parent / f"_tmp_el_{output_path.stem}_{i}.mp3"
+                tmp.write_bytes(resp.content)
+                temp_files.append(tmp)
+                gen_log.append(f"[{i}] {role}: OK (ElevenLabs, {len(text)} chars, {len(resp.content)} bytes)")
+            else:
                 errors += 1
+                err_msg = resp.text[:500]
                 logger.error(
-                    "ElevenLabs API error on chunk %d/%d (voice=%s, %d chars): HTTP %d — %s",
-                    i + 1, len(merged), role, len(text), resp.status_code, resp.text[:500],
+                    "ElevenLabs chunk %d/%d failed (voice=%s, %d chars): HTTP %d — %s",
+                    i + 1, len(merged), role, len(text), resp.status_code, err_msg,
                 )
-                # On rate limit (429), wait longer and retry once
-                if resp.status_code == 429:
-                    wait = 5.0
-                    logger.info("Rate limited — waiting %.0fs and retrying chunk %d", wait, i + 1)
-                    time.sleep(wait)
-                    resp = _requests.post(url, json=payload, headers=headers, timeout=120)
-                    if resp.status_code == 200:
-                        errors -= 1  # recovered
-                    else:
-                        logger.error("Retry failed for chunk %d: HTTP %d", i + 1, resp.status_code)
-                        continue
+                gen_log.append(f"[{i}] {role}: FAILED HTTP {resp.status_code} — {err_msg[:200]}")
+
+                # Fall back to edge-tts for this chunk
+                edge_voice = EDGE_VOICES.get(role, EDGE_VOICES["narrator"])
+                tmp = output_path.parent / f"_tmp_el_{output_path.stem}_{i}.mp3"
+                if _edge_tts_single(text, edge_voice, tmp):
+                    temp_files.append(tmp)
+                    gen_log.append(f"[{i}] {role}: OK (edge-tts fallback)")
+                    logger.info("Chunk %d recovered via edge-tts fallback", i + 1)
                 else:
-                    continue
+                    gen_log.append(f"[{i}] {role}: edge-tts fallback ALSO failed")
 
-            tmp = output_path.parent / f"_tmp_el_{output_path.stem}_{i}.mp3"
-            tmp.write_bytes(resp.content)
-            temp_files.append(tmp)
+        logger.info("ElevenLabs: %d/%d chunks produced audio (%d errors)", len(temp_files), len(merged), errors)
 
-        logger.info("ElevenLabs: %d/%d chunks succeeded", len(temp_files), len(merged))
+        # Save generation log for debugging (accessible via browser)
+        try:
+            log_path = output_path.with_suffix(".gen_log.txt")
+            log_path.write_text("\n".join(gen_log), encoding="utf-8")
+        except Exception:
+            pass
+
         if not temp_files:
             return False
         try:

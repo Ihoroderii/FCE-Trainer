@@ -17,10 +17,11 @@ from app.utils import e as _e, answers_match, extract_json_object, validate_part
 logger = logging.getLogger("fce_trainer")
 
 
-def generate_part3_with_openai(level="b2"):
-    if not ai_available:
-        return None
     topic = random.choice(PART3_TOPICS)
+
+    # RAG: retrieve similar examples for style reference
+    from app.rag.helpers import get_rag_examples_text
+    ref_examples = get_rag_examples_text(part=3, topic=topic)
 
     # Fetch stems the user previously got wrong that are due for repetition
     required_stems = []
@@ -31,7 +32,7 @@ def generate_part3_with_openai(level="b2"):
     except Exception:
         logger.debug("get_due_stems failed, generating without required stems", exc_info=True)
 
-    prompt = get_task_prompt_part3(topic, level, required_stems=required_stems)
+    prompt = get_task_prompt_part3(topic, level, required_stems=required_stems, ref_examples=ref_examples)
     max_unchanged = 1
     for attempt in range(3):
         try:
