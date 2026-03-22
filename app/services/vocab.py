@@ -25,35 +25,21 @@ _DICT_TIMEOUT = 5  # seconds
 # ── Translation ──────────────────────────────────────────────────────────────
 
 def _translate_en_ru(text: str) -> str:
-    """Translate English → Russian via MyMemory free API.
+    """Translate English → Russian via Google Translate (deep-translator).
 
     Returns translated text, or empty string on failure.
     """
     if not text or not text.strip():
         return ""
     try:
-        resp = requests.get(
-            _MYMEMORY_URL,
-            params={"q": text.strip()[:500], "langpair": "en|ru"},
-            timeout=_TRANSLATION_TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        translated = data.get("responseData", {}).get("translatedText", "")
+        from deep_translator import GoogleTranslator
+        translated = GoogleTranslator(source='en', target='ru').translate(text.strip()[:500])
         if not translated:
             return ""
-        # Strip punctuation for comparison — API sometimes echoes input with a dot
-        clean_src = re.sub(r'[^\w\s]', '', text.strip()).upper()
-        clean_tgt = re.sub(r'[^\w\s]', '', translated).upper()
-        if clean_tgt == clean_src:
-            return ""  # API just echoed the input
-        # Check that the result actually contains Cyrillic characters
-        if not re.search(r'[\u0400-\u04FF]', translated):
-            return ""  # Not a Russian translation
-        logger.debug("Translated '%s' → '%s'", text.strip()[:60], translated[:60])
+        logger.debug("Google translated '%s' → '%s'", text.strip()[:60], translated[:60])
         return translated
     except Exception:
-        logger.warning("Translation failed for: %s", text[:60], exc_info=True)
+        logger.warning("Google translation failed for: %s", text[:60], exc_info=True)
         return ""
 
 
@@ -85,12 +71,12 @@ def _translate_en_ru_ai(word: str, sentence: str) -> tuple[str, str]:
 
 
 def translate_word_and_sentence(word: str, sentence: str) -> tuple[str, str]:
-    """Return (word_ru, sentence_ru). Tries MyMemory first, falls back to AI."""
+    """Return (word_ru, sentence_ru). Tries Google Translate first, falls back to AI."""
     word_ru = _translate_en_ru(word)
     sentence_ru = _translate_en_ru(sentence) if sentence else ""
-    # Fallback to AI if MyMemory failed for the word
+    # Fallback to AI if Google Translate failed for the word
     if not word_ru:
-        logger.info("MyMemory failed for '%s', trying AI fallback", word[:30])
+        logger.info("Google Translate failed for '%s', trying AI fallback", word[:30])
         ai_word_ru, ai_sentence_ru = _translate_en_ru_ai(word, sentence)
         word_ru = ai_word_ru
         if not sentence_ru and ai_sentence_ru:
