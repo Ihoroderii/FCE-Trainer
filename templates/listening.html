@@ -152,6 +152,37 @@
     </div>
     {% endif %}
 
+    {# ── Transcript (shown after checking answers) ── #}
+    {% if check_result %}
+    <div class="listening-transcript-wrap">
+      <button type="button" class="btn btn-transcript-toggle" id="btn-transcript-toggle">📜 Show transcript</button>
+      <a href="{{ url_for('listening.listening_transcript', part=part) }}" class="btn btn-generate" download>💾 Download .txt</a>
+      <div class="listening-transcript" id="listening-transcript" style="display:none">
+        {% if part == 1 %}
+          {% for ex in task.data.extracts %}
+          <div class="transcript-block">
+            <p class="transcript-intro"><strong>Extract {{ loop.index }}.</strong> <em>{{ ex.intro }}</em></p>
+            {% for seg in ex.script %}
+            <p><span class="transcript-voice">{{ seg.voice }}:</span> {{ seg.text }}</p>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        {% elif part == 3 %}
+          {% for sp in task.data.speakers %}
+          <div class="transcript-block">
+            <p class="transcript-intro"><strong>Speaker {{ loop.index }}</strong></p>
+            <p><span class="transcript-voice">{{ sp.voice }}:</span> {{ sp.text }}</p>
+          </div>
+          {% endfor %}
+        {% else %}
+          {% for seg in task.data.script %}
+          <p><span class="transcript-voice">{{ seg.voice }}:</span> {{ seg.text }}</p>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
     {# ── Action buttons ── #}
     <div class="listening-actions">
       {% if not check_result %}
@@ -164,4 +195,17 @@
   {% endif %}
 </div>
 <script src="{{ url_for('static', filename='listening.js') }}?v=1"></script>
+<script>
+(function(){
+  var btn = document.getElementById('btn-transcript-toggle');
+  var panel = document.getElementById('listening-transcript');
+  if (btn && panel) {
+    btn.addEventListener('click', function() {
+      var hidden = panel.style.display === 'none';
+      panel.style.display = hidden ? 'block' : 'none';
+      btn.textContent = hidden ? '📜 Hide transcript' : '📜 Show transcript';
+    });
+  }
+})();
+</script>
 {% endblock %}

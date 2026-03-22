@@ -4504,6 +4504,53 @@ html.dark-mode .coll-btn-translate { border-color: #555; color: #aaa; }
 }
 .btn-generate:hover { background: #eee; color: #333; }
 
+/* Transcript */
+.listening-transcript-wrap {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+.btn-transcript-toggle {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-transcript-toggle:hover { opacity: 0.9; }
+.listening-transcript {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: #f9f9fc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+.transcript-block {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.transcript-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.transcript-intro { color: #555; font-size: 0.88rem; margin-bottom: 0.3rem; }
+.transcript-voice {
+  font-weight: 700;
+  color: #667eea;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+html.dark-mode .listening-transcript { background: #23233a; }
+html.dark-mode .transcript-intro { color: #aaa; }
+html.dark-mode .transcript-voice { color: #90caf9; }
+
 /* Empty state */
 .listening-empty {
   text-align: center;

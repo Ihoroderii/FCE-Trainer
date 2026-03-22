@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+from pathlib import Path
 
 from app.ai import chat_create, ai_available
 from app.ai.prompts.listening_generation import (
@@ -145,6 +146,56 @@ _SEGMENT_COLLECTORS = {
     4: _collect_segments_part4,
 }
 
+# ── Transcript file ──────────────────────────────────────────────────────────
+
+_TRANSCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "transcripts"
+
+
+def _save_transcript(part: int, task_id: int, data: dict) -> None:
+    """Save a plain-text transcript to static/transcripts/."""
+    try:
+        _TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        lines = [f"FCE Listening — Part {part}  (task #{task_id})\n"]
+        if part == 1:
+            for i, ex in enumerate(data.get("extracts", [])):
+                lines.append(f"\n--- Extract {i + 1} ---")
+                lines.append(ex.get("intro", ""))
+                for seg in ex.get("script", []):
+                    lines.append(f"[{seg.get('voice', '')}] {seg.get('text', '')}")
+                lines.append(f"\nQ: {ex.get('question', '')}")
+                for j, opt in enumerate(ex.get("options", [])):
+                    mark = " ✓" if j == ex.get("correct") else ""
+                    lines.append(f"  {'ABC'[j]}) {opt}{mark}")
+        elif part == 2:
+            for seg in data.get("script", []):
+                lines.append(f"[{seg.get('voice', '')}] {seg.get('text', '')}")
+            lines.append("\n--- Sentences ---")
+            for i, s in enumerate(data.get("sentences", [])):
+                lines.append(f"{i + 1}. {s.get('text', '')}  →  {s.get('answer', '')}")
+        elif part == 3:
+            for i, sp in enumerate(data.get("speakers", [])):
+                lines.append(f"\n--- Speaker {i + 1} ---")
+                lines.append(f"[{sp.get('voice', '')}] {sp.get('text', '')}")
+            lines.append("\n--- Statements ---")
+            for st in data.get("statements", []):
+                lines.append(f"  {st}")
+            lines.append(f"\nAnswers: {data.get('answers', [])}")
+        elif part == 4:
+            for seg in data.get("script", []):
+                lines.append(f"[{seg.get('voice', '')}] {seg.get('text', '')}")
+            lines.append("\n--- Questions ---")
+            for i, q in enumerate(data.get("questions", [])):
+                lines.append(f"\n{i + 1}. {q.get('text', '')}")
+                for j, opt in enumerate(q.get("options", [])):
+                    mark = " ✓" if j == q.get("correct") else ""
+                    lines.append(f"  {'ABC'[j]}) {opt}{mark}")
+
+        path = _TRANSCRIPTS_DIR / f"listening_p{part}_{task_id}.txt"
+        path.write_text("\n".join(lines), encoding="utf-8")
+        logger.info("Transcript saved: %s", path)
+    except Exception:
+        logger.warning("Failed to save transcript", exc_info=True)
+
 
 # ── Generate ─────────────────────────────────────────────────────────────────
 
@@ -190,6 +241,7 @@ def generate_listening_task(part: int) -> dict | None:
         task_id = save_listening_task(part, data_json, audio_url)
 
         if task_id:
+            _save_transcript(part, task_id, data)
             return {"id": task_id, "data": data, "audio_path": audio_url, "source": "openai"}
         return None
 

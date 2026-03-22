@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, redirect, render_template, request, session, url_for
 
 from app.config import LISTENING_HISTORY_PARTS, LISTENING_PARTS_RANGE, LISTENING_QUESTION_COUNTS
 from app.parts.listening import (
@@ -86,6 +86,43 @@ def listening():
         parts_range=LISTENING_PARTS_RANGE,
         part_names=_PART_NAMES,
         check_result=check_result,
+    )
+
+
+@bp.route("/listening/transcript")
+def listening_transcript():
+    """Download the transcript of the current listening task as a .txt file."""
+    part = request.args.get("part", 1, type=int)
+    if part not in LISTENING_PARTS_RANGE:
+        return redirect(url_for("listening.listening"))
+
+    tid = session.get(_session_key(part))
+    task = get_listening_task(part, tid) if tid else None
+    if not task:
+        return redirect(url_for("listening.listening", part=part))
+
+    data = task["data"]
+    lines = [f"FCE Listening — Part {part}: {_PART_NAMES.get(part, '')}\n"]
+
+    if part == 1:
+        for i, ex in enumerate(data.get("extracts", [])):
+            lines.append(f"\n--- Extract {i + 1} ---")
+            lines.append(ex.get("intro", ""))
+            for seg in ex.get("script", []):
+                lines.append(f"[{seg.get('voice', '')}] {seg.get('text', '')}")
+    elif part == 3:
+        for i, sp in enumerate(data.get("speakers", [])):
+            lines.append(f"\n--- Speaker {i + 1} ---")
+            lines.append(f"[{sp.get('voice', '')}] {sp.get('text', '')}")
+    else:
+        for seg in data.get("script", []):
+            lines.append(f"[{seg.get('voice', '')}] {seg.get('text', '')}")
+
+    text = "\n".join(lines)
+    return Response(
+        text,
+        mimetype="text/plain",
+        headers={"Content-Disposition": f"attachment; filename=listening_part{part}_transcript.txt"},
     )
 
 
