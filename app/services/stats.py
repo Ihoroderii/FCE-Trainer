@@ -6,7 +6,7 @@ from datetime import datetime
 
 from flask import session
 
-from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE
+from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE, LISTENING_HISTORY_PARTS
 from app.db import db_connection
 from app.services.repetition import record_review
 
@@ -76,7 +76,8 @@ def record_check_result(result: dict) -> dict | None:
     total = result.get("total", 0)
     if total <= 0:
         return None
-    if part not in PARTS_RANGE and part != GET_PHRASE_PART:
+    _valid_parts = set(PARTS_RANGE) | {GET_PHRASE_PART} | set(LISTENING_HISTORY_PARTS.values())
+    if part not in _valid_parts:
         return None
     user_id = session.get("user_id")
     logger.debug("record_check_result: part=%s score=%d/%d user=%s", part, score, total, user_id)

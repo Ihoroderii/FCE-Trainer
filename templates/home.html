@@ -54,7 +54,7 @@
   {# ── Hero ── #}
   <div class="home-hero">
     <h1 class="home-title">Practice for Cambridge B2 First (FCE)</h1>
-    <p class="home-tagline">All 7 Use of English &amp; Reading parts. AI-generated tasks at B2 and B2+ levels. Instant feedback with explanations why each answer is correct or wrong.</p>
+    <p class="home-tagline">All 7 Use of English &amp; Reading parts + Listening Parts 1–4. AI-generated tasks at B2 and B2+ levels. Instant feedback with explanations why each answer is correct or wrong.</p>
     <a href="{{ url_for('use_of_english.use_of_english') }}" class="btn btn-hero">Start practicing &mdash; free</a>
   </div>
 
@@ -91,6 +91,12 @@
       <h3 class="home-section-title">Writing</h3>
       <p class="home-section-desc">Essay, article, email/letter, review. Practice tasks (140–190 words each) with a built-in timer.</p>
       <span class="home-section-cta">Go to Writing &rarr;</span>
+    </a>
+    <a href="{{ url_for('listening.listening') }}" class="home-section-card home-section-listening">
+      <span class="home-section-icon" aria-hidden="true">🎧</span>
+      <h3 class="home-section-title">Listening</h3>
+      <p class="home-section-desc">Parts 1–4: multiple choice, sentence completion, matching, interview. AI-generated scripts with text-to-speech audio.</p>
+      <span class="home-section-cta">Start listening practice &rarr;</span>
     </a>
     <a href="{{ url_for('get_phrases.get_phrases') }}" class="home-section-card home-section-use">
       <span class="home-section-icon" aria-hidden="true">GET</span>

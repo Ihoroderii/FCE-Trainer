@@ -267,6 +267,70 @@ def _ensure_user_settings_table():
     _run_migration("add_user_settings_table", _migrate_user_settings_table)
 
 
+def _ensure_listening_tables():
+    _run_migration("add_listening_tables", _migrate_listening_tables)
+
+
+def _migrate_listening_tables(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS listening_part1_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_json TEXT NOT NULL,
+            audio_path TEXT,
+            source TEXT NOT NULL DEFAULT 'openai',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS listening_part1_task_shows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL REFERENCES listening_part1_tasks(id),
+            shown_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_lp1_shows_task_id ON listening_part1_task_shows(task_id);
+
+        CREATE TABLE IF NOT EXISTS listening_part2_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_json TEXT NOT NULL,
+            audio_path TEXT,
+            source TEXT NOT NULL DEFAULT 'openai',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS listening_part2_task_shows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL REFERENCES listening_part2_tasks(id),
+            shown_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_lp2_shows_task_id ON listening_part2_task_shows(task_id);
+
+        CREATE TABLE IF NOT EXISTS listening_part3_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_json TEXT NOT NULL,
+            audio_path TEXT,
+            source TEXT NOT NULL DEFAULT 'openai',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS listening_part3_task_shows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL REFERENCES listening_part3_tasks(id),
+            shown_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_lp3_shows_task_id ON listening_part3_task_shows(task_id);
+
+        CREATE TABLE IF NOT EXISTS listening_part4_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_json TEXT NOT NULL,
+            audio_path TEXT,
+            source TEXT NOT NULL DEFAULT 'openai',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS listening_part4_task_shows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL REFERENCES listening_part4_tasks(id),
+            shown_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_lp4_shows_task_id ON listening_part4_task_shows(task_id);
+    """)
+
+
 def _migrate_user_settings_table(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS user_settings (
@@ -602,6 +666,61 @@ _PART_DB_SCHEMA = {
         },
     },
 }
+
+# Listening parts use part numbers 101-104 to avoid collision with reading parts 1-7
+_LISTENING_DB_SCHEMA = {}
+for _lp in range(1, 5):
+    _tbl = f"listening_part{_lp}_tasks"
+    _stbl = f"listening_part{_lp}_task_shows"
+    _LISTENING_DB_SCHEMA[_lp] = {
+        "table": _tbl,
+        "shows": _stbl,
+        "select": f"SELECT id, data_json, audio_path, source FROM {_tbl} WHERE id = ?",
+        "parse": lambda row: {
+            "id": row["id"],
+            "data": json.loads(row["data_json"]),
+            "audio_path": row["audio_path"],
+            "source": row["source"],
+        },
+    }
+
+
+def get_listening_task(part: int, task_id: int) -> dict[str, Any] | None:
+    schema = _LISTENING_DB_SCHEMA.get(part)
+    if not schema or not task_id:
+        return None
+    with db_connection() as conn:
+        cur = conn.execute(schema["select"], (task_id,))
+        row = cur.fetchone()
+    if not row:
+        return None
+    return schema["parse"](row)
+
+
+def pick_listening_task_id(part: int, exclude_current: int | None = None) -> int | None:
+    schema = _LISTENING_DB_SCHEMA.get(part)
+    if not schema:
+        return None
+    return _pick_one_task_id(schema["table"], schema["shows"], exclude_current)
+
+
+def record_listening_show(part: int, task_id: int) -> None:
+    schema = _LISTENING_DB_SCHEMA.get(part)
+    if schema:
+        _record_show(schema["shows"], task_id)
+
+
+def save_listening_task(part: int, data_json: str, audio_path: str | None) -> int | None:
+    schema = _LISTENING_DB_SCHEMA.get(part)
+    if not schema:
+        return None
+    with db_connection() as conn:
+        cur = conn.execute(
+            f"INSERT INTO {schema['table']} (data_json, audio_path, source) VALUES (?, ?, ?)",
+            (data_json, audio_path, "openai"),
+        )
+        conn.commit()
+        return cur.lastrowid
 
 
 def get_task_by_id_for_part(part: int, task_id: int | None) -> dict[str, Any] | None:

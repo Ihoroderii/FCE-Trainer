@@ -1,4 +1,5 @@
 """Prompts used for generating new FCE tasks (Part 1–7). Single source of truth for accuracy."""
+from __future__ import annotations
 
 
 def get_task_prompt_part1(topic: str, level: str = "b2") -> str:
