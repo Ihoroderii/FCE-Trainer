@@ -289,8 +289,10 @@ def get_or_create_listening_task(part: int, exclude_id: int | None = None) -> tu
     return task, task_id
 
 
-def retry_audio_generation(part: int, task: dict) -> dict:
-    """Try to generate audio for a task that was saved without it."""
+def retry_audio_generation(part: int, task: dict, force: bool = False) -> dict:
+    """Generate (or re-generate) audio for a listening task."""
+    if not force and task.get("audio_path"):
+        return task
     collector = _SEGMENT_COLLECTORS.get(part)
     if not collector or not task.get("data"):
         return task
@@ -300,11 +302,18 @@ def retry_audio_generation(part: int, task: dict) -> dict:
         filename = f"listening_p{part}_{int(time.time())}"
         audio_url = generate_listening_audio(segments, filename)
         if audio_url:
+            # Delete old audio file if it exists
+            if task.get("audio_path"):
+                old_file = Path(__file__).resolve().parent.parent.parent / "static" / task["audio_path"].lstrip("/")
+                try:
+                    old_file.unlink(missing_ok=True)
+                except Exception:
+                    pass
             update_listening_audio_path(part, task["id"], audio_url)
             task["audio_path"] = audio_url
-            logger.info("Retry audio OK for listening part %d task %d", part, task["id"])
+            logger.info("Audio generated for listening part %d task %d", part, task["id"])
     except Exception:
-        logger.exception("Retry audio failed for listening part %d task %d", part, task.get("id"))
+        logger.exception("Audio generation failed for listening part %d task %d", part, task.get("id"))
     return task
 
 

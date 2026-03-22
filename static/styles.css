@@ -4334,6 +4334,21 @@ html.dark-mode .coll-btn-translate { border-color: #555; color: #aaa; }
   white-space: nowrap;
 }
 .listening-no-plays { color: #e53935; }
+.listening-regen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(102,126,234,0.1);
+  color: #667eea;
+  text-decoration: none;
+  font-size: 1rem;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.listening-regen-btn:hover { background: rgba(102,126,234,0.2); }
 
 .listening-no-audio {
   padding: 1rem;

@@ -45,12 +45,12 @@ def listening():
             session[_session_key(part)] = task["id"]
         return redirect(url_for("listening.listening", part=part))
 
-    # Retry audio generation for current task
+    # Retry audio generation for current task (works even if audio exists)
     if action == "regenerate_audio":
         tid = session.get(_session_key(part))
         task = get_listening_task(part, tid) if tid else None
-        if task and not task.get("audio_path"):
-            retry_audio_generation(part, task)
+        if task:
+            retry_audio_generation(part, task, force=True)
         return redirect(url_for("listening.listening", part=part))
 
     # Check for next action

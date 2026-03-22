@@ -40,6 +40,7 @@
       </div>
       <span class="listening-time" id="listening-time">0:00 / 0:00</span>
       <span class="listening-plays-left" id="listening-plays-left" title="Plays remaining">2 plays left</span>
+      <a href="{{ url_for('listening.listening', part=part, action='regenerate_audio') }}" class="listening-regen-btn" title="Re-generate audio with current TTS engine">🔄</a>
     </div>
   </div>
   {% else %}

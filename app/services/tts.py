@@ -60,9 +60,9 @@ def _ensure_dir():
 def _get_engine() -> str:
     """Return the TTS engine to use: 'edge', 'openai', or 'elevenlabs'."""
     engine = os.environ.get("TTS_ENGINE", "").strip().lower()
-    if engine in ("openai", "elevenlabs"):
+    if engine in ("openai", "elevenlabs", "edge"):
         return engine
-    # Legacy env var support
+    # Legacy env var support — only if TTS_ENGINE is not set at all
     if os.environ.get("OPENAI_TTS", "").lower() in ("1", "true", "yes"):
         return "openai"
     return "edge"
@@ -127,6 +127,21 @@ def _build_ssml(text: str, voice_name: str, role: str) -> str:
     )
 
 
+def _save_tts_input(segments: list[dict], output_path: Path, engine: str) -> None:
+    """Save the exact text sent to TTS as a debug file next to the audio."""
+    try:
+        txt_path = output_path.with_suffix(".tts_input.txt")
+        lines = [f"TTS Engine: {engine}\n"]
+        for i, seg in enumerate(segments):
+            role = seg.get("voice", "narrator")
+            text = seg.get("text", "").strip()
+            lines.append(f"[{i:03d}] [{role}] {text}")
+        txt_path.write_text("\n".join(lines), encoding="utf-8")
+        logger.debug("TTS input saved: %s", txt_path)
+    except Exception:
+        pass
+
+
 # ── Edge-TTS (free) ─────────────────────────────────────────────────────────
 
 async def _edge_tts_multi(segments: list[dict], output_path: Path):
@@ -140,8 +155,8 @@ async def _edge_tts_multi(segments: list[dict], output_path: Path):
         if not text:
             continue
         tmp = output_path.parent / f"_tmp_seg_{output_path.stem}_{i}.mp3"
-        ssml = _build_ssml(text, voice, role)
-        communicate = edge_tts.Communicate(ssml, voice)
+        # Send plain text — edge-tts Communicate() treats first arg as plain text
+        communicate = edge_tts.Communicate(text, voice)
         await communicate.save(str(tmp))
         temp_files.append(tmp)
     if not temp_files:
@@ -285,7 +300,10 @@ def generate_listening_audio(segments: list[dict], filename: str) -> str | None:
     output_path = _STATIC_DIR / safe_name
 
     engine = _get_engine()
-    logger.info("TTS engine: %s, segments: %d", engine, len(segments))
+    logger.info("TTS engine: %s, segments: %d, file: %s", engine, len(segments), safe_name)
+
+    # Save the exact text being sent to TTS for debugging
+    _save_tts_input(segments, output_path, engine)
 
     if engine == "elevenlabs":
         ok = generate_audio_elevenlabs(segments, output_path)
