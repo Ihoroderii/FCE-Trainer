@@ -13,13 +13,23 @@ from pathlib import Path
 
 logger = logging.getLogger("fce_trainer")
 
-# Edge-TTS British English voices
+# Edge-TTS British English voices — use multilingual voices where possible
+# for more natural-sounding speech
 EDGE_VOICES = {
-    "narrator": "en-GB-SoniaNeural",   # Female narrator / exam instructions
-    "male1":    "en-GB-RyanNeural",     # Male speaker
-    "female1":  "en-GB-SoniaNeural",    # Female speaker 1
-    "female2":  "en-GB-LibbyNeural",    # Female speaker 2
-    "male2":    "en-GB-ThomasNeural",   # Male speaker 2
+    "narrator": "en-GB-SoniaNeural",        # Female narrator / exam instructions
+    "male1":    "en-GB-RyanNeural",          # Male speaker
+    "female1":  "en-GB-MaisieNeural",        # Female speaker 1 (younger, natural)
+    "female2":  "en-GB-LibbyNeural",         # Female speaker 2
+    "male2":    "en-GB-ThomasNeural",        # Male speaker 2
+}
+
+# SSML prosody settings per voice role — makes speech less robotic
+_VOICE_STYLES = {
+    "narrator": {"rate": "-5%",  "pitch": "+0Hz"},    # calm, measured
+    "male1":    {"rate": "+3%",  "pitch": "-2Hz"},     # slightly faster, natural
+    "female1":  {"rate": "+0%",  "pitch": "+1Hz"},     # default, slight lilt
+    "female2":  {"rate": "+5%",  "pitch": "+2Hz"},     # a bit more animated
+    "male2":    {"rate": "-3%",  "pitch": "-3Hz"},     # slower, deeper
 }
 
 # OpenAI TTS voices
@@ -68,6 +78,22 @@ def _concat_mp3_files(file_paths: list[Path], output_path: Path, silence_path: P
     return output_path.stat().st_size > 0
 
 
+def _build_ssml(text: str, voice_name: str, role: str) -> str:
+    """Wrap text in SSML with prosody for more natural delivery."""
+    style = _VOICE_STYLES.get(role, {})
+    rate = style.get("rate", "+0%")
+    pitch = style.get("pitch", "+0Hz")
+    # Escape XML entities in the text
+    safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return (
+        f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-GB">'
+        f'<voice name="{voice_name}">'
+        f'<prosody rate="{rate}" pitch="{pitch}">'
+        f'{safe}'
+        f'</prosody></voice></speak>'
+    )
+
+
 # ── Edge-TTS (free) ─────────────────────────────────────────────────────────
 
 async def _edge_tts_multi(segments: list[dict], output_path: Path):
@@ -77,13 +103,15 @@ async def _edge_tts_multi(segments: list[dict], output_path: Path):
     temp_files = []
 
     for i, seg in enumerate(segments):
-        voice = EDGE_VOICES.get(seg.get("voice", "narrator"), EDGE_VOICES["narrator"])
+        role = seg.get("voice", "narrator")
+        voice = EDGE_VOICES.get(role, EDGE_VOICES["narrator"])
         text = seg.get("text", "").strip()
         if not text:
             continue
 
         tmp = output_path.parent / f"_tmp_seg_{output_path.stem}_{i}.mp3"
-        communicate = edge_tts.Communicate(text, voice)
+        ssml = _build_ssml(text, voice, role)
+        communicate = edge_tts.Communicate(ssml, voice)
         await communicate.save(str(tmp))
         temp_files.append(tmp)
 
