@@ -24,36 +24,131 @@ _DICT_TIMEOUT = 5  # seconds
 
 # ── Translation ──────────────────────────────────────────────────────────────
 
-def _translate_en_ru(text: str) -> str:
-    """Translate English → Russian via MyMemory free API.
+def _get_translation_settings() -> tuple[str, str]:
+    """Return (target_lang, translator) from current user's settings, or defaults."""
+    try:
+        from flask import session
+        user_id = session.get("user_id")
+        if user_id:
+            from app.services.settings import get_user_settings
+            s = get_user_settings(user_id)
+            return s["target_lang"], s["translator"]
+    except Exception:
+        pass
+    return "ru", "google"
+
+
+def _translate_text(text: str, target_lang: str = "ru", translator: str = "google") -> str:
+    """Translate English text using the specified translator engine.
 
     Returns translated text, or empty string on failure.
     """
     if not text or not text.strip():
         return ""
+    text = text.strip()[:500]
+
+    if translator == "ai":
+        return ""  # AI handled separately in translate_word_and_sentence
+
     try:
-        resp = requests.get(
-            _MYMEMORY_URL,
-            params={"q": text.strip()[:500], "langpair": "en|ru"},
-            timeout=_TRANSLATION_TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        translated = data.get("responseData", {}).get("translatedText", "")
-        if translated and translated.upper() != text.strip().upper():
-            logger.debug("Translated '%s' → '%s'", text.strip()[:60], translated[:60])
-            return translated
-        return ""
+        if translator == "mymemory":
+            from deep_translator import MyMemoryTranslator
+            translated = MyMemoryTranslator(source='en', target=target_lang).translate(text)
+        elif translator == "linguee":
+            from deep_translator import LingueeTranslator
+            result = LingueeTranslator(source='english', target=_linguee_lang_name(target_lang)).translate(text)
+            translated = result if isinstance(result, str) else "; ".join(result) if result else ""
+        elif translator == "pons":
+            from deep_translator import PonsTranslator
+            result = PonsTranslator(source='english', target=_pons_lang_name(target_lang)).translate(text)
+            translated = result if isinstance(result, str) else "; ".join(result) if result else ""
+        else:  # google (default)
+            from deep_translator import GoogleTranslator
+            translated = GoogleTranslator(source='en', target=target_lang).translate(text)
+
+        if not translated:
+            return ""
+        logger.debug("%s translated '%s' → '%s'", translator, text[:60], str(translated)[:60])
+        return translated
     except Exception:
-        logger.warning("Translation failed for: %s", text[:60], exc_info=True)
+        logger.warning("%s translation failed for: %s", translator, text[:60], exc_info=True)
         return ""
+
+
+def _linguee_lang_name(code: str) -> str:
+    """Convert language code to Linguee language name."""
+    _map = {
+        "ru": "russian", "de": "german", "fr": "french", "es": "spanish",
+        "it": "italian", "pt": "portuguese", "pl": "polish", "nl": "dutch",
+        "zh-CN": "chinese", "ja": "japanese", "cs": "czech", "sv": "swedish",
+        "da": "danish", "el": "greek", "hu": "hungarian", "fi": "finnish",
+        "sl": "slovenian", "bg": "bulgarian", "ro": "romanian", "sk": "slovak",
+        "lv": "latvian", "lt": "lithuanian", "et": "estonian",
+    }
+    return _map.get(code, "russian")
+
+
+def _pons_lang_name(code: str) -> str:
+    """Convert language code to PONS language name."""
+    _map = {
+        "ru": "russian", "de": "german", "fr": "french", "es": "spanish",
+        "it": "italian", "pt": "portuguese", "pl": "polish", "nl": "dutch",
+        "zh-CN": "chinese", "el": "greek", "sl": "slovenian", "bg": "bulgarian",
+        "cs": "czech", "da": "danish", "hu": "hungarian", "sv": "swedish",
+        "tr": "turkish", "ar": "arabic", "no": "norwegian", "ro": "romanian",
+        "sk": "slovak", "hr": "croatian", "la": "latin",
+    }
+    return _map.get(code, "russian")
+
+
+def _translate_ai(word: str, sentence: str, target_lang: str = "ru") -> tuple[str, str]:
+    """Translate word and sentence using the AI client."""
+    from app.ai import chat_create, ai_available
+    from app.services.settings import LANGUAGES
+    if not ai_available:
+        return "", ""
+    lang_name = LANGUAGES.get(target_lang, target_lang)
+    # Strip flag emoji from lang name
+    lang_name = re.sub(r'^[\U0001F1E0-\U0001F1FF\s]+', '', lang_name).strip()
+    prompt = f'Translate the English word "{word}" to {lang_name}.'
+    if sentence:
+        prompt += f' Context sentence: "{sentence}". Also translate the full sentence to {lang_name}.'
+    prompt += '\nReturn ONLY a JSON object: {"word_translated": "...", "sentence_translated": "..."}'
+    prompt += '\nIf there is no sentence, set sentence_translated to empty string.'
+    try:
+        import json
+        comp = chat_create([{"role": "user", "content": prompt}], temperature=0.1)
+        content = (comp.choices[0].message.content or "").strip()
+        m = re.search(r'\{[\s\S]*\}', content)
+        if not m:
+            return "", ""
+        data = json.loads(m.group(0))
+        word_tr = (data.get("word_translated") or "").strip()
+        sentence_tr = (data.get("sentence_translated") or "").strip()
+        logger.debug("AI translated '%s' → '%s'", word[:30], word_tr[:30])
+        return word_tr, sentence_tr
+    except Exception:
+        logger.warning("AI translation failed for: %s", word[:30], exc_info=True)
+        return "", ""
 
 
 def translate_word_and_sentence(word: str, sentence: str) -> tuple[str, str]:
-    """Return (word_ru, sentence_ru)."""
-    word_ru = _translate_en_ru(word)
-    sentence_ru = _translate_en_ru(sentence) if sentence else ""
-    return word_ru, sentence_ru
+    """Return (word_translated, sentence_translated) using user's chosen translator."""
+    target_lang, translator = _get_translation_settings()
+
+    if translator == "ai":
+        return _translate_ai(word, sentence, target_lang)
+
+    word_tr = _translate_text(word, target_lang, translator)
+    sentence_tr = _translate_text(sentence, target_lang, translator) if sentence else ""
+    # Fallback to AI if primary translator failed for the word
+    if not word_tr:
+        logger.info("%s failed for '%s', trying AI fallback", translator, word[:30])
+        ai_word_tr, ai_sentence_tr = _translate_ai(word, sentence, target_lang)
+        word_tr = ai_word_tr
+        if not sentence_tr and ai_sentence_tr:
+            sentence_tr = ai_sentence_tr
+    return word_tr, sentence_tr
 
 
 # ── Word Forms & Synonyms (AI-powered) ───────────────────────────────────────
@@ -219,6 +314,27 @@ def delete_word(user_id: int, word_id: int) -> bool:
         )
         conn.commit()
     return cur.rowcount > 0
+
+
+def retranslate_entry(user_id: int, word_id: int) -> dict | None:
+    """Re-translate word and sentence via MyMemory API. Returns {word_ru, sentence_ru} or None."""
+    with db_connection() as conn:
+        row = conn.execute(
+            "SELECT id, word, sentence FROM vocab_notebook WHERE id = ? AND user_id = ?",
+            (word_id, user_id),
+        ).fetchone()
+    if not row:
+        return None
+    word_ru, sentence_ru = translate_word_and_sentence(row["word"], row["sentence"] or "")
+    logger.info("retranslate id=%s word='%s' → word_ru='%s' sentence_ru='%s'",
+                word_id, row["word"][:30], word_ru[:30] if word_ru else '', sentence_ru[:30] if sentence_ru else '')
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE vocab_notebook SET word_ru = ?, sentence_ru = ? WHERE id = ? AND user_id = ?",
+            (word_ru, sentence_ru, word_id, user_id),
+        )
+        conn.commit()
+    return {"word_ru": word_ru, "sentence_ru": sentence_ru}
 
 
 def update_translation(user_id: int, word_id: int, word_ru: str, sentence_ru: str) -> bool:

@@ -18,10 +18,22 @@ logger = logging.getLogger("fce_trainer")
 
 
 def generate_part3_with_openai(level="b2"):
-    if not ai_available:
-        return None
     topic = random.choice(PART3_TOPICS)
-    prompt = get_task_prompt_part3(topic, level)
+
+    # RAG: retrieve similar examples for style reference
+    from app.rag.helpers import get_rag_examples_text
+    ref_examples = get_rag_examples_text(part=3, topic=topic)
+
+    # Fetch stems the user previously got wrong that are due for repetition
+    required_stems = []
+    try:
+        from app.services.word_repetition import get_due_stems
+        due = get_due_stems()
+        required_stems = [d["stem"] for d in due]
+    except Exception:
+        logger.debug("get_due_stems failed, generating without required stems", exc_info=True)
+
+    prompt = get_task_prompt_part3(topic, level, required_stems=required_stems, ref_examples=ref_examples)
     max_unchanged = 1
     for attempt in range(3):
         try:
@@ -192,11 +204,13 @@ def check_part3(data, form):
         return None
     if "answers" in task:
         answers = task["answers"]
+        stems = task.get("stems") or []
     else:
         items = task.get("items") or []
         if not items:
             return None
         answers = [items[i].get("answer", "") for i in range(min(8, len(items)))]
+        stems = [items[i].get("key", "") for i in range(min(8, len(items)))]
     if len(answers) < 8:
         return None
     details = []
@@ -204,11 +218,11 @@ def check_part3(data, form):
     for i in range(8):
         user_val = (form.get(f"p3_{i}") or "").strip()
         expected = answers[i] if i < len(answers) else ""
-        correct = answers_match(user_val, expected)
+        correct = answers_match(user_val, expected, strict=True)
         if correct:
             score += 1
         details.append({"correct": correct, "user_val": user_val, "expected": expected})
-    result = {"part": 3, "score": score, "total": 8, "details": details}
+    result = {"part": 3, "score": score, "total": 8, "details": details, "stems": stems}
     explanations_data = fetch_explanations_part3(task, details)
     for i, data in enumerate(explanations_data):
         if i < len(result["details"]):

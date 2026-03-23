@@ -1,7 +1,15 @@
 """Prompts used for generating new FCE tasks (Part 1–7). Single source of truth for accuracy."""
+from __future__ import annotations
 
 
-def get_task_prompt_part1(topic: str, level: str = "b2") -> str:
+def _append_examples(prompt: str, ref_examples: str) -> str:
+    """Append RAG reference examples to a prompt if provided."""
+    if ref_examples:
+        return prompt + "\n" + ref_examples
+    return prompt
+
+
+def get_task_prompt_part1(topic: str, level: str = "b2", ref_examples: str = "") -> str:
     level = (level or "b2").strip().lower()
     if level != "b2plus":
         level = "b2"
@@ -16,7 +24,7 @@ def get_task_prompt_part1(topic: str, level: str = "b2") -> str:
             "The text must be at B2 level: clear vocabulary and grammar appropriate for FCE. "
             "Standard Part 1 length (4-6 sentences, 8 gaps)."
         )
-    return f"""You are an FCE (B2 First) English exam expert. Generate exactly ONE "multiple-choice cloze" task.
+    prompt = f"""You are an FCE (B2 First) English exam expert. Generate exactly ONE "multiple-choice cloze" task.
 
 The text MUST be clearly about this topic: "{topic}". Write a short, coherent paragraph that is obviously on this theme (not work or offices unless the topic says so). Use a specific angle or situation so the text feels fresh and varied.
 
@@ -28,9 +36,10 @@ The task must have:
 
 Return ONLY a valid JSON object with keys "text" and "gaps". No other text. Example shape:
 {{"text": "Some text with (1)_____ and (2)_____ ...", "gaps": [{{"options": ["a","b","c","d"], "correct": 0}}, ...]}}"""
+    return _append_examples(prompt, ref_examples)
 
 
-def get_task_prompt_part2(topic: str, level: str = "b2") -> str:
+def get_task_prompt_part2(topic: str, level: str = "b2", required_words: list[str] | None = None, ref_examples: str = "") -> str:
     level = (level or "b2").strip().lower()
     if level != "b2plus":
         level = "b2"
@@ -45,23 +54,34 @@ def get_task_prompt_part2(topic: str, level: str = "b2") -> str:
         level_instruction = (
             "- A short text (about 150-200 words) at B2 level. Standard FCE open-cloze difficulty."
         )
-    return f"""You are an FCE (B2 First) Use of English exam expert. Generate exactly ONE Part 2 (Open cloze) task.
+
+    required_instruction = ""
+    if required_words:
+        words_str = ", ".join(w.lower() for w in required_words)
+        required_instruction = (
+            f"\n- REQUIRED WORDS: You MUST use these words as correct answers for some of the 8 gaps: {words_str}. "
+            f"Weave them naturally into the text so each appears as the answer to one gap. "
+            f"The remaining gaps can test any appropriate words."
+        )
+
+    prompt = f"""You are an FCE (B2 First) Use of English exam expert. Generate exactly ONE Part 2 (Open cloze) task.
 
 The text must be about this topic: {topic}. Use a different angle or situation (e.g. a personal story, a news-style piece, advice, or a description). Do NOT write about working from home or remote work unless the chosen topic is "work and careers" and you pick that angle.
 
 Part 2 consists of:
 {level_instruction}
 - The text must contain exactly 8 gaps marked (1)_____, (2)_____, (3)_____, (4)_____, (5)_____, (6)_____, (7)_____, (8)_____ in order. Each gap needs ONE word (articles, prepositions, auxiliaries, pronouns, conjunctions, phrasal verb particles, linkers, etc.).
-- The 8 correct answers (one word per gap).
+- The 8 correct answers (one word per gap).{required_instruction}
 
 Return ONLY a valid JSON object with these exact keys:
 - "text": the full text with the exact placeholders (1)_____, (2)_____, ... (8)_____ where the gaps are. No other placeholder format.
 - "answers": an array of exactly 8 strings: the correct word for gap 1, then gap 2, ... gap 8. Use lowercase unless the word must be capitalised (e.g. start of sentence).
 
 No other text or markdown."""
+    return _append_examples(prompt, ref_examples)
 
 
-def get_task_prompt_part3(topic: str, level: str = "b2") -> str:
+def get_task_prompt_part3(topic: str, level: str = "b2", required_stems: list[str] | None = None, ref_examples: str = "") -> str:
     level = (level or "b2").strip().lower()
     if level != "b2plus":
         level = "b2"
@@ -75,7 +95,17 @@ def get_task_prompt_part3(topic: str, level: str = "b2") -> str:
             "Use B2-level vocabulary and grammar. Test common suffixes (-tion, -ness, -ly, -ful, -less, -able), "
             "prefixes (un-, in-, im-), and word class changes."
         )
-    return f"""You are an FCE (B2 First) Use of English exam expert. Generate exactly ONE Part 3 (Word formation) task.
+
+    required_instruction = ""
+    if required_stems:
+        stems_str = ", ".join(s.upper() for s in required_stems)
+        required_instruction = (
+            f"\n- REQUIRED STEMS: You MUST use these stem words among the 8 gaps: {stems_str}. "
+            f"Weave them naturally into the text. The remaining gaps can use any appropriate stems. "
+            f"Each required stem must appear as one of the 8 gaps with a different word form as the answer."
+        )
+
+    prompt = f"""You are an FCE (B2 First) Use of English exam expert. Generate exactly ONE Part 3 (Word formation) task.
 
 The text MUST be clearly about this topic: "{topic}". Write one continuous passage (150-200 words) that is obviously on this theme.
 
@@ -86,7 +116,7 @@ Requirements:
 - Each gap must be written as (1)_____, (2)_____, (3)_____, (4)_____, (5)_____, (6)_____, (7)_____, (8)_____ in order.
 - At the end of the sentence or clause that contains each gap, put the STEM WORD in CAPITAL LETTERS (e.g. "...has been delayed. COMPLETE" or "...looked at him. SUSPECT"). So the reader sees the stem word in capitals after each gap.
 - The stem word is the base form; the student must change it (prefix, suffix, plural, etc.) to fit the gap.
-- IMPORTANT: In real FCE Part 3, the correct answer is almost always a DIFFERENT form from the stem (different word class or with prefix/suffix). Only very rarely (about 1 in 20 gaps) may the answer be the stem word unchanged (e.g. DANGER → danger). So for this task: at most ONE gap in the entire 8-gap passage may have the correct answer identical to the stem word (no transformation). All other gaps MUST require a clear word formation change (e.g. COMPLETE → completion, SUSPECT → suspiciously). Prefer having all 8 gaps require a transformation.
+- IMPORTANT: In real FCE Part 3, the correct answer is almost always a DIFFERENT form from the stem (different word class or with prefix/suffix). Only very rarely (about 1 in 20 gaps) may the answer be the stem word unchanged (e.g. DANGER → danger). So for this task: at most ONE gap in the entire 8-gap passage may have the correct answer identical to the stem word (no transformation). All other gaps MUST require a clear word formation change (e.g. COMPLETE → completion, SUSPECT → suspiciously). Prefer having all 8 gaps require a transformation.{required_instruction}
 
 Return ONLY a valid JSON object with these exact keys:
 - "text": the full passage (150-200 words) with (1)_____ through (8)_____ and each stem word in CAPITALS at the end of its sentence/clause. Example fragment: "The (1)_____ of the centre has been delayed. COMPLETE She looked at him (2)_____ when he told the joke. SUSPECT"
@@ -94,9 +124,10 @@ Return ONLY a valid JSON object with these exact keys:
 - "answers": array of exactly 8 strings — the correct formed word for each gap, lowercase unless capitalised (e.g. ["completion", "suspiciously", ...])
 
 No other text or markdown."""
+    return _append_examples(prompt, ref_examples)
 
 
-def get_task_prompt_part4(count: int, level: str = "b2plus", recent_avoid: str = "") -> str:
+def get_task_prompt_part4(count: int, level: str = "b2plus", recent_avoid: str = "", ref_examples: str = "") -> str:
     level_instruction = (
         "Level: B2+ (slightly more difficult than B2). Use vocabulary and grammar that is upper-intermediate to advanced: "
         "less common collocations, more complex structures, idiomatic expressions. Avoid items that are too easy (A2/B1)."
@@ -104,7 +135,7 @@ def get_task_prompt_part4(count: int, level: str = "b2plus", recent_avoid: str =
         else "Level: B2 (Cambridge B2 First). Use vocabulary and grammar appropriate for upper-intermediate learners. "
         "Standard FCE difficulty. Avoid items that are too easy (A2/B1) or too hard (C1)."
     )
-    return f"""You are an FCE (B2 First) English exam expert. Generate exactly {count} "key word transformation" items.
+    prompt = f"""You are an FCE (B2 First) English exam expert. Generate exactly {count} "key word transformation" items.
 
 {level_instruction}
 
@@ -115,15 +146,30 @@ CRITICAL: The second sentence (sentence2) must be a REAL REPHRASING: different w
 Use a DIFFERENT grammar_topic for each item—vary the grammar (passive, conditionals, reported speech, modals, etc.). Do not repeat the same grammar focus in the set.
 {recent_avoid}
 Return ONLY a valid JSON array of objects with keys: sentence1, keyword, sentence2, answer, grammar_topic. No other text."""
+    return _append_examples(prompt, ref_examples)
 
 
-def get_task_prompt_part5(topic: str) -> str:
-    return f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 5 task.
+def get_task_prompt_part5(topic: str, level: str = "b2", ref_examples: str = "") -> str:
+    level = (level or "b2").strip().lower()
+    if level != "b2plus":
+        level = "b2"
+    if level == "b2plus":
+        level_instruction = (
+            "1. A single continuous text. Length: between 550 and 650 words. B2+ level: use more sophisticated "
+            "vocabulary, complex sentence structures (e.g. participle clauses, inversion, subjunctive), "
+            "nuanced arguments, and subtle tone shifts. The text should challenge advanced upper-intermediate readers."
+        )
+    else:
+        level_instruction = (
+            "1. A single continuous text. Length: between 550 and 650 words. Upper-Intermediate (B2) level. "
+            "The text should test understanding of the writer's opinion, attitude, purpose, tone, and implied meaning—not just surface facts."
+        )
+    prompt = f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 5 task.
 
 The text MUST be clearly about this topic: "{topic}". Write a single continuous text (e.g. magazine article, report, or extract from a modern novel) that is obviously on this theme. Use a specific angle or situation so the text feels fresh and varied.
 
 Part 5 consists of:
-1. A single continuous text. Length: between 550 and 650 words. Upper-Intermediate (B2) level. The text should test understanding of the writer's opinion, attitude, purpose, tone, and implied meaning—not just surface facts.
+{level_instruction}
 2. Exactly 6 multiple-choice questions. Each question has four options (A, B, C, D). Questions must follow the chronological order of the text: question 1 relates to the beginning, question 6 may relate to the end or the text as a whole. Each correct answer is worth 2 marks.
 
 QUESTION QUALITY REQUIREMENTS:
@@ -141,32 +187,65 @@ Example shape:
 {{"title": "...", "text": "<p>...</p><p>...</p>", "questions": [{{"q": "...", "options": ["A text", "B text", "C text", "D text"], "correct": 1}}, ...]}}
 
 No other text or markdown."""
+    return _append_examples(prompt, ref_examples)
 
 
-def get_task_prompt_part6(topic: str) -> str:
-    return f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 6 (gapped text) task.
+def get_task_prompt_part6(topic: str, level: str = "b2", ref_examples: str = "") -> str:
+    level = (level or "b2").strip().lower()
+    if level != "b2plus":
+        level = "b2"
+    if level == "b2plus":
+        level_instruction = (
+            "- A single continuous text of 500-600 words (B2+ level): use more sophisticated vocabulary, "
+            "complex sentence structures, and nuanced argumentation. The removed sentences should require "
+            "careful analysis of cohesion devices, reference words, and logical flow to place correctly. "
+            "The text must contain exactly 6 numbered gaps where a sentence has been removed. "
+            "Use the exact placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 in order where each gap appears."
+        )
+    else:
+        level_instruction = (
+            "- A single continuous text of 500-600 words (B2 level). The text must contain exactly 6 numbered gaps "
+            "where a sentence has been removed. Use the exact placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 "
+            "in order where each gap appears."
+        )
+    prompt = f"""You are an FCE (B2 First) Reading and Use of English exam expert. Generate exactly ONE Part 6 (gapped text) task.
 
 The text MUST be about this topic: "{topic}". Use a specific angle to make the text engaging and varied.
 
 Part 6 consists of:
-- A single continuous text of 500-600 words (B2 level). The text must contain exactly 6 numbered gaps where a sentence has been removed. Use the exact placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 in order where each gap appears.
+{level_instruction}
 - 7 sentences labeled A-G. Exactly 6 of these fit into the gaps (one per gap); one sentence is a distractor.
 
+IMPORTANT: Each gap replaces a sentence that was PART OF a paragraph, not a separate paragraph. A gap can appear at the beginning, middle, or end of a paragraph — wherever the removed sentence originally was. The text around the gap in the same paragraph must remain.
+
 Return ONLY a valid JSON object with these exact keys:
-- "paragraphs": an array of strings. Each string is either a paragraph or exactly "GAP1", "GAP2", "GAP3", "GAP4", "GAP5", "GAP6" where that gap appears.
+- "paragraphs": an array of strings. Each string is one paragraph. Embed the placeholders GAP1, GAP2, GAP3, GAP4, GAP5, GAP6 directly within the paragraph text where a sentence was removed. For example: "The old house had many rooms. GAP1 Its walls were made of stone." or "GAP2 The garden stretched far beyond the fence." or "She left without saying a word. GAP3"
 - "sentences": an array of exactly 7 strings: the sentence for A, then B, then C, D, E, F, G. Give only the sentence text (no "A)" prefix).
 - "answers": an array of exactly 6 integers (0-6). answers[i] is the index into "sentences" (0=A, 1=B, ... 6=G) that correctly fills gap i+1.
 
 No other text or markdown."""
+    return _append_examples(prompt, ref_examples)
 
 
-def get_task_prompt_part7(topic: str) -> str:
-    return f"""You are an FCE (B2 First) Reading exam expert. Generate exactly ONE Part 7 (Multiple matching) task.
+def get_task_prompt_part7(topic: str, level: str = "b2", ref_examples: str = "") -> str:
+    level = (level or "b2").strip().lower()
+    if level != "b2plus":
+        level = "b2"
+    if level == "b2plus":
+        level_instruction = (
+            "Total length 600-700 words. B2+ level: use more sophisticated vocabulary, complex sentence structures, "
+            "subtle distinctions between sections, and statements that require careful inference and paraphrasing."
+        )
+    else:
+        level_instruction = (
+            "Total length 600-700 words (B2 level)."
+        )
+    prompt = f"""You are an FCE (B2 First) Reading exam expert. Generate exactly ONE Part 7 (Multiple matching) task.
 
 The text MUST be about this topic: "{topic}". Use a specific angle to make the text engaging and varied.
 
 Part 7 consists of:
-- Either ONE long text divided into 4-6 sections (labeled A, B, C, D, and optionally E, F) OR 4-5 short separate texts. Total length 600-700 words (B2 level).
+- Either ONE long text divided into 4-6 sections (labeled A, B, C, D, and optionally E, F) OR 4-5 short separate texts. {level_instruction}
 - 10 statements that the candidate must match to the correct section. Each correct match = 1 mark.
 
 QUALITY REQUIREMENTS:
@@ -180,11 +259,12 @@ Return ONLY a valid JSON object with these exact keys:
 - "questions": an array of exactly 10 objects. Each has "text" (the statement to match, one sentence) and "correct" (the section id, e.g. "A", "B").
 
 No other text or markdown."""
+    return _append_examples(prompt, ref_examples)
 
 
-def get_task_prompt_get_phrases(level: str = "b2") -> str:
+def get_task_prompt_get_phrases(level: str = "b2", ref_examples: str = "") -> str:
     """Generate one cloze text with 8 gaps; each gap = correct collocation with GET (e.g. get over, get rid of)."""
-    return """You are an English (B2) exam expert. Generate exactly ONE "get phrases" practice task.
+    prompt = """You are an English (B2) exam expert. Generate exactly ONE "get phrases" practice task.
 
 The task is a short continuous text (150–200 words) with exactly 8 gaps. Each gap must be filled with a correct collocation or phrasal verb using GET (e.g. get over, get rid of, get along with, get through, get away with, get on with, get round to, get out of, get by, get at, get across, get back to, get down to, get on, get off, get together, get ahead, get behind, get in, get into). Use a variety of common "get" phrases appropriate for B2 level.
 
@@ -198,3 +278,4 @@ Return ONLY a valid JSON object with these exact keys:
 - "answers": an array of exactly 8 strings — the correct "get" phrase for each gap (e.g. ["get over", "get rid of", "get along with", "get through", "get away with", "get on with", "get round to", "get out of"]).
 
 No other text or markdown."""
+    return _append_examples(prompt, ref_examples)

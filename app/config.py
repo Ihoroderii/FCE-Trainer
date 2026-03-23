@@ -17,6 +17,12 @@ PART_QUESTION_COUNTS = {1: 8, 2: 8, 3: 8, 4: 6, 5: 6, 6: 6, 7: 10}
 # Get phrases (study mode): separate part id for check_history / stats
 GET_PHRASE_PART = 8
 
+# Listening
+LISTENING_PARTS_RANGE = range(1, 5)
+LISTENING_QUESTION_COUNTS = {1: 8, 2: 10, 3: 5, 4: 7}
+# Part numbers used in check_history for listening (101-104)
+LISTENING_HISTORY_PARTS = {1: 101, 2: 102, 3: 103, 4: 104}
+
 # Check result cache (server-side, avoid session cookie overflow)
 CHECK_RESULT_CACHE_MAX = 20
 

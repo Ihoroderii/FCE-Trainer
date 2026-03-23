@@ -41,7 +41,21 @@ def generate_part2_with_openai(level="b2"):
     if not ai_available:
         return None
     topic = random.choice(PART2_TOPICS)
-    prompt = get_task_prompt_part2(topic, level)
+
+    # RAG: retrieve similar examples for style reference
+    from app.rag.helpers import get_rag_examples_text
+    ref_examples = get_rag_examples_text(part=2, topic=topic)
+
+    # Fetch words the user previously got wrong that are due for repetition
+    required_words = []
+    try:
+        from app.services.word_repetition import get_due_words_part2
+        due = get_due_words_part2()
+        required_words = [d["word"] for d in due]
+    except Exception:
+        logger.debug("get_due_words_part2 failed, generating without required words", exc_info=True)
+
+    prompt = get_task_prompt_part2(topic, level, required_words=required_words, ref_examples=ref_examples)
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
@@ -133,7 +147,8 @@ def check_part2(data, form):
         if correct:
             score += 1
         details.append({"correct": correct, "user_val": user_val, "expected": expected})
-    result = {"part": 2, "score": score, "total": len(item["answers"]), "details": details}
+    result = {"part": 2, "score": score, "total": len(item["answers"]), "details": details,
+              "answers": list(item["answers"]), "text": item.get("text", "")}
     explanations = fetch_explanations_part2(item, details)
     for i, exp in enumerate(explanations):
         if i < len(result["details"]) and exp:

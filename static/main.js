@@ -55,11 +55,15 @@
   }
 
   (function() {
-    var total = 75 * 60;
+    var body = document.body;
+    var isMock = body && body.getAttribute('data-mock-mode') === '1';
+    var mockRemaining = isMock ? parseInt(body.getAttribute('data-mock-remaining') || '0', 10) : 0;
+    var total = isMock ? mockRemaining : 75 * 60;
     var sec = total;
     var interval = null;
     var el = document.getElementById('timer');
-    var btn = document.getElementById('timer-toggle');
+    var autoSubmitted = false;
+
     function tick() {
       sec--;
       if (sec <= 0) sec = 0;
@@ -67,27 +71,23 @@
       if (sec <= 0 && interval) {
         clearInterval(interval);
         interval = null;
-        if (btn) btn.textContent = '▶';
         if (el) {
           el.classList.add('global-timer-expired');
           el.textContent = "0:00 — Time's up!";
         }
+        // Auto-submit in mock mode
+        if (isMock && !autoSubmitted) {
+          autoSubmitted = true;
+          var finishForm = document.getElementById('mock-finish-form');
+          if (finishForm) finishForm.submit();
+        }
       }
     }
     if (el) el.textContent = fmtTime(sec);
-    if (btn) btn.addEventListener('click', function() {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-        btn.textContent = '▶';
-      } else {
-        if (sec <= 0) sec = total;
-        if (el) el.classList.remove('global-timer-expired');
-        interval = setInterval(tick, 1000);
-        btn.textContent = '⏸';
-      }
-      tick();
-    });
+    // Auto-start timer in mock mode
+    if (isMock && sec > 0 && el) {
+      interval = setInterval(tick, 1000);
+    }
     // Dark mode toggle (top right button)
     (function() {
       var btn = document.getElementById('dark-mode-btn');

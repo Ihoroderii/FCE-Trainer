@@ -17,6 +17,7 @@ from app.db import (
     record_show_for_part,
 )
 from app.parts.topics import PART1_TOPICS
+from app.rag.helpers import get_rag_examples_text
 from app.utils import e as _e, extract_json_object, validate_part1_data
 
 logger = logging.getLogger("fce_trainer")
@@ -29,7 +30,8 @@ def generate_part1_with_openai(level="b2"):
     if level != "b2plus":
         level = "b2"
     topic = random.choice(PART1_TOPICS)
-    prompt = get_task_prompt_part1(topic, level)
+    ref_examples = get_rag_examples_text(part=1, topic=topic)
+    prompt = get_task_prompt_part1(topic, level, ref_examples=ref_examples)
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.8)
         content = (comp.choices[0].message.content or "").strip()

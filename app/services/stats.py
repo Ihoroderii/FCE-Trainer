@@ -6,7 +6,7 @@ from datetime import datetime
 
 from flask import session
 
-from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE
+from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE, LISTENING_HISTORY_PARTS
 from app.db import db_connection
 from app.services.repetition import record_review
 
@@ -76,7 +76,8 @@ def record_check_result(result: dict) -> dict | None:
     total = result.get("total", 0)
     if total <= 0:
         return None
-    if part not in PARTS_RANGE and part != GET_PHRASE_PART:
+    _valid_parts = set(PARTS_RANGE) | {GET_PHRASE_PART} | set(LISTENING_HISTORY_PARTS.values())
+    if part not in _valid_parts:
         return None
     user_id = session.get("user_id")
     logger.debug("record_check_result: part=%s score=%d/%d user=%s", part, score, total, user_id)
@@ -126,6 +127,28 @@ def record_check_result(result: dict) -> dict | None:
                 record_review(user_id, part, task_id, score, total)
     except Exception:
         logging.getLogger("fce_trainer").warning("record_review failed", exc_info=True)
+
+    # Per-word repetition tracking for Part 3
+    if part == 3:
+        try:
+            from app.services.word_repetition import record_part3_word_results
+            stems = result.get("stems") or []
+            if stems and details:
+                record_part3_word_results(details, stems)
+        except Exception:
+            logging.getLogger("fce_trainer").warning("record_part3_word_results failed", exc_info=True)
+
+    # Per-word repetition + collocation tracking for Part 2
+    if part == 2:
+        try:
+            from app.services.word_repetition import record_part2_word_results, record_part2_collocations
+            p2_answers = result.get("answers") or []
+            p2_text = result.get("text") or ""
+            if p2_answers and details:
+                record_part2_word_results(details, p2_answers)
+                record_part2_collocations(details, p2_answers, p2_text)
+        except Exception:
+            logging.getLogger("fce_trainer").warning("record_part2_word_results failed", exc_info=True)
 
     return reward
 

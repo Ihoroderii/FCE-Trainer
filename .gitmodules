@@ -1,0 +1,3 @@
+[submodule "proctor"]
+	path = proctor
+	url = https://github.com/Ihoroderii/proctor.git

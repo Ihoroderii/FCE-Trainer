@@ -20,11 +20,13 @@ def e(s):
     return html.escape(str(s)) if s is not None else ""
 
 
-def answers_match(user_val: str, expected: str) -> bool:
+def answers_match(user_val: str, expected: str, strict: bool = False) -> bool:
     a, b = norm(user_val), norm(expected)
     if a == b:
         return True
     if not a or not b:
+        return False
+    if strict:
         return False
     return difflib.SequenceMatcher(None, a, b).ratio() >= 0.88
 

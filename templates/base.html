@@ -16,7 +16,7 @@
     })();
   </script>
 </head>
-<body data-current-part="{{ current_part }}">
+<body data-current-part="{{ current_part }}"{% if mock_mode %} data-mock-mode="1" data-mock-remaining="{{ mock_time_remaining }}"{% endif %}>
   <header class="header">
     <div class="header-inner">
       <a href="{{ url_for('home.home') }}" class="logo logo-link">
@@ -29,9 +29,15 @@
         <span class="logo-text"><strong>CAMBRIDGE</strong><br />English</span>
       </a>
       <div class="header-center">
-        <span class="test-taker-label">Test taker ID</span>
-        <span class="timer-display" id="timer">75:00</span>
-        <button type="button" class="timer-btn" id="timer-toggle" title="Start/Pause">▶</button>
+        {% if mock_mode %}
+        <span class="mock-exam-badge">EXAM</span>
+        <span class="timer-display" id="timer">{{ mock_time_remaining // 60 }}:{{ '%02d' | format(mock_time_remaining % 60) }}</span>
+        {% if mock_time_expired %}<span class="timer-expired-label">Time's up!</span>{% endif %}
+        <form method="post" action="{{ url_for('home.mock_exam_finish') }}" id="mock-finish-form" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button type="submit" class="btn-mock-header-finish" title="Finish exam">Finish</button>
+        </form>
+        {% endif %}
       </div>
       <div class="header-actions">
         <button type="button" class="dark-mode-btn" id="dark-mode-btn" title="Toggle dark mode" aria-label="Toggle dark mode">

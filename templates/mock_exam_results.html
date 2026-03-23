@@ -1,0 +1,47 @@
+{% extends "base_minimal.html" %}
+{% block title %}FCE Mock Exam — Results{% endblock %}
+{% block content %}
+<div class="mock-results-page">
+  <h1 class="mock-results-title">Exam Results</h1>
+
+  <div class="mock-results-summary">
+    <div class="mock-results-score">
+      <span class="mock-results-score-num">{{ results.total_score }}</span>
+      <span class="mock-results-score-sep">/</span>
+      <span class="mock-results-score-total">{{ results.total_questions }}</span>
+    </div>
+    <div class="mock-results-percent">{{ results.percent }}%</div>
+    <div class="mock-results-time">
+      Time used: {{ results.time_used_seconds // 60 }}:{{ '%02d' | format(results.time_used_seconds % 60) }}
+      / {{ results.time_limit_seconds // 60 }}:{{ '%02d' | format(results.time_limit_seconds % 60) }}
+    </div>
+    <div class="mock-results-completed">
+      Parts completed: {{ results.parts_completed }} / {{ results.parts_total }}
+    </div>
+  </div>
+
+  <table class="mock-results-table">
+    <thead>
+      <tr>
+        <th>Part</th>
+        <th>Score</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in results.parts %}
+      <tr class="{{ 'mock-results-incomplete' if not p.completed else '' }}">
+        <td>Part {{ p.part }}</td>
+        <td>{{ p.score }} / {{ p.total }}</td>
+        <td>{{ '✓ Completed' if p.completed else '— Not completed' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="mock-results-actions">
+    <a href="{{ url_for('home.home') }}" class="btn btn-mock-start">Back to Home</a>
+    <a href="{{ url_for('home.mock_exam') }}" class="btn btn-mock-start">Take Another Exam</a>
+  </div>
+</div>
+{% endblock %}

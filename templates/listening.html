@@ -1,0 +1,212 @@
+{% extends "base_minimal.html" %}
+{% block title %}FCE Listening — Part {{ part }}{% endblock %}
+{% block content %}
+<div class="listening-page">
+
+  {# ── Part navigation tabs ── #}
+  <nav class="listening-nav" aria-label="Listening parts">
+    {% for p in parts_range %}
+    <a href="{{ url_for('listening.listening', part=p) }}"
+       class="listening-nav-tab {{ 'listening-nav-active' if p == part else '' }}"
+       title="{{ part_names[p] }}">
+      Part {{ p }}
+    </a>
+    {% endfor %}
+  </nav>
+
+  <h2 class="listening-heading">Listening — Part {{ part }}: {{ part_name }}</h2>
+
+  {% if not task %}
+  {# ── No task available ── #}
+  <div class="listening-empty">
+    <p>No listening tasks available for Part {{ part }}.</p>
+    <a href="{{ url_for('listening.listening', part=part, action='generate') }}"
+       class="btn btn-generate">🤖 Generate new task with AI</a>
+  </div>
+
+  {% else %}
+
+  {# ── Audio player ── #}
+  {% if task.audio_path %}
+  <div class="listening-audio-wrap">
+    <audio id="listening-audio" preload="auto">
+      <source src="{{ task.audio_path }}" type="audio/mpeg" />
+      Your browser does not support the audio element.
+    </audio>
+    <div class="listening-player" id="listening-player">
+      <button type="button" class="listening-play-btn" id="listening-play-btn" title="Play">▶</button>
+      <div class="listening-progress-wrap" id="listening-progress-wrap">
+        <div class="listening-progress-bar" id="listening-progress-bar"></div>
+      </div>
+      <span class="listening-time" id="listening-time">0:00 / 0:00</span>
+      <span class="listening-plays-left" id="listening-plays-left" title="Plays remaining">2 plays left</span>
+      <a href="{{ url_for('listening.listening', part=part, action='regenerate_audio') }}" class="listening-regen-btn" title="Re-generate audio with current TTS engine">🔄</a>
+    </div>
+  </div>
+  {% else %}
+  <div class="listening-no-audio">
+    <p>⚠ Audio not yet generated for this task. Make sure <code>edge-tts</code> is installed (<code>pip install edge-tts</code>).</p>
+    <a href="{{ url_for('listening.listening', part=part, action='regenerate_audio') }}" class="btn btn-generate" style="margin-top:8px">🔄 Retry audio generation</a>
+  </div>
+  {% endif %}
+
+  {# ── Questions form ── #}
+  <form method="POST" action="{{ url_for('listening.listening_check') }}" class="listening-form" id="listening-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <input type="hidden" name="part" value="{{ part }}" />
+
+    {% if part == 1 %}
+    {# Part 1: 8 extracts with MCQ #}
+    {% for ex in task.data.extracts %}
+    {% set i = loop.index0 %}
+    {% set detail = check_result.details[i] if check_result and check_result.details and i < check_result.details|length else none %}
+    <div class="listening-question-block {{ 'result-correct' if detail and detail.correct else ('result-wrong' if detail and not detail.correct else '') }}">
+      <p class="listening-q-intro"><strong>{{ loop.index }}.</strong> {{ ex.intro }}</p>
+      <p class="listening-q-text">{{ ex.question }}</p>
+      <div class="listening-options">
+        {% for opt in ex.options %}
+        <label class="listening-option">
+          <input type="radio" name="q_{{ i }}" value="{{ loop.index0 }}"
+                 {{ 'checked' if detail and detail.user_val == loop.index0 else '' }}
+                 {{ 'disabled' if check_result else '' }} />
+          <span class="listening-opt-letter">{{ ['A','B','C'][loop.index0] }}</span>) {{ opt }}
+        </label>
+        {% endfor %}
+      </div>
+      {% if detail and not detail.correct %}
+      <p class="correct-answer-hint">Correct: {{ ['A','B','C'][detail.expected] }}) {{ ex.options[detail.expected] }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% elif part == 2 %}
+    {# Part 2: 10 sentence completions #}
+    {% for s in task.data.sentences %}
+    {% set i = loop.index0 %}
+    {% set detail = check_result.details[i] if check_result and check_result.details and i < check_result.details|length else none %}
+    <div class="listening-question-block {{ 'result-correct' if detail and detail.correct else ('result-wrong' if detail and not detail.correct else '') }}">
+      <p class="listening-q-text"><strong>{{ loop.index }}.</strong>
+        {{ s.text | replace('____', '<input type="text" name="q_' ~ i ~ '" class="listening-gap-input" autocomplete="off" value="' ~ (detail.user_val if detail else '') ~ '" ' ~ ('disabled' if check_result else '') ~ ' />') | safe }}
+      </p>
+      {% if detail and not detail.correct %}
+      <p class="correct-answer-hint">Correct: {{ detail.expected }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% elif part == 3 %}
+    {# Part 3: 5 speakers → match to statements A-H #}
+    <div class="listening-statements-panel">
+      <h4>Statements</h4>
+      <ul class="listening-statements-list">
+        {% for st in task.data.statements %}
+        <li>{{ st }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% for sp in task.data.speakers %}
+    {% set i = loop.index0 %}
+    {% set detail = check_result.details[i] if check_result and check_result.details and i < check_result.details|length else none %}
+    <div class="listening-question-block {{ 'result-correct' if detail and detail.correct else ('result-wrong' if detail and not detail.correct else '') }}">
+      <p class="listening-q-text"><strong>Speaker {{ loop.index }}</strong></p>
+      <select name="q_{{ i }}" class="listening-select" {{ 'disabled' if check_result else '' }}>
+        <option value="">— Choose —</option>
+        {% for st in task.data.statements %}
+        <option value="{{ loop.index0 }}" {{ 'selected' if detail and detail.user_val == loop.index0 else '' }}>{{ ['A','B','C','D','E','F','G','H'][loop.index0] }}: {{ st | truncate(50) }}</option>
+        {% endfor %}
+      </select>
+      {% if detail and not detail.correct %}
+      <p class="correct-answer-hint">Correct: {{ ['A','B','C','D','E','F','G','H'][detail.expected] }}) {{ task.data.statements[detail.expected] | truncate(60) }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% elif part == 4 %}
+    {# Part 4: 7 MCQ from interview #}
+    {% for q in task.data.questions %}
+    {% set i = loop.index0 %}
+    {% set detail = check_result.details[i] if check_result and check_result.details and i < check_result.details|length else none %}
+    <div class="listening-question-block {{ 'result-correct' if detail and detail.correct else ('result-wrong' if detail and not detail.correct else '') }}">
+      <p class="listening-q-text"><strong>{{ loop.index }}.</strong> {{ q.text }}</p>
+      <div class="listening-options">
+        {% for opt in q.options %}
+        <label class="listening-option">
+          <input type="radio" name="q_{{ i }}" value="{{ loop.index0 }}"
+                 {{ 'checked' if detail and detail.user_val == loop.index0 else '' }}
+                 {{ 'disabled' if check_result else '' }} />
+          <span class="listening-opt-letter">{{ ['A','B','C'][loop.index0] }}</span>) {{ opt }}
+        </label>
+        {% endfor %}
+      </div>
+      {% if detail and not detail.correct %}
+      <p class="correct-answer-hint">Correct: {{ ['A','B','C'][detail.expected] }}) {{ q.options[detail.expected] }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {# ── Score banner ── #}
+    {% if check_result %}
+    <div class="listening-score">
+      Score: <strong>{{ check_result.score }}</strong> / {{ check_result.total }}
+      ({{ (100 * check_result.score / check_result.total) | round(0) | int }}%)
+    </div>
+    {% endif %}
+
+    {# ── Transcript (shown after checking answers) ── #}
+    {% if check_result %}
+    <div class="listening-transcript-wrap">
+      <button type="button" class="btn btn-transcript-toggle" id="btn-transcript-toggle">📜 Show transcript</button>
+      <a href="{{ url_for('listening.listening_transcript', part=part) }}" class="btn btn-generate" download>💾 Download .txt</a>
+      <div class="listening-transcript" id="listening-transcript" style="display:none">
+        {% if part == 1 %}
+          {% for ex in task.data.extracts %}
+          <div class="transcript-block">
+            <p class="transcript-intro"><strong>Extract {{ loop.index }}.</strong> <em>{{ ex.intro }}</em></p>
+            {% for seg in ex.script %}
+            <p><span class="transcript-voice">{{ seg.voice }}:</span> {{ seg.text }}</p>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        {% elif part == 3 %}
+          {% for sp in task.data.speakers %}
+          <div class="transcript-block">
+            <p class="transcript-intro"><strong>Speaker {{ loop.index }}</strong></p>
+            <p><span class="transcript-voice">{{ sp.voice }}:</span> {{ sp.text }}</p>
+          </div>
+          {% endfor %}
+        {% else %}
+          {% for seg in task.data.script %}
+          <p><span class="transcript-voice">{{ seg.voice }}:</span> {{ seg.text }}</p>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Action buttons ── #}
+    <div class="listening-actions">
+      {% if not check_result %}
+      <button type="submit" class="btn btn-submit-listening" id="listening-submit">✓ Check answers</button>
+      {% endif %}
+      <a href="{{ url_for('listening.listening', part=part, action='next') }}" class="btn btn-next-listening">→ Next task</a>
+      <a href="{{ url_for('listening.listening', part=part, action='generate') }}" class="btn btn-generate">🤖 Generate new</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+<script src="{{ url_for('static', filename='listening.js') }}?v=1"></script>
+<script>
+(function(){
+  var btn = document.getElementById('btn-transcript-toggle');
+  var panel = document.getElementById('listening-transcript');
+  if (btn && panel) {
+    btn.addEventListener('click', function() {
+      var hidden = panel.style.display === 'none';
+      panel.style.display = hidden ? 'block' : 'none';
+      btn.textContent = hidden ? '📜 Hide transcript' : '📜 Show transcript';
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -11,17 +11,19 @@ from app.ai.prompts import get_task_prompt_part6
 from app.ai.explanations import fetch_explanations_part6
 from app.config import MAX_EXPLANATION_LEN
 from app.db import _generic_get_or_create, get_part6_task_by_id, db_connection
-from app.parts.topics import PART3_TOPICS
+from app.parts.topics import PART6_TOPICS
 from app.utils import e as _e
 
 logger = logging.getLogger("fce_trainer")
 
 
-def generate_part6_with_openai():
+def generate_part6_with_openai(level="b2"):
     if not ai_available:
         return None
-    topic = random.choice(PART3_TOPICS)
-    prompt = get_task_prompt_part6(topic)
+    topic = random.choice(PART6_TOPICS)
+    from app.rag.helpers import get_rag_examples_text
+    ref_examples = get_rag_examples_text(part=6, topic=topic)
+    prompt = get_task_prompt_part6(topic, level=level, ref_examples=ref_examples)
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
@@ -36,8 +38,10 @@ def generate_part6_with_openai():
             return None
         if not isinstance(answers, list) or len(answers) != 6:
             return None
-        gap_placeholders = {"GAP1", "GAP2", "GAP3", "GAP4", "GAP5", "GAP6"}
-        if sum(1 for p in paragraphs if p in gap_placeholders) != 6:
+        # Count GAP markers embedded within paragraphs
+        all_text = ' '.join(paragraphs)
+        found_gaps = re.findall(r'GAP[1-6]', all_text)
+        if len(found_gaps) != 6 or set(found_gaps) != {"GAP1", "GAP2", "GAP3", "GAP4", "GAP5", "GAP6"}:
             return None
         for a in answers:
             if a not in range(7):
@@ -70,49 +74,69 @@ def build_part6_text(item, check_result=None):
     answers = item.get("answers", [])
     out = []
     gap_i = 0
-    # Group consecutive text paragraphs/gaps into flowing sections.
-    # A gap is rendered as an inline-block span within surrounding text.
-    for para in item.get("paragraphs", []):
-        if para.startswith("GAP"):
-            user_val = None
-            detail = None
-            if check_result and check_result.get("details") and gap_i < len(check_result["details"]):
-                detail = check_result["details"][gap_i]
-                user_val = detail.get("user_val")
-            cls = ""
-            if detail:
-                cls = " result-correct" if detail.get("correct") else " result-wrong"
-            try:
-                sel_idx = int(user_val) if user_val is not None else -1
-            except (TypeError, ValueError):
-                sel_idx = -1
-            letter = letters_g[sel_idx] if 0 <= sel_idx < len(letters_g) else "-"
-            val_attr = str(sel_idx) if 0 <= sel_idx < len(letters_g) else ""
-            correct_hint = ""
-            explanation_html = ""
-            if detail and not detail.get("correct"):
-                correct_idx = answers[gap_i] if gap_i < len(answers) else -1
-                correct_letter = letters_g[correct_idx] if 0 <= correct_idx < len(letters_g) else "?"
-                correct_sentence = sentences[correct_idx][:80] if 0 <= correct_idx < len(sentences) else ""
-                correct_hint = f'<span class="correct-answer-hint">Correct: {correct_letter}) {_e(correct_sentence)}...</span>'
-            if detail:
-                exp = detail.get("explanation")
-                if exp:
-                    explanation_html = f'<span class="answer-explanation">{_e(exp)}</span>'
-            gap_num = gap_i + 1
-            out.append(
-                f'<span class="part6-gap-drop part6-gap-inline{cls}" data-gap-index="{gap_i}" data-droppable="true">'
-                f'<span class="part6-gap-num">{gap_num}</span>'
-                f'<span class="part6-gap-label">{letter}</span>'
-                f'<span class="part6-gap-sentence"></span>'
-                f'<button type="button" class="part6-gap-clear" title="Clear gap" aria-label="Clear gap">x</button>'
-                f'<input type="hidden" name="p6_{gap_i}" value="{val_attr}" aria-label="Gap {gap_num}">'
-                f'{correct_hint}{explanation_html}'
-                f'</span>'
-            )
-            gap_i += 1
+    gap_pattern = re.compile(r'(GAP[1-6])')
+    # Normalise old data where gaps are standalone array entries:
+    # merge them into the previous paragraph so they render inline.
+    raw = item.get("paragraphs", [])
+    paragraphs = []
+    gap_only = re.compile(r'^GAP[1-6]$')
+    for entry in raw:
+        entry = str(entry).strip()
+        if gap_only.match(entry):
+            if paragraphs:
+                paragraphs[-1] = paragraphs[-1] + ' ' + entry
+            else:
+                paragraphs.append(entry)
         else:
-            out.append(f'<p class="part6-para">{_e(para)}</p>')
+            paragraphs.append(entry)
+    for para in paragraphs:
+        parts = gap_pattern.split(para)
+        para_html = []
+        for part in parts:
+            if gap_pattern.fullmatch(part):
+                user_val = None
+                detail = None
+                if check_result and check_result.get("details") and gap_i < len(check_result["details"]):
+                    detail = check_result["details"][gap_i]
+                    user_val = detail.get("user_val")
+                cls = ""
+                if detail:
+                    cls = " result-correct" if detail.get("correct") else " result-wrong"
+                try:
+                    sel_idx = int(user_val) if user_val is not None else -1
+                except (TypeError, ValueError):
+                    sel_idx = -1
+                letter = letters_g[sel_idx] if 0 <= sel_idx < len(letters_g) else "-"
+                val_attr = str(sel_idx) if 0 <= sel_idx < len(letters_g) else ""
+                correct_hint = ""
+                explanation_html = ""
+                if detail and not detail.get("correct"):
+                    correct_idx = answers[gap_i] if gap_i < len(answers) else -1
+                    correct_letter = letters_g[correct_idx] if 0 <= correct_idx < len(letters_g) else "?"
+                    correct_sentence = sentences[correct_idx][:80] if 0 <= correct_idx < len(sentences) else ""
+                    correct_hint = f'<span class="correct-answer-hint">Correct: {correct_letter}) {_e(correct_sentence)}...</span>'
+                if detail:
+                    exp = detail.get("explanation")
+                    if exp:
+                        explanation_html = f'<span class="answer-explanation">{_e(exp)}</span>'
+                gap_num = gap_i + 1
+                para_html.append(
+                    f'<span class="part6-gap-drop part6-gap-inline{cls}" data-gap-index="{gap_i}" data-droppable="true">'
+                    f'<span class="part6-gap-num">{gap_num}</span>'
+                    f'<span class="part6-gap-label">{letter}</span>'
+                    f'<span class="part6-gap-sentence"></span>'
+                    f'<button type="button" class="part6-gap-clear" title="Clear gap" aria-label="Clear gap">x</button>'
+                    f'<input type="hidden" name="p6_{gap_i}" value="{val_attr}" aria-label="Gap {gap_num}">'
+                    f'{correct_hint}{explanation_html}'
+                    f'</span>'
+                )
+                gap_i += 1
+            else:
+                text = part.strip()
+                if text:
+                    para_html.append(_e(text))
+        if para_html:
+            out.append(f'<p class="part6-para">{" ".join(para_html)}</p>')
     return '\n'.join(out)
 
 
