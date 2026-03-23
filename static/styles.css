@@ -2652,6 +2652,156 @@ body.minimal-layout {
   text-decoration: underline;
 }
 
+/* Mock exam rules */
+.mock-exam-rules {
+  margin: 1rem 0 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--card-bg, #f9f9fb);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 10px;
+}
+.mock-exam-rules h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+.mock-exam-rules ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  line-height: 1.7;
+}
+.mock-exam-active-banner {
+  padding: 1rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+.btn-mock-finish {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0.5rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn-mock-cancel {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Mock exam badge in header */
+.mock-exam-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #fff;
+  background: #dc3545;
+  border-radius: 4px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.btn-mock-header-finish {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.btn-mock-header-finish:hover {
+  background: var(--accent-hover);
+}
+
+/* Mock exam results page */
+.mock-results-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+  text-align: center;
+}
+.mock-results-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 1.5rem;
+}
+.mock-results-summary {
+  margin-bottom: 1.5rem;
+}
+.mock-results-score {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.mock-results-score-sep {
+  margin: 0 0.15em;
+  opacity: 0.5;
+}
+.mock-results-percent {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0.25rem 0;
+}
+.mock-results-time,
+.mock-results-completed {
+  font-size: 0.95rem;
+  color: var(--muted, #666);
+  margin: 0.25rem 0;
+}
+.mock-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0 1.5rem;
+  text-align: left;
+}
+.mock-results-table th,
+.mock-results-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border, #e0e0e0);
+}
+.mock-results-table th {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.mock-results-incomplete td {
+  opacity: 0.5;
+}
+.mock-results-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Home mock exam card */
+.home-section-mock {
+  border-left-color: #dc3545;
+}
+
+/* Mock mode: submitted banner (no score shown) */
+.score-banner--mock {
+  background: #d4edda;
+  border-color: #c3e6cb;
+}
+
 /* ----- Responsive ----- */
 @media (max-width: 900px) {
   .part3-layout {

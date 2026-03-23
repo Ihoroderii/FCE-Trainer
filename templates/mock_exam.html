@@ -2,10 +2,42 @@
 {% block title %}FCE Exam Trainer — Mock exam{% endblock %}
 {% block content %}
 <div class="mock-exam-page">
-  <h1 class="mock-exam-title">Take mock exam</h1>
-  <p class="mock-exam-intro">You are about to start a timed mock exam. Your proctor <strong>{{ proctor_name }}</strong> is configured.</p>
-  <p class="mock-exam-desc">The exam includes Use of English and Reading (Parts 1–7). Complete all parts and submit your answers when finished.</p>
+  <h1 class="mock-exam-title">Mock FCE Exam</h1>
+
+  {% if exam_active %}
+  <div class="mock-exam-active-banner">
+    <p><strong>Exam in progress!</strong> Time remaining: <span id="mock-resume-timer">{{ time_remaining // 60 }}:{{ '%02d' | format(time_remaining % 60) }}</span></p>
+    <p><a href="{{ url_for('use_of_english.use_of_english', part=1) }}" class="btn btn-mock-start">Resume exam →</a></p>
+    <form method="post" action="{{ url_for('home.mock_exam_finish') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <button type="submit" class="btn btn-mock-finish">Finish exam now</button>
+    </form>
+    <form method="post" action="{{ url_for('home.mock_exam_cancel') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <button type="submit" class="btn btn-mock-cancel" onclick="return confirm('Are you sure? All progress will be lost.')">Cancel exam</button>
+    </form>
+  </div>
+  {% else %}
+
+  <p class="mock-exam-intro">Proctor <strong>{{ proctor_name }}</strong> is configured and ready.</p>
+
+  <div class="mock-exam-rules">
+    <h2>Exam Rules</h2>
+    <ul>
+      <li><strong>Duration:</strong> 75 minutes (timed)</li>
+      <li><strong>Parts:</strong> 1–7 (Use of English &amp; Reading)</li>
+      <li><strong>Questions:</strong> 52 total</li>
+      <li>The timer starts when you begin and cannot be paused</li>
+      <li>You can navigate between parts freely</li>
+      <li>Answers are auto-saved when you switch parts</li>
+      <li>When time expires, your exam is submitted automatically</li>
+      <li>Your proctor will monitor your session</li>
+    </ul>
+  </div>
+
   <p><a href="{{ url_for('home.mock_exam_start') }}" class="btn btn-mock-start">Start exam →</a></p>
+  {% endif %}
+
   <p class="mock-exam-back"><a href="{{ url_for('home.home') }}">← Back to home</a></p>
 </div>
 {% endblock %}

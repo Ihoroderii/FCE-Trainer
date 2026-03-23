@@ -28,11 +28,23 @@ from app.parts import (
     get_part1_task_by_id,
 )
 from app.services.stats import get_part_stats, record_check_result
+from app.services.mock_exam import is_mock_exam_active, get_time_remaining, record_part_score, is_time_expired
 
 logger = logging.getLogger("fce_trainer")
 
 _CHECK_RESULT_CACHE = {}
 bp = Blueprint("use_of_english", __name__)
+
+
+def _record_mock_score(result: dict) -> None:
+    """Extract score from a check result and record it for mock exam."""
+    part = result.get("part")
+    if not part:
+        return
+    score = result.get("score", 0)
+    total = result.get("total", 0)
+    if total > 0:
+        record_part_score(part, score, total)
 
 
 def _get_idx(part: int):
@@ -94,6 +106,9 @@ def _handle_check_action(form):
     result = checker(None, form)
     if result:
         record_check_result(result)
+        # Record score for mock exam
+        if is_mock_exam_active():
+            _record_mock_score(result)
         part_checked = result.get("part")
         if part_checked and part_checked in PARTS_RANGE:
             parts_checked = session.get("parts_checked") or []
@@ -276,4 +291,9 @@ def use_of_english():
     ctx = _build_template_context(current_part, check_result, items)
     ctx["csrf_expired"] = request.args.get("csrf_expired")
     ctx["last_reward"] = session.pop("last_reward", None)
+    # Mock exam context
+    mock_active = is_mock_exam_active()
+    ctx["mock_mode"] = mock_active
+    ctx["mock_time_remaining"] = get_time_remaining() if mock_active else 0
+    ctx["mock_time_expired"] = is_time_expired() if mock_active else False
     return render_template("index.html", **ctx)

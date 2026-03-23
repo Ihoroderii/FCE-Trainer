@@ -8,7 +8,7 @@ import re
 
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 
-from app.config import ACHIEVEMENTS, GAMIFICATION_ENABLED, PARTS_RANGE
+from app.config import ACHIEVEMENTS, GAMIFICATION_ENABLED, PARTS_RANGE, PART_QUESTION_COUNTS
 from app.services.stats import (
     get_part_stats,
     get_daily_stats,
@@ -17,6 +17,14 @@ from app.services.stats import (
     get_words_learning,
     get_get_phrase_stats,
     claim_orphaned_stats,
+)
+from app.services.mock_exam import (
+    start_mock_exam,
+    is_mock_exam_active,
+    get_time_remaining,
+    finish_mock_exam,
+    cancel_mock_exam,
+    get_mock_exam_results,
 )
 from app.services.user import create_email_user, verify_email_password
 from app.utils import login_required
@@ -113,7 +121,7 @@ def _call_proctor_join(backend_url, exam_code, candidate_identifier):
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return (data.get("session_id"), data.get("livekit_room_name"))
+            return (data.get("session_id"), data.get("room_name"))
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, KeyError) as e:
         logger.warning("Proctor join failed: %s", e)
         return None
@@ -125,9 +133,13 @@ def mock_exam():
     if not proctor_is_configured():
         return redirect(url_for("home.home", mode="mock", proctor_required=1))
     proctor_config = proctor_get_config()
+    # Show different page if exam already active
+    active = is_mock_exam_active()
     return render_template(
         "mock_exam.html",
         proctor_name=proctor_config.get("name", "Proctor"),
+        exam_active=active,
+        time_remaining=get_time_remaining() if active else None,
     )
 
 
@@ -141,16 +153,96 @@ def mock_exam_start():
     frontend_url = cfg.get("frontend_url")
     exam_code = cfg.get("exam_code", "DEMO")
     candidate = (session.get("user_name") or session.get("user_email") or "Candidate").strip() or "Candidate"
+
+    proctor_session_id = None
+
     if backend_url and frontend_url:
         result = _call_proctor_join(backend_url, exam_code, candidate)
         if result:
-            session_id, livekit_room_name = result
-            params = urlencode({"session_id": session_id, "livekit_room_name": livekit_room_name or ""})
-            return redirect(f"{frontend_url}/entry?{params}")
-        params = urlencode({"exam_code": exam_code, "name": candidate})
-        return redirect(f"{frontend_url}/join?{params}")
+            proctor_session_id = result[0]
+            # Store proctor info for later callback
+            session["proctor_backend_url"] = backend_url
+            session["proctor_frontend_url"] = frontend_url
+
+    # Start the timed mock exam
+    start_mock_exam(proctor_session_id=proctor_session_id)
     session["mock_exam"] = True
+
+    # If proctor frontend exists and session was created, redirect there first
+    # Proctor frontend will redirect back to /mock-exam/begin when ready
+    if proctor_session_id and frontend_url:
+        params = urlencode({
+            "session_id": proctor_session_id,
+            "return_url": url_for("home.mock_exam_begin", _external=True),
+        })
+        return redirect(f"{frontend_url}/entry?{params}")
+
+    # No proctor frontend — go directly to exam
     return redirect(url_for("use_of_english.use_of_english", part=1))
+
+
+@bp.route("/mock-exam/begin")
+@login_required
+def mock_exam_begin():
+    """Return point from proctor frontend — candidate starts the actual exam."""
+    if not is_mock_exam_active():
+        return redirect(url_for("home.mock_exam"))
+    return redirect(url_for("use_of_english.use_of_english", part=1))
+
+
+@bp.route("/mock-exam/finish", methods=["GET", "POST"])
+@login_required
+def mock_exam_finish():
+    """Finish the mock exam, show results, optionally post to proctor."""
+    results = finish_mock_exam()
+
+    # Post results to proctor backend if session exists
+    proctor_session_id = results.get("proctor_session_id")
+    backend_url = session.pop("proctor_backend_url", None)
+    if proctor_session_id and backend_url:
+        _post_results_to_proctor(backend_url, proctor_session_id, results)
+
+    session.pop("mock_exam", None)
+
+    return render_template("mock_exam_results.html", results=results)
+
+
+@bp.route("/mock-exam/cancel", methods=["POST"])
+@login_required
+def mock_exam_cancel():
+    """Abandon the mock exam."""
+    cancel_mock_exam()
+    return redirect(url_for("home.home"))
+
+
+def _post_results_to_proctor(backend_url: str, proctor_session_id: int, results: dict):
+    """Post exam results to proctor backend as a note + terminate session."""
+    import urllib.request
+    import urllib.error
+
+    score_summary = f"FCE Exam Results: {results['total_score']}/{results['total_questions']} ({results['percent']}%)"
+    parts_detail = []
+    for pr in results["parts"]:
+        status = f"{pr['score']}/{pr['total']}" if pr["completed"] else "not completed"
+        parts_detail.append(f"Part {pr['part']}: {status}")
+    note_text = score_summary + "\n" + "\n".join(parts_detail)
+
+    # Post note
+    try:
+        url = f"{backend_url}/api/proctor/sessions/{proctor_session_id}/notes"
+        body = json.dumps({"note": note_text, "timestamp_sec": results["time_used_seconds"]}).encode("utf-8")
+        req = urllib.request.Request(url, data=body, method="POST", headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        logger.warning("Failed to post results to proctor", exc_info=True)
+
+    # Terminate session
+    try:
+        url = f"{backend_url}/api/proctor/sessions/{proctor_session_id}/terminate"
+        req = urllib.request.Request(url, data=b"{}", method="POST", headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        logger.warning("Failed to terminate proctor session", exc_info=True)
 
 
 EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")

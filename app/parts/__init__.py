@@ -32,7 +32,7 @@ _GENERATE_CONFIG = {
     3: {"fn": lambda level: part3.generate_part3_with_openai(level=level), "session_key": "part3_task_id", "default_level": "b2"},
     5: {"fn": lambda level: part5.generate_part5_with_openai(level=level), "session_key": "part5_task_id", "default_level": "b2"},
     6: {"fn": lambda level: part6.generate_part6_with_openai(level=level), "session_key": "part6_task_id", "default_level": "b2"},
-    7: {"fn": lambda level: part7.generate_part7_with_openai(), "session_key": "part7_task_id", "default_level": "b2"},
+    7: {"fn": lambda level: part7.generate_part7_with_openai(level=level), "session_key": "part7_task_id", "default_level": "b2"},
 }
 
 _PART_ERROR_MSGS = {

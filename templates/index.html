@@ -5,6 +5,7 @@
 {% endif %}
 {% macro csrf_input() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endmacro %}
 {% macro generate_buttons(action_name, label, show_b2plus=true, part_num=1) %}
+{% if not mock_mode %}
 <div class="part2-generate-row">
   <span class="part2-generate-label">{{ label }}</span>
   <form method="post" action="{{ url_for('use_of_english.use_of_english', part=part_num) }}" class="part2-generate-form">
@@ -24,6 +25,7 @@
   </form>
   {% endif %}
 </div>
+{% endif %}
 {% endmacro %}
 
 <div class="part-stats-box {% if current_part == 5 and not part5_error %}part-stats-box--with-timer{% endif %}">
@@ -56,13 +58,17 @@
 </div>
 {% endif %}
 
-{% if check_result and check_result.part == current_part %}
+{% if check_result and check_result.part == current_part and not mock_mode %}
 <div class="score-banner" id="score-banner" role="status" aria-live="polite">
   <span class="score-banner-title">Score:</span>
   <span class="score-banner-value">{{ check_result.score }} / {{ check_result.total }}</span>
   <span class="score-banner-label">
     {% if current_part == 4 %}up to 2 marks per question{% elif current_part in (5, 6) %}2 marks each{% else %}1 mark each{% endif %}
   </span>
+</div>
+{% elif check_result and check_result.part == current_part and mock_mode %}
+<div class="score-banner score-banner--mock" id="score-banner" role="status" aria-live="polite">
+  <span class="score-banner-title">✓ Answers submitted</span>
 </div>
 {% endif %}
 
@@ -85,7 +91,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english.use_of_english', part=1, next=1) }}" class="btn btn-next">Next task</a>
+          {% if not mock_mode %}<a href="{{ url_for('use_of_english.use_of_english', part=1, next=1) }}" class="btn btn-next">Next task</a>{% endif %}
         </div>
       </form>
     {% endif %}
@@ -111,7 +117,7 @@
       </div>
       <div class="actions">
         <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-        <a href="{{ url_for('use_of_english.use_of_english', part=2, next=1) }}" class="btn btn-next">Next task</a>
+        {% if not mock_mode %}<a href="{{ url_for('use_of_english.use_of_english', part=2, next=1) }}" class="btn btn-next">Next task</a>{% endif %}
       </div>
     </form>
     {% endif %}
@@ -145,7 +151,7 @@
       {{ part3_html|safe }}
       <div class="actions">
         <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-        <a href="{{ url_for('use_of_english.use_of_english', part=3, next=1) }}" class="btn btn-next">Next task</a>
+        {% if not mock_mode %}<a href="{{ url_for('use_of_english.use_of_english', part=3, next=1) }}" class="btn btn-next">Next task</a>{% endif %}
       </div>
     </form>
     {% endif %}
@@ -181,7 +187,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english.use_of_english', part=4, next=1) }}" class="btn btn-next">Next set</a>
+          {% if not mock_mode %}<a href="{{ url_for('use_of_english.use_of_english', part=4, next=1) }}" class="btn btn-next">Next set</a>{% endif %}
         </div>
       </form>
     {% endif %}
@@ -209,7 +215,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english.use_of_english', part=5, next=1) }}" class="btn btn-next">Next task</a>
+          {% if not mock_mode %}<a href="{{ url_for('use_of_english.use_of_english', part=5, next=1) }}" class="btn btn-next">Next task</a>{% endif %}
         </div>
       </form>
     {% endif %}
@@ -237,7 +243,7 @@
         </div>
         <div class="actions">
           <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-          <a href="{{ url_for('use_of_english.use_of_english', part=6, next=1) }}" class="btn btn-next">Next task</a>
+          {% if not mock_mode %}<a href="{{ url_for('use_of_english.use_of_english', part=6, next=1) }}" class="btn btn-next">Next task</a>{% endif %}
         </div>
       </form>
     {% endif %}
@@ -251,7 +257,7 @@
     {% if part7_generated is not none and part7_generated > 0 %}
       <div class="feedback success">Generated new multiple matching text.</div>
     {% endif %}
-    {{ generate_buttons("generate_part7", "Generate Part 7 (multiple matching):", show_b2plus=false, part_num=7) }}
+    {{ generate_buttons("generate_part7", "Generate Part 7 (multiple matching):", show_b2plus=true, part_num=7) }}
     {% if part7_error %}
       <div class="feedback error">{{ part7_error }}</div>
     {% else %}
@@ -265,7 +271,7 @@
       </div>
       <div class="actions">
         <button type="submit" name="action" value="check" class="btn btn-check">Check answers</button>
-        <a href="{{ url_for('use_of_english.use_of_english', part=7, next=1) }}" class="btn btn-next">Next set</a>
+        {% if not mock_mode %}<a href="{{ url_for('use_of_english.use_of_english', part=7, next=1) }}" class="btn btn-next">Next set</a>{% endif %}
       </div>
     </form>
     {% endif %}

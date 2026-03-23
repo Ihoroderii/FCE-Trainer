@@ -130,6 +130,14 @@
       <span class="home-section-cta">Open settings &rarr;</span>
     </a>
     {% endif %}
+    {% if proctor_configured %}
+    <a href="{{ url_for('home.mock_exam') }}" class="home-section-card home-section-mock">
+      <span class="home-section-icon" aria-hidden="true">🎯</span>
+      <h3 class="home-section-title">Mock Exam</h3>
+      <p class="home-section-desc">Take a full timed FCE Use of English &amp; Reading exam (75 minutes, Parts&nbsp;1–7) with proctored monitoring.</p>
+      <span class="home-section-cta">Start mock exam &rarr;</span>
+    </a>
+    {% endif %}
   </div>
 
   {# ── Account & stats ── #}

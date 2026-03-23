@@ -227,13 +227,25 @@ No other text or markdown."""
     return _append_examples(prompt, ref_examples)
 
 
-def get_task_prompt_part7(topic: str, ref_examples: str = "") -> str:
+def get_task_prompt_part7(topic: str, level: str = "b2", ref_examples: str = "") -> str:
+    level = (level or "b2").strip().lower()
+    if level != "b2plus":
+        level = "b2"
+    if level == "b2plus":
+        level_instruction = (
+            "Total length 600-700 words. B2+ level: use more sophisticated vocabulary, complex sentence structures, "
+            "subtle distinctions between sections, and statements that require careful inference and paraphrasing."
+        )
+    else:
+        level_instruction = (
+            "Total length 600-700 words (B2 level)."
+        )
     prompt = f"""You are an FCE (B2 First) Reading exam expert. Generate exactly ONE Part 7 (Multiple matching) task.
 
 The text MUST be about this topic: "{topic}". Use a specific angle to make the text engaging and varied.
 
 Part 7 consists of:
-- Either ONE long text divided into 4-6 sections (labeled A, B, C, D, and optionally E, F) OR 4-5 short separate texts. Total length 600-700 words (B2 level).
+- Either ONE long text divided into 4-6 sections (labeled A, B, C, D, and optionally E, F) OR 4-5 short separate texts. {level_instruction}
 - 10 statements that the candidate must match to the correct section. Each correct match = 1 mark.
 
 QUALITY REQUIREMENTS:

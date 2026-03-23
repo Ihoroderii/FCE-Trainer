@@ -1,0 +1,12 @@
+# Add one example
+python -m scripts.rag_manager add --paper use_of_english --part 1 --type multiple_choice_cloze --topic "travel" --file my_example.txt
+
+# Bulk add from JSON
+python -m scripts.rag_manager add-json scripts/rag_examples_template.json
+
+# Compute embeddings (uses OpenAI API)
+python -m scripts.rag_manager rebuild-embeddings
+
+# Check what's stored
+python -m scripts.rag_manager stats
+python -m scripts.rag_manager list --paper use_of_english

@@ -53,13 +53,13 @@ def _parse_json_relaxed(raw):
         return None
 
 
-def generate_part7_with_openai():
+def generate_part7_with_openai(level="b2"):
     if not ai_available:
         return None
     topic = random.choice(PART3_TOPICS)
     from app.rag.helpers import get_rag_examples_text
     ref_examples = get_rag_examples_text(part=7, topic=topic)
-    prompt = get_task_prompt_part7(topic, ref_examples=ref_examples)
+    prompt = get_task_prompt_part7(topic, level=level, ref_examples=ref_examples)
     try:
         comp = chat_create([{"role": "user", "content": prompt}], temperature=0.7)
         content = (comp.choices[0].message.content or "").strip()
@@ -72,8 +72,10 @@ def generate_part7_with_openai():
         sections = data.get("sections")
         questions = data.get("questions")
         if not isinstance(sections, list) or len(sections) < 4 or len(sections) > 6:
+            logger.warning("Part 7 generation: invalid section count %s", len(sections) if isinstance(sections, list) else type(sections))
             return None
         if not isinstance(questions, list) or len(questions) != 10:
+            logger.warning("Part 7 generation: expected 10 questions, got %s", len(questions) if isinstance(questions, list) else type(questions))
             return None
         section_ids = [s.get("id", "").strip().upper() for s in sections]
         sections_clean = []
@@ -85,12 +87,14 @@ def generate_part7_with_openai():
             })
         total_words = sum(len(sec["text"].split()) for sec in sections_clean)
         if total_words < 550 or total_words > 750:
+            logger.warning("Part 7 generation: word count %d out of range 550-750", total_words)
             return None
         questions_clean = []
         for q in questions:
             text = (q.get("text") or "").strip()
             correct = (q.get("correct") or "").strip().upper()
             if not text or correct not in section_ids:
+                logger.warning("Part 7 generation: invalid question (text=%r, correct=%r, valid_ids=%s)", text[:50] if text else '', correct, section_ids)
                 return None
             questions_clean.append({"text": text, "correct": correct})
         with db_connection() as conn:
