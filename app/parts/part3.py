@@ -17,6 +17,7 @@ from app.utils import e as _e, answers_match, extract_json_object, validate_part
 logger = logging.getLogger("fce_trainer")
 
 
+def generate_part3_with_openai(level="b2"):
     topic = random.choice(PART3_TOPICS)
 
     # RAG: retrieve similar examples for style reference
