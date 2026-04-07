@@ -7,9 +7,10 @@
   <p class="stats-page-intro">Day and week overview, progress over time, and words you're learning from Part 3 (word formation). Stats are saved when you're signed in and click <strong>Check answers</strong> after a practice task.</p>
 
   <nav class="stats-nav" aria-label="Statistics sections">
-    <a href="#game" class="stats-nav-link">Game</a>
-    <a href="#achievements" class="stats-nav-link">Achievements</a>
+    {% if game %}<a href="#game" class="stats-nav-link">Game</a>{% endif %}
+    {% if game %}<a href="#achievements" class="stats-nav-link">Achievements</a>{% endif %}
     <a href="#overview" class="stats-nav-link">All-time</a>
+    {% if listening_stats and (listening_stats | selectattr('attempts') | list | length) > 0 %}<a href="#listening" class="stats-nav-link">Listening</a>{% endif %}
     <a href="#today" class="stats-nav-link">Today</a>
     <a href="#week" class="stats-nav-link">This week</a>
     <a href="#progress" class="stats-nav-link">Progress</a>
@@ -59,6 +60,7 @@
   {% endif %}
 
   {# ── Achievements ── #}
+  {% if game %}
   <section id="achievements" class="stats-panel">
     <h2 class="stats-panel-title">Achievements</h2>
     <p class="stats-panel-desc">Earn badges by practicing regularly, getting perfect scores, and reaching XP milestones.</p>
@@ -78,6 +80,7 @@
       {% endfor %}
     </div>
   </section>
+  {% endif %}
 
   {# ── All-time overview ── #}
   <section id="overview" class="stats-panel">
@@ -149,6 +152,58 @@
     <p class="home-stats-link"><a href="{{ url_for('get_phrases.get_phrases') }}" class="btn btn-next">Practice Get phrases</a></p>
     {% endif %}
   </section>
+
+  {# ── Listening all-time ── #}
+  {% set listening_has_any = listening_stats and (listening_stats | selectattr('attempts') | list | length) > 0 %}
+  {% if listening_has_any %}
+  <section id="listening" class="stats-panel">
+    <h2 class="stats-panel-title">All-time (Listening)</h2>
+    <table class="stats-table stats-table--colorful">
+      <thead>
+        <tr><th>Part</th><th>Right</th><th>Wrong</th><th>Attempts</th><th>Accuracy</th></tr>
+      </thead>
+      <tbody>
+        {% set lns = namespace(tc=0, tw=0, att=0, tq=0) %}
+        {% for s in listening_stats %}
+        {% set tier = 'excellent' if s.percent is not none and s.percent >= 80 else ('good' if s.percent is not none and s.percent >= 60 else ('mid' if s.percent is not none and s.percent >= 40 else 'low')) %}
+        <tr class="stats-row--{{ tier if s.attempts else 'none' }}">
+          <td class="stats-part-cell"><span class="stats-part-badge">{{ s.part_label }}</span></td>
+          <td class="stats-right">{{ s.total_correct }}</td>
+          <td class="stats-wrong">{{ s.total_wrong }}</td>
+          <td>{{ s.attempts }}</td>
+          <td class="stats-pct-cell">
+            {% if s.percent is not none %}
+            <div class="stats-pct-bar"><div class="stats-pct-fill stats-pct-fill--{{ tier }}" style="width:{{ s.percent }}%"></div></div>
+            <span class="stats-pct-val">{{ s.percent }}%</span>
+            {% else %}<span class="stats-pct-val stats-pct-val--none">&mdash;</span>{% endif %}
+          </td>
+        </tr>
+        {% set lns.tc = lns.tc + s.total_correct %}
+        {% set lns.tw = lns.tw + s.total_wrong %}
+        {% set lns.att = lns.att + s.attempts %}
+        {% set lns.tq = lns.tq + s.total_questions %}
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        {% set l_overall_pct = (lns.tc * 100 / lns.tq)|round(1) if lns.tq else 0 %}
+        {% set lotier = 'excellent' if l_overall_pct >= 80 else ('good' if l_overall_pct >= 60 else ('mid' if l_overall_pct >= 40 else 'low')) %}
+        <tr class="stats-row--total">
+          <td class="stats-part-cell"><span class="stats-part-badge stats-part-badge--total">Overall</span></td>
+          <td class="stats-right">{{ lns.tc }}</td>
+          <td class="stats-wrong">{{ lns.tw }}</td>
+          <td>{{ lns.att }}</td>
+          <td class="stats-pct-cell">
+            {% if lns.tq %}
+            <div class="stats-pct-bar"><div class="stats-pct-fill stats-pct-fill--{{ lotier }}" style="width:{{ l_overall_pct }}%"></div></div>
+            <span class="stats-pct-val">{{ l_overall_pct }}%</span>
+            {% else %}<span class="stats-pct-val stats-pct-val--none">&mdash;</span>{% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+    <p class="home-stats-link"><a href="{{ url_for('listening.listening') }}" class="btn btn-next">Practice Listening</a></p>
+  </section>
+  {% endif %}
 
   {# ── Today ── #}
   <section id="today" class="stats-panel">

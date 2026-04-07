@@ -671,3 +671,52 @@
       });
     });
   })();
+
+  // ── AI action loading indicators ─────────────────────────────────────────
+  // Shows a spinner on the clicked button whenever a "generate" or "check"
+  // form is submitted, so users know the AI call is in progress.
+  (function () {
+    function setLoading(btn, label) {
+      btn.disabled = true;
+      btn.dataset.origText = btn.textContent;
+      btn.innerHTML =
+        '<span class="btn-spinner" aria-hidden="true"></span>' + label;
+      btn.classList.add('btn--loading');
+    }
+
+    // Generate buttons (.part2-generate-form → any submit button)
+    document.querySelectorAll('.part2-generate-form').forEach(function (form) {
+      form.addEventListener('submit', function () {
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) setLoading(btn, 'Generating…');
+      });
+    });
+
+    // Check-answers forms (.task-form with action=check btn)
+    document.querySelectorAll('.task-form').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        var submitter = e.submitter;
+        if (submitter && submitter.value === 'check') {
+          setLoading(submitter, 'Checking…');
+        }
+      });
+    });
+
+    // Writing: generate form
+    document.querySelectorAll('.writing-generate-form').forEach(function (form) {
+      form.addEventListener('submit', function () {
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) setLoading(btn, 'Generating…');
+      });
+    });
+
+    // Writing: check with AI (editor form, button value="check")
+    document.querySelectorAll('.writing-editor-wrap').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        var submitter = e.submitter;
+        if (submitter && submitter.value === 'check') {
+          setLoading(submitter, 'Checking with AI…');
+        }
+      });
+    });
+  })();

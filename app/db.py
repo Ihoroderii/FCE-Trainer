@@ -999,3 +999,58 @@ def record_get_phrase_show(task_id: int) -> None:
             (task_id,),
         )
         conn.commit()
+
+
+# --- Password reset tokens ---
+
+def _ensure_password_reset_tokens_table() -> None:
+    with db_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                token      TEXT    NOT NULL UNIQUE,
+                expires_at TEXT    NOT NULL,
+                used       INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens(token)"
+        )
+        conn.commit()
+
+
+def create_reset_token(user_id: int, token: str, ttl_minutes: int = 60) -> None:
+    with db_connection() as conn:
+        conn.execute(
+            "DELETE FROM password_reset_tokens WHERE user_id = ? AND used = 0",
+            (user_id,),
+        )
+        conn.execute(
+            """INSERT INTO password_reset_tokens (user_id, token, expires_at)
+               VALUES (?, ?, datetime('now', ? || ' minutes'))""",
+            (user_id, token, str(ttl_minutes)),
+        )
+        conn.commit()
+
+
+def get_valid_reset_token(token: str) -> dict | None:
+    """Return token row if token is valid and unexpired; else None."""
+    with db_connection() as conn:
+        cur = conn.execute(
+            """SELECT id, user_id FROM password_reset_tokens
+               WHERE token = ? AND used = 0 AND expires_at > datetime('now')""",
+            (token,),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def consume_reset_token(token: str) -> None:
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE password_reset_tokens SET used = 1 WHERE token = ?",
+            (token,),
+        )
+        conn.commit()

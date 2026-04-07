@@ -75,6 +75,17 @@ def verify_email_password(email: str, password: str) -> dict | None:
     return {"id": user["id"], "email": user["email"] or "", "name": user["name"] or ""}
 
 
+def update_password(user_id: int, new_password: str) -> None:
+    """Hash and store a new password for the given user."""
+    password_hash = generate_password_hash(new_password.strip(), method="scrypt")
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (password_hash, user_id),
+        )
+        conn.commit()
+
+
 def get_user_by_id(user_id: int | None) -> dict | None:
     """Return user row (id, email, name) or None."""
     if not user_id:

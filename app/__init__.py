@@ -8,7 +8,7 @@ from flask import Flask, redirect, request, session, url_for
 from flask_wtf.csrf import CSRFProtect
 
 from app.config import PARTS_RANGE
-from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_check_history_created_index, _ensure_spaced_repetition_table, _ensure_orphaned_stats_claimed, _ensure_vocab_notebook_table, _ensure_vocab_word_forms_column, _ensure_part3_word_repetition_table, _ensure_part2_word_repetition_tables, _ensure_user_settings_table, _ensure_listening_tables
+from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_check_history_created_index, _ensure_spaced_repetition_table, _ensure_orphaned_stats_claimed, _ensure_vocab_notebook_table, _ensure_vocab_word_forms_column, _ensure_part3_word_repetition_table, _ensure_part2_word_repetition_tables, _ensure_user_settings_table, _ensure_listening_tables, _ensure_password_reset_tokens_table
 from app.rag.store import ensure_rag_tables
 from app.views.home import bp as home_bp
 from app.views.use_of_english import bp as uoe_bp
@@ -80,6 +80,37 @@ def create_app(config=None):
             part = 1
         return redirect(url_for("use_of_english.use_of_english", part=part, csrf_expired=1))
 
+    @app.errorhandler(404)
+    def handle_not_found(err):
+        from flask import render_template as _rt
+        return _rt(
+            "error.html",
+            code=404,
+            title="Page not found",
+            message="The page you're looking for doesn't exist or has been moved.",
+        ), 404
+
+    @app.errorhandler(429)
+    def handle_too_many_requests(err):
+        from flask import render_template as _rt
+        return _rt(
+            "error.html",
+            code=429,
+            title="Too many attempts",
+            message="You've made too many requests. Please wait a moment and try again.",
+        ), 429
+
+    @app.errorhandler(500)
+    def handle_server_error(err):
+        logger.exception("500 Internal Server Error")
+        from flask import render_template as _rt
+        return _rt(
+            "error.html",
+            code=500,
+            title="Something went wrong",
+            message="An unexpected error occurred on our end. Please try again in a moment.",
+        ), 500
+
     app.register_blueprint(home_bp)
     app.register_blueprint(uoe_bp)
     app.register_blueprint(writing_bp)
@@ -88,9 +119,9 @@ def create_app(config=None):
     app.register_blueprint(settings_bp)
     app.register_blueprint(listening_bp)
 
-    # Apply strict rate limits to auth endpoints
-    limiter.limit("5/minute")(app.view_functions["home.register"])
-    limiter.limit("5/minute")(app.view_functions["home.login"])
+    # Apply strict rate limits to auth endpoints (brute-force protection)
+    limiter.limit("5/minute;20/day")(app.view_functions["home.register"])
+    limiter.limit("5/minute;20/day")(app.view_functions["home.login"])
 
     if app.config["GOOGLE_OAUTH_CLIENT_ID"] and app.config["GOOGLE_OAUTH_CLIENT_SECRET"]:
         from flask_dance.contrib.google import make_google_blueprint
@@ -123,12 +154,15 @@ def create_app(config=None):
         _ensure_part2_word_repetition_tables()
         _ensure_user_settings_table()
         _ensure_listening_tables()
+        _ensure_password_reset_tokens_table()
         ensure_rag_tables()
         seed_db()
         logger.debug("Database ready")
 
-    logger.info("FCE-Trainer starting (debug=%s, AI=%s)",
+    from app.ai import ai_available, _provider
+    logger.info("FCE-Trainer starting (debug=%s, AI=%s, provider=%s)",
                 _debug_mode,
-                "enabled" if app.config.get("AI_ENABLED") else "disabled")
+                "enabled" if ai_available else "disabled",
+                _provider or "none")
 
     return app

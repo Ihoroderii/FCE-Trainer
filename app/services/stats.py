@@ -206,6 +206,51 @@ def get_part_stats(user_id: int | None = None) -> list[dict]:
     return out
 
 
+def get_listening_stats(user_id=None) -> list[dict]:
+    """Per-part stats for Listening (parts 101–104). Returns a list of 4 dicts."""
+    if user_id is None:
+        user_id = session.get("user_id")
+    where, params = _user_filter_sql(user_id)
+    part_codes = list(LISTENING_HISTORY_PARTS.values())  # [101, 102, 103, 104]
+    ph = ",".join("?" * len(part_codes))
+    with db_connection() as conn:
+        cur = conn.execute(
+            f"""SELECT part, SUM(score) AS total_correct, SUM(total) AS total_questions, COUNT(*) AS attempts
+                FROM check_history
+                WHERE {where} AND part IN ({ph})
+                GROUP BY part""",
+            (*params, *part_codes),
+        )
+        rows = cur.fetchall()
+    stats_by_part = {r["part"]: r for r in rows}
+    out = []
+    for listening_part, history_part in LISTENING_HISTORY_PARTS.items():
+        row = stats_by_part.get(history_part)
+        if not row or not row["total_questions"]:
+            out.append({
+                "part": listening_part,
+                "part_label": f"Part {listening_part}",
+                "total_correct": 0,
+                "total_wrong": 0,
+                "total_questions": 0,
+                "attempts": 0,
+                "percent": None,
+            })
+        else:
+            tc = row["total_correct"] or 0
+            tq = row["total_questions"] or 0
+            out.append({
+                "part": listening_part,
+                "part_label": f"Part {listening_part}",
+                "total_correct": tc,
+                "total_wrong": tq - tc,
+                "total_questions": tq,
+                "attempts": row["attempts"] or 0,
+                "percent": round(100 * tc / tq, 1) if tq else None,
+            })
+    return out
+
+
 def get_get_phrase_stats(user_id=None):
     """Single summary for Get phrases (part=8). Returns dict with part, total_correct, total_wrong, attempts, percent."""
     if user_id is None:

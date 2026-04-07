@@ -16,6 +16,7 @@ from app.services.stats import (
     get_progress_series,
     get_words_learning,
     get_get_phrase_stats,
+    get_listening_stats,
     claim_orphaned_stats,
 )
 from app.services.mock_exam import (
@@ -26,7 +27,9 @@ from app.services.mock_exam import (
     cancel_mock_exam,
     get_mock_exam_results,
 )
-from app.services.user import create_email_user, verify_email_password
+from app.services.user import create_email_user, verify_email_password, find_user_by_email, update_password
+from app.services.email import send_reset_email
+from app.db import create_reset_token, get_valid_reset_token, consume_reset_token
 from app.utils import login_required
 
 logger = logging.getLogger("fce_trainer")
@@ -62,6 +65,7 @@ def stats():
     progress_series = get_progress_series(user_id, days=14)
     words_learning = get_words_learning(user_id, part=3, limit=60)
     get_phrase_stats = get_get_phrase_stats(user_id)
+    listening_stats = get_listening_stats(user_id)
     has_attempts = any(s.get("attempts", 0) for s in user_stats) or get_phrase_stats.get("attempts", 0)
     game_stats = None
     if GAMIFICATION_ENABLED:
@@ -75,6 +79,7 @@ def stats():
         progress_series=progress_series,
         words_learning=words_learning,
         get_phrase_stats=get_phrase_stats,
+        listening_stats=listening_stats,
         has_attempts=has_attempts,
         game=game_stats,
         all_achievements=ACHIEVEMENTS if GAMIFICATION_ENABLED else {},
@@ -331,3 +336,48 @@ def login_callback():
 def logout():
     session.clear()
     return redirect(url_for("home.home"))
+
+
+@bp.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if session.get("user_id"):
+        return redirect(url_for("home.home"))
+    sent = False
+    error = None
+    if request.method == "POST":
+        import secrets
+        email = (request.form.get("email") or "").strip().lower()
+        if not email or not EMAIL_RE.match(email):
+            error = "Please enter a valid email address."
+        else:
+            user = find_user_by_email(email)
+            if user:
+                token = secrets.token_urlsafe(32)
+                create_reset_token(user["id"], token)
+                reset_url = url_for("home.reset_password", token=token, _external=True)
+                send_reset_email(email, reset_url)
+            # Always show success to avoid user enumeration
+            sent = True
+    return render_template("forgot_password.html", sent=sent, error=error)
+
+
+@bp.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token: str):
+    if session.get("user_id"):
+        return redirect(url_for("home.home"))
+    row = get_valid_reset_token(token)
+    if not row:
+        return render_template("reset_password.html", invalid=True, token=token)
+    error = None
+    if request.method == "POST":
+        password = request.form.get("password") or ""
+        password_confirm = request.form.get("password_confirm") or ""
+        if len(password) < MIN_PASSWORD_LEN:
+            error = f"Password must be at least {MIN_PASSWORD_LEN} characters."
+        elif password != password_confirm:
+            error = "Passwords do not match."
+        else:
+            update_password(row["user_id"], password)
+            consume_reset_token(token)
+            return render_template("reset_password.html", success=True, token=token)
+    return render_template("reset_password.html", token=token, error=error, invalid=False)

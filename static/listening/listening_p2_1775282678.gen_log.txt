@@ -1,0 +1,2 @@
+[0] narrator: OK (ElevenLabs, 143 chars, 140060 bytes)
+[1] male1: OK (ElevenLabs, 2103 chars, 2096527 bytes)

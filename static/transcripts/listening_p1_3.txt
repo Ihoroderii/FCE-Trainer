@@ -1,0 +1,80 @@
+FCE Listening — Part 1  (task #3)
+
+
+--- Extract 1 ---
+Extract one. You hear a woman leaving a voicemail for a company about a job interview.
+[female1] Hi, this is Laura Evans. I’m calling about tomorrow’s interview at ten. My train’s been cancelled because of engineering works, so I may arrive about fifteen minutes late. I’m still coming, and I can stay later if needed.
+
+Q: Why is the woman calling?
+  A) To accept a different interview time
+  B) To warn that she might not be on time ✓
+  C) To ask for directions to the building
+
+--- Extract 2 ---
+Extract two. You hear two colleagues talking in an office kitchen.
+[male1] So, are you going for that team leader role? You’d be great at it.
+[female1] I’m tempted, but it’s not the extra tasks that worry me—it’s the constant meetings. I actually like being hands-on with projects. Still, it might open doors later, so I’ll apply and see.
+
+Q: What is the woman’s attitude to applying for the role?
+  A) She’s unsure but thinks it could benefit her ✓
+  B) She’s confident she will enjoy the change
+  C) She’s decided not to apply because it’s too demanding
+
+--- Extract 3 ---
+Extract three. You hear a man giving a short announcement at a careers fair.
+[male1] Attention, everyone: the CV workshop has moved from Room 2 to Room 5 due to a sound problem. It will still start at two o’clock, but please collect your handouts from the desk outside Room 5 before you go in.
+
+Q: What should people do before the workshop begins?
+  A) Pick up materials at the new location ✓
+  B) Arrive early because the start time has changed
+  C) Wait in Room 2 until the sound problem is fixed
+
+--- Extract 4 ---
+Extract four. You hear two friends talking about work experience.
+[female1] How’s the internship at the design studio? Still making coffee all day?
+[male1] Not anymore. They finally let me sit in on client calls, and yesterday I even presented a rough idea. It wasn’t perfect, but my supervisor said I’m improving fast, which was a relief.
+
+Q: What does the man say about his internship?
+  A) He feels he’s being trusted with more meaningful tasks ✓
+  B) He thinks the work is too difficult for him
+  C) He’s disappointed because he rarely gets feedback
+
+--- Extract 5 ---
+Extract five. You hear a radio presenter interviewing a man about changing careers.
+[narrator] You hear part of a radio interview.
+[female1] You left a secure job in banking to become a chef. Do you regret it?
+[male1] Some days, yes—my feet hurt and the hours are brutal. But I’m learning constantly, and I go home feeling I’ve created something real. Financially it’s tighter, but I’m happier overall.
+
+Q: How does the man feel about his career change?
+  A) He misses the salary too much to enjoy it
+  B) He finds it hard but more satisfying ✓
+  C) He thinks he made the decision too quickly
+
+--- Extract 6 ---
+Extract six. You hear a manager speaking to an employee in a short meeting.
+[male1] I’ve looked at your last two reports, and the ideas are strong. The issue is the deadlines—you’ve missed three this month.
+[female1] I know, and I’m sorry. I’ve been covering for Sam while he’s off, but that’s not an excuse. If we can agree on priorities, I can deliver on time.
+
+Q: What is the main problem being discussed?
+  A) The employee’s work quality is getting worse
+  B) The employee is not finishing tasks when expected ✓
+  C) The employee refuses to help other colleagues
+
+--- Extract 7 ---
+Extract seven. You hear a man talking to a neighbour about his new job.
+[male1] The new job’s mostly remote, which is great, but it’s strange not seeing people. I’ve started going into the office on Wednesdays just to chat and feel part of the team. Otherwise the days blur together.
+
+Q: Why does the man go to the office on Wednesdays?
+  A) To get help with the technical side of his work
+  B) To feel more connected to colleagues ✓
+  C) To avoid working from home because it’s noisy
+
+--- Extract 8 ---
+Extract eight. You hear two people discussing a training course at work.
+[female1] Are you doing that customer-service training next week?
+[male2] I have to. It’s not optional if you want to keep working on the front desk. I thought it would be boring, but my friend did it and said it’s practical—lots of role-play, not just slides.
+
+Q: What does the man say about the training?
+  A) He expects it to be more useful than he first thought ✓
+  B) He’s chosen it because it will help him get promoted
+  C) He’s worried it will take too much time away from his job

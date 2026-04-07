@@ -4762,3 +4762,189 @@ html.dark-mode .btn-generate:hover { background: #333352; color: #ddd; }
   .listening-actions { flex-direction: column; }
   .btn-submit-listening, .btn-next-listening, .btn-generate { width: 100%; justify-content: center; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVENESS  (≤ 600 px and ≤ 420 px breakpoints)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Header ── */
+@media (max-width: 600px) {
+  /* Tighten header padding so logo + actions fit on one line */
+  .header { padding: 0.5rem 0.75rem; }
+  .header-inner { gap: 0.5rem; }
+
+  /* Truncate long display names */
+  .header-user { max-width: 100px; font-size: 0.78rem; }
+
+  /* Smaller auth links */
+  .header-auth-link { padding: 0.25rem 0.45rem; font-size: 0.78rem; }
+
+  /* Squeeze actions */
+  .header-actions { gap: 0.4rem; }
+
+  /* Dark-mode toggle: icon only, no extra padding */
+  .dark-mode-btn { padding: 0.3rem 0.35rem; font-size: 1rem; }
+}
+
+@media (max-width: 420px) {
+  /* On very small phones hide the display name entirely – the logout link is enough */
+  .header-user { display: none; }
+}
+
+/* ── Minimal layout container ── */
+@media (max-width: 600px) {
+  .main-minimal { padding: 1.25rem 0.75rem; }
+}
+
+/* ── Home page ── */
+@media (max-width: 600px) {
+  /* Hero */
+  .home-hero { padding: 1.5rem 0 1.25rem; }
+  .home-title { font-size: 1.5rem; }
+  .home-tagline { font-size: 0.95rem; }
+  .btn-hero { width: 100%; text-align: center; }
+
+  /* Feature grid: single column */
+  .home-features { grid-template-columns: 1fr; gap: 0.75rem; margin-bottom: 1.5rem; }
+
+  /* Paper / tool cards: full-width column */
+  .home-sections,
+  .home-sections--tools { grid-template-columns: 1fr; gap: 0.75rem; }
+  .home-section-card { padding: 1rem 1rem; }
+  .home-section-cta { font-size: 0.85rem; }
+
+  /* Study-tools heading same as section heading */
+  .home-sections-heading { font-size: 1rem; }
+}
+
+/* ── Stats page: tables scroll horizontally on narrow screens ── */
+@media (max-width: 600px) {
+  .stats-page { padding: 0 0.5rem; }
+  .stats-panel { padding: 1rem 0.75rem; }
+  .stats-panel-title { font-size: 1.1rem; }
+  .stats-nav { gap: 0.4rem; flex-wrap: wrap; }
+  .stats-nav-link { font-size: 0.78rem; padding: 0.3rem 0.5rem; }
+
+  /* Wrap table in a scrollable container via CSS overflow trick */
+  .stats-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Compact daily/weekly cards */
+  .stats-day-card { padding: 0.75rem; }
+}
+
+/* ── Auth pages (login / register / forgot-password / reset-password) ── */
+@media (max-width: 600px) {
+  .auth-page { margin: 1rem auto; padding: 0 0.75rem; }
+  .auth-title { font-size: 1.4rem; }
+}
+
+/* ── Get Phrases page ── */
+@media (max-width: 600px) {
+  .get-phrases-page { padding: 0.5rem 0.75rem 1.5rem; }
+  .part-stats-box { flex-direction: column; gap: 0.4rem; }
+}
+
+/* ── Writing page ── */
+@media (max-width: 600px) {
+  .writing-header-row { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  .writing-tabs { flex-wrap: wrap; }
+  .writing-tab { font-size: 0.85rem; padding: 0.4rem 0.75rem; }
+  .writing-actions { flex-direction: column; }
+  .writing-actions .btn { width: 100%; text-align: center; }
+}
+
+/* ── UoE / exam pages ── */
+@media (max-width: 600px) {
+  .part2-generate-row { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  .btn-generate { width: 100%; }
+  .actions { flex-direction: column; gap: 0.5rem; }
+  .actions .btn { width: 100%; text-align: center; }
+}
+
+/* ── Home stats sidebar: on mobile default to collapsed ── */
+@media (max-width: 600px) {
+  /* Move to bottom bar; the existing 700px rule handles repositioning.
+     Also start collapsed on small screens so it doesn't cover content. */
+  .home-sidebar-stats:not(.expanded) .sidebar-stats-body { display: none; }
+  .sidebar-stats-body { min-width: 0; width: 100vw; max-height: 50vh; overflow-y: auto; }
+}
+
+/* ── Ensure all interactive elements are at least 44 px tall on touch ── */
+@media (max-width: 768px) and (pointer: coarse) {
+  .btn, button, .part-seg,
+  input[type="radio"] + label,
+  .header-auth-link,
+  .writing-tab,
+  select { min-height: 44px; }
+}
+
+/* ── AI action loading spinners ── */
+.btn--loading {
+  opacity: 0.75;
+  cursor: not-allowed;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.btn-spinner {
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error pages (404 / 429 / 500) ── */
+.error-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 2rem 1rem;
+}
+.error-card {
+  text-align: center;
+  max-width: 480px;
+  width: 100%;
+}
+.error-code {
+  font-size: 6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  letter-spacing: -4px;
+  margin-bottom: 0.5rem;
+}
+.error-title {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  color: var(--ink);
+}
+.error-desc {
+  color: var(--ink-muted);
+  font-size: 1rem;
+  margin: 0 0 2rem;
+  line-height: 1.6;
+}
+.error-home-btn {
+  display: inline-block;
+  padding: 0.65rem 1.8rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background 0.15s;
+}
+.error-home-btn:hover { background: var(--accent-hover); }
+html.dark-mode .error-code { color: #7b93f5; }
+html.dark-mode .error-title { color: #eee; }
+html.dark-mode .error-desc { color: #aaa; }

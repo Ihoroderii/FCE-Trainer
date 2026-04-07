@@ -255,9 +255,15 @@ def writing():
                     if opt:
                         task_desc = f"{opt['task']}\n\n{opt['prompt']}"
                 prompt = _build_writing_prompt(part, task_desc, text)
-                comp = chat_create([{"role": "user", "content": prompt}], temperature=0.4)
-                content = (comp.choices[0].message.content or "").strip()
-                fb = _parse_feedback(content) or {"raw_text": content}
+                try:
+                    comp = chat_create([{"role": "user", "content": prompt}], temperature=0.4)
+                    content = (comp.choices[0].message.content or "").strip()
+                    fb = _parse_feedback(content) or {"raw_text": content}
+                except Exception:
+                    fb = {
+                        "raw_text": "Sorry, the AI is temporarily unavailable. Please try again in a moment.",
+                        "overall": 0,
+                    }
             fb.setdefault("overall", fb.get("overall", 0))
             if part == 1:
                 ctx["part1_feedback"] = fb
