@@ -1,0 +1,18 @@
+{% if current_live_lesson_code %}
+<div class="live-lesson-banner" role="status">
+  <div class="live-lesson-banner-main">
+    <span class="live-lesson-dot" aria-hidden="true"></span>
+    {% if current_live_lesson_role == "teacher" %}
+      <span>Teacher room <strong>{{ current_live_lesson_code }}</strong></span>
+      <a href="{{ url_for('lessons.teacher_room', code=current_live_lesson_code) }}" class="live-lesson-banner-link">Open dashboard</a>
+    {% else %}
+      <span>Live lesson <strong>{{ current_live_lesson_code }}</strong></span>
+      <span class="live-lesson-banner-muted">Your activity is visible to your teacher.</span>
+    {% endif %}
+  </div>
+  <form method="post" action="{{ url_for('lessons.leave_lesson_room') }}" class="live-lesson-leave-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <button type="submit" class="live-lesson-leave-btn">Leave</button>
+  </form>
+</div>
+{% endif %}

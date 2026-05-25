@@ -38,6 +38,45 @@
       <button type="submit" class="btn settings-btn-save">💾 Save settings</button>
     </div>
   </form>
+
+  <form method="POST" action="{{ url_for('settings.change_password') }}" class="settings-form settings-form-secondary">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+    <div class="settings-section">
+      <h2 class="settings-section-title">Password</h2>
+
+      {% if password_error %}
+      <div class="feedback error" role="alert">{{ password_error }}</div>
+      {% endif %}
+      {% if password_success %}
+      <div class="feedback success" role="status">{{ password_success }}</div>
+      {% endif %}
+
+      {% if can_change_password %}
+      <div class="settings-field">
+        <label for="current_password" class="settings-label">Current password</label>
+        <input type="password" id="current_password" name="current_password" class="settings-input" required autocomplete="current-password" />
+      </div>
+
+      <div class="settings-field">
+        <label for="new_password" class="settings-label">New password</label>
+        <input type="password" id="new_password" name="new_password" class="settings-input" required minlength="8" autocomplete="new-password" />
+        <p class="settings-hint">At least 8 characters.</p>
+      </div>
+
+      <div class="settings-field">
+        <label for="new_password_confirm" class="settings-label">Confirm new password</label>
+        <input type="password" id="new_password_confirm" name="new_password_confirm" class="settings-input" required minlength="8" autocomplete="new-password" />
+      </div>
+
+      <div class="settings-actions">
+        <button type="submit" class="btn settings-btn-save">Change password</button>
+      </div>
+      {% else %}
+      <p class="settings-note">This account uses Google sign-in, so there is no local password to change here.</p>
+      {% endif %}
+    </div>
+  </form>
 </div>
 
 <style>
@@ -64,6 +103,9 @@
   border-radius: 8px;
   padding: 1.5rem;
 }
+.settings-form-secondary {
+  margin-top: 1rem;
+}
 .settings-section-title {
   font-size: 1.1rem;
   margin: 0 0 1rem;
@@ -89,10 +131,28 @@
   color: var(--ink);
   appearance: auto;
 }
+.settings-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.settings-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
 .settings-hint {
   margin: 0.3rem 0 0;
   font-size: 0.82rem;
   color: var(--ink-muted);
+}
+.settings-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.95rem;
 }
 .settings-actions {
   margin-top: 1.5rem;

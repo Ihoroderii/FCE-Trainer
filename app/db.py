@@ -530,6 +530,94 @@ def _migrate_part2_collocations_table(conn):
     """)
 
 
+def _ensure_live_lesson_tables() -> None:
+    with db_connection() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS lesson_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                teacher_user_id INTEGER NOT NULL REFERENCES users(id),
+                title TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                closed_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_lesson_sessions_teacher
+                ON lesson_sessions(teacher_user_id, status);
+            CREATE TABLE IF NOT EXISTS lesson_participants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lesson_id INTEGER NOT NULL REFERENCES lesson_sessions(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                role TEXT NOT NULL DEFAULT 'student',
+                joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+                left_at TEXT,
+                UNIQUE(lesson_id, user_id, role)
+            );
+            CREATE INDEX IF NOT EXISTS idx_lesson_participants_lesson
+                ON lesson_participants(lesson_id, role, last_seen_at);
+            CREATE TABLE IF NOT EXISTS live_exercise_state (
+                lesson_id INTEGER NOT NULL REFERENCES lesson_sessions(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                state_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (lesson_id, user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_live_state_lesson
+                ON live_exercise_state(lesson_id, updated_at);
+            CREATE TABLE IF NOT EXISTS lesson_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lesson_id INTEGER NOT NULL REFERENCES lesson_sessions(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                event_type TEXT NOT NULL,
+                part INTEGER,
+                score INTEGER,
+                total INTEGER,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_lesson_events_lesson_created
+                ON lesson_events(lesson_id, created_at);
+        """)
+        conn.commit()
+
+
+def _ensure_writing_tables() -> None:
+    with db_connection() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS writing_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_key TEXT NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                part INTEGER NOT NULL,
+                option_id TEXT NOT NULL DEFAULT '',
+                task_key TEXT NOT NULL DEFAULT '',
+                task_json TEXT NOT NULL DEFAULT '{}',
+                answer TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(owner_key, part, option_id, task_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_writing_drafts_owner
+                ON writing_drafts(owner_key, updated_at);
+            CREATE TABLE IF NOT EXISTS writing_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_key TEXT NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                part INTEGER NOT NULL,
+                option_id TEXT NOT NULL DEFAULT '',
+                task_key TEXT NOT NULL DEFAULT '',
+                task_json TEXT NOT NULL DEFAULT '{}',
+                answer TEXT NOT NULL DEFAULT '',
+                feedback_json TEXT NOT NULL DEFAULT '{}',
+                word_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_writing_attempts_owner
+                ON writing_attempts(owner_key, created_at);
+        """)
+        conn.commit()
+
+
 def seed_db() -> None:
     from data import (
         UOE_SEED_TASKS,

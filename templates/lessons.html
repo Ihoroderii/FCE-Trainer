@@ -1,0 +1,91 @@
+{% extends "base_minimal.html" %}
+{% block title %}Live Lessons{% endblock %}
+{% block content %}
+<div class="lessons-page">
+  <section class="lesson-hero">
+    <div>
+      <p class="lesson-kicker">Teacher mode</p>
+      <h1 class="lesson-title">Live Lessons</h1>
+      <p class="lesson-subtitle">Create a room, share the code, and watch student exercise progress update while they work.</p>
+    </div>
+    {% if active_lesson %}
+    <div class="lesson-active-chip">
+      <span class="live-lesson-dot" aria-hidden="true"></span>
+      Active {{ active_lesson.active_role }} room {{ active_lesson.code }}
+    </div>
+    {% endif %}
+  </section>
+
+  {% if error %}
+  <div class="feedback error">{{ error }}</div>
+  {% endif %}
+
+  <div class="lesson-grid">
+    <section class="lesson-panel">
+      <h2>Create teacher room</h2>
+      <p class="lesson-panel-copy">Use this when you are the teacher and want students to join your lesson.</p>
+      <form method="post" action="{{ url_for('lessons.create_lesson_room') }}" class="lesson-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <label class="lesson-label" for="lesson-title">Lesson title</label>
+        <input id="lesson-title" class="lesson-input" name="title" maxlength="120" placeholder="B2 First practice lesson" />
+        <button type="submit" class="btn lesson-primary-btn">Create room</button>
+      </form>
+    </section>
+
+    <section class="lesson-panel">
+      <h2>Join as student</h2>
+      <p class="lesson-panel-copy">Use the code your teacher gives you. Your answers and progress will be shared during the lesson.</p>
+      <form method="post" action="{{ url_for('lessons.join_lesson_room') }}" class="lesson-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <label class="lesson-label" for="lesson-code">Lesson code</label>
+        <input id="lesson-code" class="lesson-input lesson-code-input" name="code" value="{{ joined_code }}" maxlength="12" placeholder="ABCD-1234" autocomplete="off" />
+        <button type="submit" class="btn lesson-primary-btn">Join lesson</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="lesson-history-grid">
+    <section class="lesson-panel lesson-history-panel">
+      <h2>Your teacher rooms</h2>
+      {% if teacher_lessons %}
+      <div class="lesson-list">
+        {% for lesson in teacher_lessons %}
+        <div class="lesson-list-item">
+          <div>
+            <strong>{{ lesson.title or "Live lesson" }}</strong>
+            <span class="lesson-list-meta">{{ lesson.code }} · {{ lesson.status }} · {{ lesson.student_count }} student{{ "s" if lesson.student_count != 1 else "" }}</span>
+          </div>
+          {% if lesson.status == "active" %}
+          <a href="{{ url_for('lessons.teacher_room', code=lesson.code) }}" class="lesson-list-link">Open</a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="lesson-empty">No teacher rooms yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="lesson-panel lesson-history-panel">
+      <h2>Lessons you joined</h2>
+      {% if student_lessons %}
+      <div class="lesson-list">
+        {% for lesson in student_lessons %}
+        <div class="lesson-list-item">
+          <div>
+            <strong>{{ lesson.title or "Live lesson" }}</strong>
+            <span class="lesson-list-meta">{{ lesson.code }} · teacher: {{ lesson.teacher_name or lesson.teacher_email }} · {{ lesson.status }}</span>
+          </div>
+          {% if lesson.status == "active" %}
+          <a href="{{ url_for('lessons.student_room', code=lesson.code) }}" class="lesson-list-link">Join</a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="lesson-empty">No joined lessons yet.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

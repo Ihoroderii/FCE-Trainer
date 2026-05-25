@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import tempfile
 
 import pytest
 
@@ -16,9 +15,12 @@ def app(tmp_path):
     # Override DB path before importing app modules
     db_file = tmp_path / "test.db"
     import app.config as cfg
+    import app.db as db
 
     original_db = cfg.DB_PATH
+    original_db_module = db.DB_PATH
     cfg.DB_PATH = db_file
+    db.DB_PATH = db_file
     try:
         from app import create_app
 
@@ -28,6 +30,7 @@ def app(tmp_path):
         yield test_app
     finally:
         cfg.DB_PATH = original_db
+        db.DB_PATH = original_db_module
 
 
 @pytest.fixture()

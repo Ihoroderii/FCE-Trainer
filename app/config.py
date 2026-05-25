@@ -30,6 +30,8 @@ CHECK_RESULT_CACHE_MAX = 20
 WRITING_MIN_WORDS = 140
 WRITING_MAX_WORDS = 190
 WRITING_TOTAL_MINUTES = 80
+# Part numbers used in check_history for writing Part 1 / Part 2 checks
+WRITING_HISTORY_PARTS = {1: 201, 2: 202}
 
 # Gamification
 GAMIFICATION_ENABLED = False  # Set to True to re-enable XP, levels, streaks, achievements

@@ -6,9 +6,9 @@ from urllib.parse import urlencode
 
 import re
 
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
 
-from app.config import ACHIEVEMENTS, GAMIFICATION_ENABLED, PARTS_RANGE, PART_QUESTION_COUNTS
+from app.config import ACHIEVEMENTS, GAMIFICATION_ENABLED
 from app.services.stats import (
     get_part_stats,
     get_daily_stats,
@@ -17,6 +17,7 @@ from app.services.stats import (
     get_words_learning,
     get_get_phrase_stats,
     get_listening_stats,
+    get_cambridge_scale_profile,
     claim_orphaned_stats,
 )
 from app.services.mock_exam import (
@@ -25,7 +26,6 @@ from app.services.mock_exam import (
     get_time_remaining,
     finish_mock_exam,
     cancel_mock_exam,
-    get_mock_exam_results,
 )
 from app.services.user import create_email_user, verify_email_password, find_user_by_email, update_password
 from app.services.email import send_reset_email
@@ -60,6 +60,7 @@ def faq():
 def stats():
     user_id = session.get("user_id")
     user_stats = get_part_stats(user_id)
+    scale_profile = get_cambridge_scale_profile(user_id)
     daily = get_daily_stats(user_id)
     weekly = get_weekly_stats(user_id)
     progress_series = get_progress_series(user_id, days=14)
@@ -73,6 +74,7 @@ def stats():
         game_stats = get_game_stats(user_id)
     return render_template(
         "stats.html",
+        scale_profile=scale_profile,
         user_stats=user_stats,
         daily_stats=daily,
         weekly_stats=weekly,
@@ -84,6 +86,13 @@ def stats():
         game=game_stats,
         all_achievements=ACHIEVEMENTS if GAMIFICATION_ENABLED else {},
     )
+
+
+@bp.route("/api/stats/profile")
+@login_required
+def stats_profile_api():
+    user_id = session.get("user_id")
+    return jsonify(get_cambridge_scale_profile(user_id))
 
 
 @bp.route("/")
@@ -254,6 +263,16 @@ EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 MIN_PASSWORD_LEN = 8
 
 
+def _allow_local_reset_link() -> bool:
+    """Allow showing reset links directly only on local/dev hosts."""
+    if os.environ.get("ALLOW_LOCAL_RESET_LINKS", "").lower() in ("1", "true", "yes"):
+        return True
+    if os.environ.get("FLASK_ENV") == "production":
+        return False
+    host = (request.host or "").split(":", 1)[0].strip("[]").lower()
+    return host in {"localhost", "127.0.0.1", "::1"}
+
+
 @bp.route("/register", methods=["GET", "POST"])
 def register():
     if session.get("user_id"):
@@ -344,6 +363,7 @@ def forgot_password():
         return redirect(url_for("home.home"))
     sent = False
     error = None
+    local_reset_url = None
     if request.method == "POST":
         import secrets
         email = (request.form.get("email") or "").strip().lower()
@@ -355,10 +375,17 @@ def forgot_password():
                 token = secrets.token_urlsafe(32)
                 create_reset_token(user["id"], token)
                 reset_url = url_for("home.reset_password", token=token, _external=True)
-                send_reset_email(email, reset_url)
+                email_sent = send_reset_email(email, reset_url)
+                if not email_sent and _allow_local_reset_link():
+                    local_reset_url = reset_url
             # Always show success to avoid user enumeration
             sent = True
-    return render_template("forgot_password.html", sent=sent, error=error)
+    return render_template(
+        "forgot_password.html",
+        sent=sent,
+        error=error,
+        local_reset_url=local_reset_url,
+    )
 
 
 @bp.route("/reset-password/<token>", methods=["GET", "POST"])

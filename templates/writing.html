@@ -2,7 +2,94 @@
 {% block title %}FCE Exam Trainer — Writing{% endblock %}
 {% block content %}
 {% macro csrf_input() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endmacro %}
-<div class="writing-page" data-word-min="{{ word_min }}" data-word-max="{{ word_max }}" data-total-minutes="{{ total_minutes }}">
+{% macro render_feedback(fb) %}
+  {% if fb %}
+  <div class="writing-feedback">
+    <div class="writing-feedback-scores">
+      <span class="writing-feedback-score"><strong>Overall:</strong> {{ fb.overall|default("—") }}/5</span>
+      {% if fb.content is defined %}
+      <span class="writing-feedback-score"><strong>Content:</strong> {{ fb.content }}/5</span>
+      <span class="writing-feedback-score"><strong>Comm. achievement:</strong> {{ fb.communicative_achievement }}/5</span>
+      <span class="writing-feedback-score"><strong>Organisation:</strong> {{ fb.organisation }}/5</span>
+      <span class="writing-feedback-score"><strong>Language:</strong> {{ fb.language }}/5</span>
+      {% endif %}
+    </div>
+    <p class="writing-feedback-comment">{{ fb.comment or fb.raw_text }}</p>
+
+    {% if fb.missing_task_points %}
+    <section class="writing-feedback-section">
+      <h3>Missing task points</h3>
+      <ul class="writing-feedback-list">
+        {% for item in fb.missing_task_points %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if fb.grammar_corrections %}
+    <section class="writing-feedback-section">
+      <h3>Grammar corrections</h3>
+      {% for item in fb.grammar_corrections %}
+      <article class="writing-correction-card">
+        {% if item.original %}<p><span>Original</span>{{ item.original }}</p>{% endif %}
+        {% if item.corrected %}<p><span>Corrected</span>{{ item.corrected }}</p>{% endif %}
+        {% if item.explanation %}<p><span>Why</span>{{ item.explanation }}</p>{% endif %}
+      </article>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if fb.better_sentence_examples %}
+    <section class="writing-feedback-section">
+      <h3>Better sentence examples</h3>
+      {% for item in fb.better_sentence_examples %}
+      <article class="writing-correction-card">
+        {% if item.original %}<p><span>Original</span>{{ item.original }}</p>{% endif %}
+        {% if item.improved %}<p><span>Improved</span>{{ item.improved }}</p>{% endif %}
+        {% if item.reason %}<p><span>Why</span>{{ item.reason }}</p>{% endif %}
+      </article>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if fb.vocabulary_upgrades %}
+    <section class="writing-feedback-section">
+      <h3>Vocabulary upgrades</h3>
+      {% for item in fb.vocabulary_upgrades %}
+      <article class="writing-correction-card">
+        {% if item.original %}<p><span>Basic</span>{{ item.original }}</p>{% endif %}
+        {% if item.upgraded %}<p><span>Upgrade</span>{{ item.upgraded }}</p>{% endif %}
+        {% if item.reason %}<p><span>Use</span>{{ item.reason }}</p>{% endif %}
+      </article>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if fb.organisation_advice %}
+    <section class="writing-feedback-section">
+      <h3>Organisation advice</h3>
+      <ul class="writing-feedback-list">
+        {% for item in fb.organisation_advice %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% set rewrite = fb.rewrite_suggestion if fb.rewrite_suggestion is defined else None %}
+    {% if rewrite and (rewrite.original or rewrite.improved or rewrite.reason) %}
+    <section class="writing-feedback-section writing-rewrite-box">
+      <h3>Rewrite this paragraph</h3>
+      {% if rewrite.original %}<p><span>Original</span>{{ rewrite.original }}</p>{% endif %}
+      {% if rewrite.improved %}<p><span>Improved</span>{{ rewrite.improved }}</p>{% endif %}
+      {% if rewrite.reason %}<p><span>Why</span>{{ rewrite.reason }}</p>{% endif %}
+    </section>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endmacro %}
+<div class="writing-page" data-word-min="{{ word_min }}" data-word-max="{{ word_max }}" data-total-minutes="{{ total_minutes }}" data-autosave-url="{{ url_for('writing.save_writing_draft_api') }}">
   <div class="writing-header-row">
     <h1 class="writing-title">Writing</h1>
     <p class="writing-intro">B2 First (FCE) — 1 hour 20 minutes. Part 1: compulsory essay. Part 2: choose one task (140–190 words each).</p>
@@ -17,6 +104,12 @@
     <button type="button" class="writing-tab{% if active_part == 1 %} writing-tab-active{% endif %}" role="tab" aria-selected="{{ 'true' if active_part == 1 else 'false' }}" aria-controls="writing-part1-panel" id="writing-tab-1" data-part="1">Part 1 — Essay</button>
     <button type="button" class="writing-tab{% if active_part == 2 %} writing-tab-active{% endif %}" role="tab" aria-selected="{{ 'true' if active_part == 2 else 'false' }}" aria-controls="writing-part2-panel" id="writing-tab-2" data-part="2">Part 2 — Choice</button>
   </div>
+
+  {% if writing_error %}
+  <div class="feedback error" role="alert">{{ writing_error }}</div>
+  {% elif not ai_feedback_available %}
+  <div class="feedback error" role="alert">AI feedback is unavailable. Configure API key.</div>
+  {% endif %}
 
   <section id="writing-part1-panel" class="writing-panel{% if active_part == 1 %} writing-panel-active{% endif %}" role="tabpanel" aria-labelledby="writing-tab-1"{% if active_part != 1 %} hidden{% endif %}>
     <h2 class="writing-part-title">Part 1 — Compulsory essay</h2>
@@ -49,25 +142,17 @@
         <form method="post" action="{{ url_for('writing.writing') }}" class="writing-editor-wrap">
           {{ csrf_input() }}
           <input type="hidden" name="part" value="1" />
-          <label for="writing-part1-text" class="writing-word-count" id="writing-part1-count" aria-live="polite">0 words ({{ word_min }}–{{ word_max }})</label>
-          <textarea id="writing-part1-text" class="writing-textarea" name="answer" rows="12" placeholder="Write your essay here…" aria-label="Part 1 essay">{{ request.form.answer if active_part == 1 else '' }}</textarea>
+          {% set part1_draft = writing_drafts.part1 if writing_drafts else None %}
+          {% set part1_answer = request.form.get('answer', '') if request.method == 'POST' and active_part == 1 else (part1_draft.answer if part1_draft else '') %}
+          <div class="writing-editor-meta">
+            <label for="writing-part1-text" class="writing-word-count" id="writing-part1-count" aria-live="polite">0 words ({{ word_min }}–{{ word_max }})</label>
+            <span class="writing-draft-status" data-draft-status>Autosave ready</span>
+          </div>
+          <textarea id="writing-part1-text" class="writing-textarea" name="answer" data-part="1" data-option-id="" rows="12" placeholder="Write your essay here…" aria-label="Part 1 essay">{{ part1_answer }}</textarea>
           <div class="writing-actions">
             <button type="submit" name="action" value="check" class="btn btn-check">Check with AI</button>
           </div>
-          {% if part1_feedback %}
-          <div class="writing-feedback">
-            <div class="writing-feedback-scores">
-              <span class="writing-feedback-score"><strong>Overall:</strong> {{ part1_feedback.overall }}/5</span>
-              {% if part1_feedback.content is defined %}
-              <span class="writing-feedback-score"><strong>Content:</strong> {{ part1_feedback.content }}/5</span>
-              <span class="writing-feedback-score"><strong>Comm. achievement:</strong> {{ part1_feedback.communicative_achievement }}/5</span>
-              <span class="writing-feedback-score"><strong>Organisation:</strong> {{ part1_feedback.organisation }}/5</span>
-              <span class="writing-feedback-score"><strong>Language:</strong> {{ part1_feedback.language }}/5</span>
-              {% endif %}
-            </div>
-            <p class="writing-feedback-comment">{{ part1_feedback.comment or part1_feedback.raw_text }}</p>
-          </div>
-          {% endif %}
+          {{ render_feedback(part1_feedback) }}
         </form>
       </div>
     </div>
@@ -79,11 +164,11 @@
     <div class="writing-part2-options" role="group" aria-label="Part 2 task options">
       {% for opt in part2_options %}
       <div class="writing-option-card" data-option-id="{{ opt.id }}">
-        <button type="button" class="writing-option-btn" data-option-id="{{ opt.id }}" aria-expanded="false" aria-controls="writing-option-prompt-{{ opt.id }}">
+        <button type="button" class="writing-option-btn" data-option-id="{{ opt.id }}" aria-expanded="{{ 'true' if active_part == 2 and active_option_id == opt.id else 'false' }}" aria-controls="writing-option-prompt-{{ opt.id }}">
           <span class="writing-option-letter">Option {{ opt.id|upper }}</span>
           <span class="writing-option-type">{{ opt.type }}</span>
         </button>
-        <div id="writing-option-prompt-{{ opt.id }}" class="writing-option-prompt" hidden>
+        <div id="writing-option-prompt-{{ opt.id }}" class="writing-option-prompt"{% if not (active_part == 2 and active_option_id == opt.id) %} hidden{% endif %}>
           <div class="writing-layout writing-layout-part2">
             <div class="writing-prompt-col">
               <div class="writing-prompt-box">
@@ -96,26 +181,18 @@
                 {{ csrf_input() }}
                 <input type="hidden" name="part" value="2" />
                 <input type="hidden" name="option_id" value="{{ opt.id }}" />
-                <label class="writing-word-count writing-part2-count" id="writing-part2-count-{{ opt.id }}" aria-live="polite" data-option="{{ opt.id }}">0 words ({{ word_min }}–{{ word_max }})</label>
-                <textarea class="writing-textarea writing-part2-text" name="answer" data-option="{{ opt.id }}" rows="12" placeholder="Write your {{ opt.type|lower }} here…" aria-label="Part 2 {{ opt.type }}">{{ request.form.answer if active_part == 2 and request.form.get('option_id') == opt.id else '' }}</textarea>
+                {% set opt_draft = writing_drafts.part2.get(opt.id) if writing_drafts and writing_drafts.part2 else None %}
+                {% set opt_answer = request.form.get('answer', '') if request.method == 'POST' and active_part == 2 and request.form.get('option_id') == opt.id else (opt_draft.answer if opt_draft else '') %}
+                <div class="writing-editor-meta">
+                  <label class="writing-word-count writing-part2-count" id="writing-part2-count-{{ opt.id }}" aria-live="polite" data-option="{{ opt.id }}">0 words ({{ word_min }}–{{ word_max }})</label>
+                  <span class="writing-draft-status" data-draft-status>Autosave ready</span>
+                </div>
+                <textarea class="writing-textarea writing-part2-text" name="answer" data-part="2" data-option-id="{{ opt.id }}" data-option="{{ opt.id }}" rows="12" placeholder="Write your {{ opt.type|lower }} here…" aria-label="Part 2 {{ opt.type }}">{{ opt_answer }}</textarea>
                 <div class="writing-actions">
                   <button type="submit" name="action" value="check" class="btn btn-check">Check with AI</button>
                 </div>
                 {% set fb = part2_feedback.get(opt.id) if part2_feedback else None %}
-                {% if fb %}
-                <div class="writing-feedback">
-                  <div class="writing-feedback-scores">
-                    <span class="writing-feedback-score"><strong>Overall:</strong> {{ fb.overall }}/5</span>
-                    {% if fb.content is defined %}
-                    <span class="writing-feedback-score"><strong>Content:</strong> {{ fb.content }}/5</span>
-                    <span class="writing-feedback-score"><strong>Comm. achievement:</strong> {{ fb.communicative_achievement }}/5</span>
-                    <span class="writing-feedback-score"><strong>Organisation:</strong> {{ fb.organisation }}/5</span>
-                    <span class="writing-feedback-score"><strong>Language:</strong> {{ fb.language }}/5</span>
-                    {% endif %}
-                  </div>
-                  <p class="writing-feedback-comment">{{ fb.comment or fb.raw_text }}</p>
-                </div>
-                {% endif %}
+                {{ render_feedback(fb) }}
               </form>
             </div>
           </div>
@@ -129,5 +206,5 @@
     <a href="{{ url_for('home.home') }}" class="btn btn-next">← Back to home</a>
   </div>
 </div>
-<script src="{{ url_for('static', filename='writing.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='writing.js') }}?v=2"></script>
 {% endblock %}

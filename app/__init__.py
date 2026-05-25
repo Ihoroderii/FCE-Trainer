@@ -8,7 +8,7 @@ from flask import Flask, redirect, request, session, url_for
 from flask_wtf.csrf import CSRFProtect
 
 from app.config import PARTS_RANGE
-from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_check_history_created_index, _ensure_spaced_repetition_table, _ensure_orphaned_stats_claimed, _ensure_vocab_notebook_table, _ensure_vocab_word_forms_column, _ensure_part3_word_repetition_table, _ensure_part2_word_repetition_tables, _ensure_user_settings_table, _ensure_listening_tables, _ensure_password_reset_tokens_table
+from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_check_history_created_index, _ensure_spaced_repetition_table, _ensure_orphaned_stats_claimed, _ensure_vocab_notebook_table, _ensure_vocab_word_forms_column, _ensure_part3_word_repetition_table, _ensure_part2_word_repetition_tables, _ensure_user_settings_table, _ensure_listening_tables, _ensure_password_reset_tokens_table, _ensure_live_lesson_tables, _ensure_writing_tables
 from app.rag.store import ensure_rag_tables
 from app.views.home import bp as home_bp
 from app.views.use_of_english import bp as uoe_bp
@@ -17,6 +17,7 @@ from app.views.get_phrases import bp as get_phrases_bp
 from app.views.vocab import bp as vocab_bp
 from app.views.settings import bp as settings_bp
 from app.views.listening import bp as listening_bp
+from app.views.lessons import bp as lessons_bp
 
 _debug_mode = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
 _log_level = logging.DEBUG if _debug_mode else logging.INFO
@@ -118,10 +119,19 @@ def create_app(config=None):
     app.register_blueprint(vocab_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(listening_bp)
+    app.register_blueprint(lessons_bp)
 
     # Apply strict rate limits to auth endpoints (brute-force protection)
     limiter.limit("5/minute;20/day")(app.view_functions["home.register"])
     limiter.limit("5/minute;20/day")(app.view_functions["home.login"])
+    limiter.limit("5/minute;20/day")(app.view_functions["settings.change_password"])
+    for polling_endpoint in (
+        "writing.save_writing_draft_api",
+        "lessons.live_state_api",
+        "lessons.teacher_snapshot_api",
+    ):
+        if polling_endpoint in app.view_functions:
+            limiter.exempt(app.view_functions[polling_endpoint])
 
     if app.config["GOOGLE_OAUTH_CLIENT_ID"] and app.config["GOOGLE_OAUTH_CLIENT_SECRET"]:
         from flask_dance.contrib.google import make_google_blueprint
@@ -136,6 +146,8 @@ def create_app(config=None):
             "current_user_id": session.get("user_id"),
             "current_user_email": session.get("user_email") or "",
             "current_user_name": session.get("user_name") or "",
+            "current_live_lesson_code": session.get("live_lesson_code") or "",
+            "current_live_lesson_role": session.get("live_lesson_role") or "",
         }
 
     with app.app_context():
@@ -155,6 +167,8 @@ def create_app(config=None):
         _ensure_user_settings_table()
         _ensure_listening_tables()
         _ensure_password_reset_tokens_table()
+        _ensure_live_lesson_tables()
+        _ensure_writing_tables()
         ensure_rag_tables()
         seed_db()
         logger.debug("Database ready")

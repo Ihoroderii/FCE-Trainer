@@ -124,6 +124,12 @@
       <span class="home-section-cta">Practice get phrases &rarr;</span>
     </a>
     {% if current_user_id %}
+    <a href="{{ url_for('lessons.lessons_page') }}" class="home-section-card home-section-live">
+      <span class="home-section-icon" aria-hidden="true">LIVE</span>
+      <h3 class="home-section-title">Live Lessons</h3>
+      <p class="home-section-desc">Create a room as a teacher or join with a code so your teacher can see your exercise progress in real time.</p>
+      <span class="home-section-cta">Open live lessons &rarr;</span>
+    </a>
     <a href="{{ url_for('vocab.vocab_page') }}" class="home-section-card home-section-vocab">
       <span class="home-section-icon" aria-hidden="true">📒</span>
       <h3 class="home-section-title">Vocabulary Notebook</h3>

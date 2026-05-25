@@ -1,0 +1,220 @@
+{% extends "base_minimal.html" %}
+{% block title %}Teacher Dashboard{% endblock %}
+{% block content %}
+<div class="lessons-page lesson-teacher-page" data-snapshot-url="{{ url_for('lessons.teacher_snapshot_api', code=lesson.code) }}">
+  <section class="lesson-hero lesson-teacher-hero">
+    <div>
+      <p class="lesson-kicker">Teacher dashboard</p>
+      <h1 class="lesson-title">{{ lesson.title or "Live lesson" }}</h1>
+      <p class="lesson-subtitle">Share code <strong>{{ lesson.code }}</strong>. Students join from the Live Lessons page.</p>
+    </div>
+    <div class="lesson-teacher-actions">
+      <div class="lesson-code-box" aria-label="Lesson code">{{ lesson.code }}</div>
+      <form method="post" action="{{ url_for('lessons.close_lesson_room', code=lesson.code) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="lesson-close-btn">Close lesson</button>
+      </form>
+    </div>
+  </section>
+
+  <div class="lesson-dashboard-grid">
+    <section class="lesson-panel lesson-students-panel">
+      <div class="lesson-panel-header">
+        <h2>Students</h2>
+        <span class="lesson-refresh-status" id="lesson-refresh-status">Waiting for updates</span>
+      </div>
+      <div id="lesson-students" class="lesson-students-list"></div>
+    </section>
+
+    <section class="lesson-panel lesson-events-panel">
+      <h2>Recent results</h2>
+      <div id="lesson-events" class="lesson-events-list"></div>
+    </section>
+  </div>
+</div>
+
+<script id="lesson-initial-snapshot" type="application/json">{{ snapshot | tojson | safe }}</script>
+<script>
+(function() {
+  var page = document.querySelector('.lesson-teacher-page');
+  if (!page) return;
+  var snapshotUrl = page.getAttribute('data-snapshot-url');
+  var studentsEl = document.getElementById('lesson-students');
+  var eventsEl = document.getElementById('lesson-events');
+  var statusEl = document.getElementById('lesson-refresh-status');
+  var initialEl = document.getElementById('lesson-initial-snapshot');
+
+  function text(value) {
+    return value == null || value === '' ? '-' : String(value);
+  }
+
+  function emptyMessage(message) {
+    var p = document.createElement('p');
+    p.className = 'lesson-empty';
+    p.textContent = message;
+    return p;
+  }
+
+  function answerItem(item) {
+    var row = document.createElement('div');
+    var choices = Array.isArray(item.choices) ? item.choices : [];
+    row.className = 'lesson-answer-row' + (item.filled ? ' lesson-answer-filled' : '');
+    if (choices.length) row.classList.add('lesson-answer-row--choices');
+    var label = document.createElement('span');
+    label.className = 'lesson-answer-label';
+    label.textContent = item.label || item.name || 'Answer';
+    var value = document.createElement('span');
+    value.className = 'lesson-answer-value';
+    value.textContent = item.filled ? text(item.display_value || item.value) : 'empty';
+    row.appendChild(label);
+    row.appendChild(value);
+    if (choices.length) {
+      var list = document.createElement('div');
+      list.className = 'lesson-choice-list';
+      choices.forEach(function(choice) {
+        var choiceEl = document.createElement('span');
+        choiceEl.className = 'lesson-choice-pill' + (choice.selected ? ' lesson-choice-pill-selected' : '');
+        choiceEl.textContent = choice.label || choice.value || '-';
+        list.appendChild(choiceEl);
+      });
+      row.appendChild(list);
+    }
+    return row;
+  }
+
+  function studentCard(student) {
+    var state = student.state || {};
+    var card = document.createElement('article');
+    card.className = 'lesson-student-card';
+    if (student.left_at) card.classList.add('lesson-student-left');
+
+    var header = document.createElement('div');
+    header.className = 'lesson-student-header';
+    var name = document.createElement('div');
+    name.className = 'lesson-student-name';
+    name.textContent = student.name || student.email || 'Student';
+    var online = document.createElement('span');
+    online.className = 'lesson-online-pill';
+    online.textContent = student.left_at ? 'left' : 'connected';
+    header.appendChild(name);
+    header.appendChild(online);
+    card.appendChild(header);
+
+    var meta = document.createElement('div');
+    meta.className = 'lesson-student-meta';
+    meta.textContent = state.section_title || state.page_title || state.path || 'No activity yet';
+    card.appendChild(meta);
+
+    var progress = document.createElement('div');
+    progress.className = 'lesson-progress-line';
+    progress.textContent = text(state.filled_count) + ' / ' + text(state.total_fields) + ' fields filled';
+    card.appendChild(progress);
+
+    if (state.score_text) {
+      var score = document.createElement('div');
+      score.className = 'lesson-score-line';
+      score.textContent = state.score_text;
+      card.appendChild(score);
+    }
+
+    var answers = Array.isArray(state.answers) ? state.answers : [];
+    if (state.exercise_text || answers.length) {
+      var exercise = document.createElement('details');
+      exercise.className = 'lesson-exercise-details';
+      exercise.open = true;
+      var summary = document.createElement('summary');
+      summary.textContent = 'Exercise view';
+      var content = document.createElement('div');
+      content.className = 'lesson-exercise-preview';
+      if (state.exercise_text) {
+        var textBlock = document.createElement('pre');
+        textBlock.className = 'lesson-exercise-text';
+        textBlock.textContent = state.exercise_text;
+        content.appendChild(textBlock);
+      }
+      if (answers.length) {
+        var inlineAnswers = document.createElement('div');
+        inlineAnswers.className = 'lesson-answer-box-grid';
+        answers.slice(0, 30).forEach(function(item) {
+          inlineAnswers.appendChild(answerItem(item));
+        });
+        content.appendChild(inlineAnswers);
+      }
+      exercise.appendChild(summary);
+      exercise.appendChild(content);
+      card.appendChild(exercise);
+    }
+
+    if (!state.exercise_text && answers.length) {
+      var answerWrap = document.createElement('div');
+      answerWrap.className = 'lesson-answer-list';
+      answers.slice(0, 30).forEach(function(item) {
+        answerWrap.appendChild(answerItem(item));
+      });
+      card.appendChild(answerWrap);
+    }
+
+    var updated = document.createElement('div');
+    updated.className = 'lesson-updated-at';
+    updated.textContent = 'Updated: ' + text(student.state_updated_at || student.last_seen_at);
+    card.appendChild(updated);
+    return card;
+  }
+
+  function eventRow(event) {
+    var row = document.createElement('div');
+    row.className = 'lesson-event-row';
+    var main = document.createElement('span');
+    main.textContent = text(event.name) + ' submitted part ' + text(event.part);
+    var score = document.createElement('strong');
+    score.textContent = text(event.score) + ' / ' + text(event.total);
+    var time = document.createElement('span');
+    time.className = 'lesson-event-time';
+    time.textContent = text(event.created_at);
+    row.appendChild(main);
+    row.appendChild(score);
+    row.appendChild(time);
+    return row;
+  }
+
+  function render(snapshot) {
+    var students = snapshot.students || [];
+    var events = snapshot.events || [];
+    studentsEl.replaceChildren();
+    eventsEl.replaceChildren();
+    if (!students.length) {
+      studentsEl.appendChild(emptyMessage('No students have joined yet.'));
+    } else {
+      students.forEach(function(student) {
+        studentsEl.appendChild(studentCard(student));
+      });
+    }
+    if (!events.length) {
+      eventsEl.appendChild(emptyMessage('No submitted results yet.'));
+    } else {
+      events.forEach(function(event) {
+        eventsEl.appendChild(eventRow(event));
+      });
+    }
+    if (statusEl) statusEl.textContent = 'Updated now';
+  }
+
+  function fetchSnapshot() {
+    fetch(snapshotUrl, { credentials: 'same-origin' })
+      .then(function(resp) { return resp.ok ? resp.json() : Promise.reject(); })
+      .then(function(data) {
+        if (data.ok) render(data);
+      })
+      .catch(function() {
+        if (statusEl) statusEl.textContent = 'Connection problem';
+      });
+  }
+
+  try {
+    if (initialEl && initialEl.textContent) render(JSON.parse(initialEl.textContent));
+  } catch (e) {}
+  fetchSnapshot();
+  setInterval(fetchSnapshot, 2000);
+})();
+</script>
+{% endblock %}

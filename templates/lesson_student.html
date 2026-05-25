@@ -1,0 +1,39 @@
+{% extends "base_minimal.html" %}
+{% block title %}Joined Live Lesson{% endblock %}
+{% block content %}
+<div class="lessons-page lesson-student-page">
+  <section class="lesson-hero">
+    <div>
+      <p class="lesson-kicker">Student mode</p>
+      <h1 class="lesson-title">You joined {{ lesson.code }}</h1>
+      <p class="lesson-subtitle">Your teacher can now see your current exercise, answer progress, and submitted scores while this lesson is active.</p>
+    </div>
+    <div class="lesson-active-chip">
+      <span class="live-lesson-dot" aria-hidden="true"></span>
+      Sharing is on
+    </div>
+  </section>
+
+  <section class="lesson-panel lesson-student-actions">
+    <h2>Start working</h2>
+    <div class="lesson-action-grid">
+      <a href="{{ url_for('use_of_english.use_of_english') }}" class="lesson-action-card">
+        <span class="lesson-action-title">Use of English and Reading</span>
+        <span class="lesson-action-meta">Parts 1-7</span>
+      </a>
+      <a href="{{ url_for('writing.writing') }}" class="lesson-action-card">
+        <span class="lesson-action-title">Writing</span>
+        <span class="lesson-action-meta">Essay and Part 2</span>
+      </a>
+      <a href="{{ url_for('listening.listening') }}" class="lesson-action-card">
+        <span class="lesson-action-title">Listening</span>
+        <span class="lesson-action-meta">Parts 1-4</span>
+      </a>
+      <a href="{{ url_for('home.stats') }}" class="lesson-action-card">
+        <span class="lesson-action-title">Statistics</span>
+        <span class="lesson-action-meta">Current profile</span>
+      </a>
+    </div>
+  </section>
+</div>
+{% endblock %}

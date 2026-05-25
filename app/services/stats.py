@@ -6,11 +6,98 @@ from datetime import datetime
 
 from flask import session
 
-from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE, LISTENING_HISTORY_PARTS
+from app.config import GAMIFICATION_ENABLED, GET_PHRASE_PART, PARTS_RANGE, LISTENING_HISTORY_PARTS, WRITING_HISTORY_PARTS
 from app.db import db_connection
 from app.services.repetition import record_review
 
 logger = logging.getLogger("fce_trainer")
+CAMBRIDGE_SCALE_MIN = 120
+CAMBRIDGE_SCALE_MAX = 190
+
+
+def _cambridge_score_from_percent(percent: float | None) -> int | None:
+    """Estimate a Cambridge English Scale score from local practice accuracy."""
+    if percent is None:
+        return None
+    pct = max(0.0, min(float(percent), 100.0))
+    score = CAMBRIDGE_SCALE_MIN + ((CAMBRIDGE_SCALE_MAX - CAMBRIDGE_SCALE_MIN) * pct / 100)
+    return int(round(score))
+
+
+def _cefr_for_cambridge_score(score: int | None) -> str | None:
+    if score is None:
+        return None
+    if score >= 180:
+        return "C1"
+    if score >= 160:
+        return "B2"
+    if score >= 140:
+        return "B1"
+    return "A2"
+
+
+def _aggregate_parts(user_id: int | None, parts: list[int]) -> dict:
+    if not parts:
+        return {"total_correct": 0, "total_questions": 0, "attempts": 0, "percent": None}
+    where, params = _user_filter_sql(user_id)
+    placeholders = ",".join("?" * len(parts))
+    with db_connection() as conn:
+        cur = conn.execute(
+            f"""SELECT SUM(score) AS total_correct, SUM(total) AS total_questions, COUNT(*) AS attempts
+                FROM check_history
+                WHERE {where} AND part IN ({placeholders})""",
+            (*params, *parts),
+        )
+        row = cur.fetchone()
+    total_correct = row["total_correct"] or 0
+    total_questions = row["total_questions"] or 0
+    return {
+        "total_correct": total_correct,
+        "total_questions": total_questions,
+        "attempts": row["attempts"] or 0,
+        "percent": round(100 * total_correct / total_questions, 1) if total_questions else None,
+    }
+
+
+def _scale_component(key: str, label: str, summary: dict, enabled: bool = True) -> dict:
+    percent = summary.get("percent") if enabled else None
+    score = _cambridge_score_from_percent(percent)
+    return {
+        "key": key,
+        "label": label,
+        "score": score,
+        "cefr": _cefr_for_cambridge_score(score),
+        "percent": percent,
+        "attempts": summary.get("attempts", 0) if enabled else 0,
+        "total_correct": summary.get("total_correct", 0) if enabled else 0,
+        "total_questions": summary.get("total_questions", 0) if enabled else 0,
+        "available": score is not None,
+    }
+
+
+def get_cambridge_scale_profile(user_id: int | None = None) -> dict:
+    """Return a Cambridge-style score profile from saved practice stats."""
+    if user_id is None:
+        user_id = session.get("user_id")
+
+    components = [
+        _scale_component("reading", "Reading", _aggregate_parts(user_id, [5, 6, 7])),
+        _scale_component("use_of_english", "Use of English", _aggregate_parts(user_id, [1, 2, 3, 4])),
+        _scale_component("writing", "Writing", _aggregate_parts(user_id, list(WRITING_HISTORY_PARTS.values()))),
+        _scale_component("listening", "Listening", _aggregate_parts(user_id, list(LISTENING_HISTORY_PARTS.values()))),
+        _scale_component("speaking", "Speaking", {}, enabled=False),
+    ]
+    available_scores = [c["score"] for c in components if c["score"] is not None]
+    overall_score = int(round(sum(available_scores) / len(available_scores))) if available_scores else None
+    return {
+        "scale_min": CAMBRIDGE_SCALE_MIN,
+        "scale_max": CAMBRIDGE_SCALE_MAX,
+        "components": components,
+        "overall_score": overall_score,
+        "overall_cefr": _cefr_for_cambridge_score(overall_score),
+        "has_data": bool(available_scores),
+        "note": "Practice estimate from your saved task accuracy, not an official Cambridge result.",
+    }
 
 
 def _user_filter_sql(user_id: int | None) -> tuple[str, tuple]:
@@ -76,7 +163,7 @@ def record_check_result(result: dict) -> dict | None:
     total = result.get("total", 0)
     if total <= 0:
         return None
-    _valid_parts = set(PARTS_RANGE) | {GET_PHRASE_PART} | set(LISTENING_HISTORY_PARTS.values())
+    _valid_parts = set(PARTS_RANGE) | {GET_PHRASE_PART} | set(LISTENING_HISTORY_PARTS.values()) | set(WRITING_HISTORY_PARTS.values())
     if part not in _valid_parts:
         return None
     user_id = session.get("user_id")
@@ -105,6 +192,12 @@ def record_check_result(result: dict) -> dict | None:
                 ),
             )
         conn.commit()
+
+    try:
+        from app.services.lessons import record_result_event_from_session
+        record_result_event_from_session(result, check_id)
+    except Exception:
+        logging.getLogger("fce_trainer").warning("record_lesson_result failed", exc_info=True)
 
     # Award XP & check achievements for logged-in users
     reward = None
