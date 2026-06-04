@@ -607,7 +607,11 @@ def _ensure_writing_tables() -> None:
                 option_id TEXT NOT NULL DEFAULT '',
                 task_key TEXT NOT NULL DEFAULT '',
                 task_json TEXT NOT NULL DEFAULT '{}',
+                task_text TEXT NOT NULL DEFAULT '',
                 answer TEXT NOT NULL DEFAULT '',
+                student_answer TEXT NOT NULL DEFAULT '',
+                student_improved_version TEXT NOT NULL DEFAULT '',
+                ai_improved_version TEXT NOT NULL DEFAULT '',
                 feedback_json TEXT NOT NULL DEFAULT '{}',
                 word_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -615,7 +619,84 @@ def _ensure_writing_tables() -> None:
             CREATE INDEX IF NOT EXISTS idx_writing_attempts_owner
                 ON writing_attempts(owner_key, created_at);
         """)
+        cur = conn.execute("PRAGMA table_info(writing_attempts)")
+        cols = {r["name"] for r in cur.fetchall()}
+        for name in (
+            "task_text",
+            "student_answer",
+            "student_improved_version",
+            "ai_improved_version",
+        ):
+            if name not in cols:
+                conn.execute(f"ALTER TABLE writing_attempts ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
+        _backfill_writing_attempt_columns(conn)
         conn.commit()
+
+
+def _writing_task_text_from_snapshot(task_snapshot: dict) -> str:
+    task = task_snapshot or {}
+    if task.get("part") == 1:
+        points = "\n".join(f"- {point}" for point in task.get("points") or [])
+        return "\n\n".join(
+            part for part in (
+                str(task.get("question") or "").strip(),
+                f"Points to cover:\n{points}" if points else "",
+                str(task.get("notes") or "").strip(),
+            ) if part
+        )
+    if task.get("part") == 2:
+        return "\n\n".join(
+            part for part in (
+                str(task.get("task") or "").strip(),
+                str(task.get("prompt") or "").strip(),
+            ) if part
+        )
+    return json.dumps(task, sort_keys=True, ensure_ascii=False)
+
+
+def _backfill_writing_attempt_columns(conn) -> None:
+    rows = conn.execute("""
+        SELECT id, task_json, answer, feedback_json, task_text, student_answer,
+               student_improved_version, ai_improved_version
+        FROM writing_attempts
+        WHERE task_text = ''
+           OR student_answer = ''
+           OR (student_improved_version = '' AND feedback_json LIKE '%student_improved_version%')
+           OR (ai_improved_version = '' AND feedback_json LIKE '%ai_improved_version%')
+    """).fetchall()
+    for row in rows:
+        try:
+            task_snapshot = json.loads(row["task_json"] or "{}")
+            if not isinstance(task_snapshot, dict):
+                task_snapshot = {}
+        except json.JSONDecodeError:
+            task_snapshot = {}
+        try:
+            feedback = json.loads(row["feedback_json"] or "{}")
+            if not isinstance(feedback, dict):
+                feedback = {}
+        except json.JSONDecodeError:
+            feedback = {}
+        conn.execute(
+            """
+            UPDATE writing_attempts
+            SET task_text = ?,
+                student_answer = ?,
+                student_improved_version = ?,
+                ai_improved_version = ?
+            WHERE id = ?
+            """,
+            (
+                (row["task_text"] or _writing_task_text_from_snapshot(task_snapshot))[:30000],
+                (row["student_answer"] or row["answer"] or "")[:30000],
+                (
+                    row["student_improved_version"]
+                    or str(feedback.get("student_improved_version") or "")
+                )[:30000],
+                (row["ai_improved_version"] or str(feedback.get("ai_improved_version") or ""))[:30000],
+                row["id"],
+            ),
+        )
 
 
 def seed_db() -> None:

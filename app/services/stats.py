@@ -1,6 +1,7 @@
 """Check history and per-part statistics."""
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 
@@ -39,6 +40,9 @@ def _cefr_for_cambridge_score(score: int | None) -> str | None:
 def _aggregate_parts(user_id: int | None, parts: list[int]) -> dict:
     if not parts:
         return {"total_correct": 0, "total_questions": 0, "attempts": 0, "percent": None}
+    writing_parts = set(WRITING_HISTORY_PARTS.values())
+    if set(parts).issubset(writing_parts):
+        return _aggregate_unique_writing_tasks(user_id, parts)
     where, params = _user_filter_sql(user_id)
     placeholders = ",".join("?" * len(parts))
     with db_connection() as conn:
@@ -55,6 +59,59 @@ def _aggregate_parts(user_id: int | None, parts: list[int]) -> dict:
         "total_correct": total_correct,
         "total_questions": total_questions,
         "attempts": row["attempts"] or 0,
+        "percent": round(100 * total_correct / total_questions, 1) if total_questions else None,
+    }
+
+
+def _writing_score_from_feedback(feedback_json: str) -> int | None:
+    try:
+        feedback = json.loads(feedback_json or "{}")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(feedback, dict):
+        return None
+    if not any(key in feedback for key in ("content", "communicative_achievement", "organisation", "language")):
+        return None
+    try:
+        score = float(feedback.get("overall", 0))
+    except (TypeError, ValueError):
+        return None
+    return max(0, min(5, round(score)))
+
+
+def _aggregate_unique_writing_tasks(user_id: int | None, history_parts: list[int]) -> dict:
+    """Aggregate Writing stats by unique writing task, using the latest scored check per task."""
+    history_part_set = set(history_parts)
+    where, params = _user_filter_sql(user_id)
+    with db_connection() as conn:
+        rows = conn.execute(
+            f"""SELECT id, part, option_id, task_key, feedback_json, created_at
+                FROM writing_attempts
+                WHERE {where}
+                ORDER BY datetime(created_at), id""",
+            params,
+        ).fetchall()
+
+    latest_by_task: dict[tuple[int, str, str], tuple[int, str]] = {}
+    for row in rows:
+        history_part = WRITING_HISTORY_PARTS.get(row["part"])
+        if history_part not in history_part_set:
+            continue
+        score = _writing_score_from_feedback(row["feedback_json"])
+        if score is None:
+            continue
+        task_key = row["task_key"] or f"attempt:{row['id']}"
+        unique_key = (history_part, row["option_id"] or "", task_key)
+        latest_by_task[unique_key] = (score, row["created_at"])
+
+    if not latest_by_task:
+        return {"total_correct": 0, "total_questions": 0, "attempts": 0, "percent": None}
+    total_correct = sum(score for score, _created_at in latest_by_task.values())
+    total_questions = len(latest_by_task) * 5
+    return {
+        "total_correct": total_correct,
+        "total_questions": total_questions,
+        "attempts": len(latest_by_task),
         "percent": round(100 * total_correct / total_questions, 1) if total_questions else None,
     }
 

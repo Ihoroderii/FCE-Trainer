@@ -1765,6 +1765,24 @@ body.minimal-layout {
   text-align: center;
 }
 
+.home-scale-profile-full {
+  margin: 0 auto 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.home-scale-profile-full .cambridge-scale-profile {
+  min-width: 980px;
+}
+
+.home-scale-profile-full .scale-ruler-col,
+.home-scale-profile-full .stats-scale-track {
+  background: var(--bg);
+}
+
 /* ── Hero ── */
 .home-hero {
   padding: 2.5rem 0 2rem;
@@ -2549,9 +2567,24 @@ html.dark-mode .stats-scale-skill-meta {
 
 /* ----- Writing (FCE B2, Inspera-style) ----- */
 .writing-page {
-  padding: 0.5rem 0 2rem;
+  --writing-bg: #fff8f3;
+  --writing-surface: #fffdf9;
+  --writing-card: #fff2e8;
+  --writing-card-strong: #ffe8d9;
+  --writing-border: #ead3c1;
+  --writing-accent: #b75b2a;
+  --writing-accent-hover: #93471f;
+  --writing-heading: #5f321f;
+  --writing-muted: #725f52;
+  --writing-shadow: rgba(126, 67, 31, 0.1);
   max-width: 100%;
   margin: 0;
+  color: var(--ink);
+  background: var(--writing-bg);
+  border: 1px solid var(--writing-border);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 10px 30px var(--writing-shadow);
 }
 
 .writing-header-row {
@@ -2567,14 +2600,14 @@ html.dark-mode .stats-scale-skill-meta {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--writing-heading);
 }
 
 .writing-intro {
   margin: 0;
   flex: 1 1 280px;
   font-size: 0.95rem;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
 }
 
 .writing-timer-wrap {
@@ -2586,14 +2619,14 @@ html.dark-mode .stats-scale-skill-meta {
 
 .writing-timer-label {
   font-size: 0.85rem;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
 }
 
 .writing-timer {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   font-size: 1.25rem;
-  color: var(--ink);
+  color: var(--writing-heading);
 }
 
 .writing-timer-expired {
@@ -2604,7 +2637,7 @@ html.dark-mode .stats-scale-skill-meta {
 .btn-writing-timer-start {
   padding: 0.4rem 0.75rem;
   font-size: 0.9rem;
-  background: var(--accent);
+  background: var(--writing-accent);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -2612,7 +2645,7 @@ html.dark-mode .stats-scale-skill-meta {
 }
 
 .btn-writing-timer-start:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--writing-accent-hover);
 }
 
 .btn-writing-timer-start:disabled {
@@ -2624,7 +2657,7 @@ html.dark-mode .stats-scale-skill-meta {
   display: flex;
   gap: 0.25rem;
   margin-bottom: 1.25rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--writing-border);
 }
 
 .writing-tab {
@@ -2634,18 +2667,18 @@ html.dark-mode .stats-scale-skill-meta {
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
   cursor: pointer;
   margin-bottom: -1px;
 }
 
 .writing-tab:hover {
-  color: var(--ink);
+  color: var(--writing-heading);
 }
 
 .writing-tab-active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--writing-accent);
+  border-bottom-color: var(--writing-accent);
 }
 
 .writing-panel {
@@ -2658,48 +2691,51 @@ html.dark-mode .stats-scale-skill-meta {
 
 .writing-layout {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: 0.5rem;
+  gap: 1rem;
   width: 100%;
-  min-height: 360px;
-  --writing-left-pct: 40%;
+  min-height: 0;
+  --writing-left-pct: 100%;
 }
 
 .writing-prompt-col {
-  flex: 0 0 var(--writing-left-pct);
-  min-width: 260px;
-  max-width: 70%;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
 }
 
 .writing-editor-col {
-  flex: 1 1 0;
-  min-width: 320px;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
 }
 
 .writing-resizer {
-  align-self: stretch;
-  min-height: 0;
+  display: none;
 }
 
 .writing-part-title {
   margin: 0 0 0.5rem;
   font-size: 1.15rem;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--writing-heading);
 }
 
 .writing-instruction {
   margin: 0 0 1rem;
   font-size: 0.95rem;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
 }
 
 .writing-task-image-wrap {
   margin-bottom: 0.75rem;
+  width: min(100%, 760px);
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
+  border: 1px solid var(--writing-border);
+  background: var(--writing-surface);
 }
 
 .writing-task-image {
@@ -2718,31 +2754,32 @@ html.dark-mode .stats-scale-skill-meta {
   font-size: 0.95rem;
   font-weight: 500;
   border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
+  border: 1px solid var(--writing-border);
+  background: var(--writing-surface);
   color: var(--ink);
   cursor: pointer;
 }
 
 .btn-generate-writing:hover {
-  background: var(--nav-bg);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--writing-card);
+  border-color: var(--writing-accent);
+  color: var(--writing-accent);
 }
 
 .writing-prompt-box {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: var(--writing-surface);
+  border: 1px solid var(--writing-border);
   border-radius: 8px;
   padding: 1rem 1.25rem;
   margin-bottom: 1.25rem;
+  box-shadow: 0 4px 14px rgba(126, 67, 31, 0.06);
 }
 
 .writing-question,
 .writing-task-intro {
   margin: 0 0 0.75rem;
   font-weight: 500;
-  color: var(--ink);
+  color: var(--writing-heading);
 }
 
 .writing-points {
@@ -2754,7 +2791,7 @@ html.dark-mode .stats-scale-skill-meta {
 .writing-prompt-text {
   margin: 0.75rem 0 0;
   font-size: 0.9rem;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
 }
 
 .writing-prompt-text {
@@ -2781,10 +2818,13 @@ html.dark-mode .stats-scale-skill-meta {
 .writing-feedback {
   margin-top: 1rem;
   padding: 0.9rem 1rem;
+  width: 100%;
+  box-sizing: border-box;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
+  border: 1px solid var(--writing-border);
+  background: var(--writing-surface);
   font-size: 0.95rem;
+  box-shadow: 0 8px 24px rgba(126, 67, 31, 0.08);
 }
 
 .writing-feedback-scores {
@@ -2796,7 +2836,11 @@ html.dark-mode .stats-scale-skill-meta {
 
 .writing-feedback-score {
   font-size: 0.85rem;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
+}
+
+.writing-feedback-score strong {
+  color: var(--writing-heading);
 }
 
 .writing-feedback-comment {
@@ -2808,14 +2852,14 @@ html.dark-mode .stats-scale-skill-meta {
 .writing-feedback-section {
   margin-top: 0.85rem;
   padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--writing-border);
 }
 
 .writing-feedback-section h3 {
   margin: 0 0 0.45rem;
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--writing-heading);
 }
 
 .writing-feedback-list {
@@ -2829,19 +2873,29 @@ html.dark-mode .stats-scale-skill-meta {
 }
 
 .writing-correction-card,
-.writing-rewrite-box {
+.writing-rewrite-box,
+.writing-version-box {
   padding: 0.7rem 0.8rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--writing-border);
   border-radius: 6px;
-  background: var(--bg);
+  background: var(--writing-card);
   margin-top: 0.5rem;
 }
 
 .writing-correction-card p,
-.writing-rewrite-box p {
+.writing-rewrite-box p,
+.writing-version-box p {
   margin: 0.35rem 0;
   color: var(--ink);
   line-height: 1.5;
+}
+
+.writing-version-box p {
+  white-space: pre-wrap;
+}
+
+.writing-version-box {
+  background: var(--writing-card-strong);
 }
 
 .writing-correction-card span,
@@ -2852,27 +2906,27 @@ html.dark-mode .stats-scale-skill-meta {
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
   letter-spacing: 0.02em;
 }
 
 .writing-word-count {
   display: block;
   font-size: 0.85rem;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
   margin-bottom: 0;
 }
 
 .writing-draft-status {
   flex-shrink: 0;
   font-size: 0.8rem;
-  color: var(--ink-muted);
+  color: var(--writing-muted);
   white-space: nowrap;
 }
 
 .writing-draft-status-saving,
 .writing-draft-status-dirty {
-  color: var(--accent);
+  color: var(--writing-accent);
 }
 
 .writing-draft-status-saved {
@@ -2898,21 +2952,39 @@ html.dark-mode .stats-scale-skill-meta {
 
 .writing-textarea {
   width: 100%;
-  min-height: 220px;
+  min-height: 300px;
   padding: 0.75rem 1rem;
   font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.6;
-  border: 1px solid var(--border);
+  border: 1px solid var(--writing-border);
   border-radius: 6px;
-  background: var(--bg);
+  background: var(--writing-surface);
   color: var(--ink);
   resize: vertical;
 }
 
 .writing-textarea:focus {
-  border-color: var(--accent);
+  border-color: var(--writing-accent);
+  box-shadow: 0 0 0 3px rgba(183, 91, 42, 0.14);
   outline: none;
+}
+
+.writing-page .btn-check {
+  background: var(--writing-accent);
+  color: #fff;
+}
+
+.writing-page .btn-check:hover:not(:disabled) {
+  background: var(--writing-accent-hover);
+  color: #fff;
+}
+
+.writing-page .btn-check:disabled {
+  background: var(--writing-card-strong);
+  color: var(--writing-muted);
+  cursor: not-allowed;
+  opacity: 0.75;
 }
 
 /* Part 2 option cards */
@@ -2923,9 +2995,10 @@ html.dark-mode .stats-scale-skill-meta {
 }
 
 .writing-option-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--writing-border);
   border-radius: 8px;
   overflow: hidden;
+  background: var(--writing-surface);
 }
 
 .writing-option-btn {
@@ -2936,18 +3009,18 @@ html.dark-mode .stats-scale-skill-meta {
   padding: 0.75rem 1rem;
   font-size: 1rem;
   text-align: left;
-  background: var(--card-bg);
+  background: var(--writing-surface);
   border: none;
   color: var(--ink);
   cursor: pointer;
 }
 
 .writing-option-btn:hover {
-  background: var(--border);
+  background: var(--writing-card);
 }
 
 .writing-option-btn[aria-expanded="true"] {
-  background: var(--accent);
+  background: var(--writing-accent);
   color: #fff;
 }
 
@@ -2962,18 +3035,18 @@ html.dark-mode .stats-scale-skill-meta {
 
 .writing-option-prompt {
   padding: 0 1rem 1rem;
-  background: var(--card-bg);
-  border-top: 1px solid var(--border);
+  background: var(--writing-card);
+  border-top: 1px solid var(--writing-border);
 }
 
 .writing-footer {
   margin-top: 2rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--writing-border);
 }
 
 .writing-footer .btn-next {
-  color: var(--accent);
+  color: var(--writing-accent);
   text-decoration: none;
 }
 
@@ -3273,6 +3346,28 @@ html.dark-mode {
   --nav-seg-bg: #333333;
 }
 
+html.dark-mode .writing-page {
+  --writing-bg: #261f1b;
+  --writing-surface: #302823;
+  --writing-card: #3a2d25;
+  --writing-card-strong: #4a352b;
+  --writing-border: #5b4638;
+  --writing-accent: #f0a46f;
+  --writing-accent-hover: #ffba86;
+  --writing-heading: #ffd9bd;
+  --writing-muted: #cdb8a8;
+  --writing-shadow: rgba(0, 0, 0, 0.28);
+}
+
+html.dark-mode .writing-prompt-box,
+html.dark-mode .writing-feedback {
+  box-shadow: none;
+}
+
+html.dark-mode .writing-textarea:focus {
+  box-shadow: 0 0 0 3px rgba(240, 164, 111, 0.2);
+}
+
 html.dark-mode .exercise,
 html.dark-mode .reading-text,
 html.dark-mode .cloze-text {
@@ -3354,13 +3449,13 @@ html.dark-mode .writing-timer-expired {
 }
 
 html.dark-mode .writing-textarea {
-  background: #252525;
-  border-color: var(--border);
+  background: var(--writing-surface);
+  border-color: var(--writing-border);
   color: var(--ink);
 }
 
 html.dark-mode .writing-option-btn[aria-expanded="true"] {
-  background: var(--accent);
+  background: var(--writing-accent);
   color: #fff;
 }
 

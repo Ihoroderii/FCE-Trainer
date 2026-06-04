@@ -60,7 +60,6 @@ def faq():
 def stats():
     user_id = session.get("user_id")
     user_stats = get_part_stats(user_id)
-    scale_profile = get_cambridge_scale_profile(user_id)
     daily = get_daily_stats(user_id)
     weekly = get_weekly_stats(user_id)
     progress_series = get_progress_series(user_id, days=14)
@@ -74,7 +73,6 @@ def stats():
         game_stats = get_game_stats(user_id)
     return render_template(
         "stats.html",
-        scale_profile=scale_profile,
         user_stats=user_stats,
         daily_stats=daily,
         weekly_stats=weekly,
@@ -102,6 +100,8 @@ def home():
     user_name = session.get("user_name") or ""
     user_stats = get_part_stats(user_id) if user_id is not None else None
     has_attempts = user_stats and any(s.get("attempts", 0) for s in user_stats)
+    scale_profile = get_cambridge_scale_profile(user_id) if user_id is not None else None
+    has_scale_profile = bool(scale_profile and scale_profile.get("has_data"))
     game_stats = None
     if GAMIFICATION_ENABLED and user_id is not None:
         from app.services.gamification import get_game_stats
@@ -117,6 +117,8 @@ def home():
         user_name=user_name,
         user_stats=user_stats,
         has_attempts=has_attempts,
+        scale_profile=scale_profile,
+        has_scale_profile=has_scale_profile,
         google_available=google_available,
         proctor_configured=proctor_configured,
         game=game_stats,

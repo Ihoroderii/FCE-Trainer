@@ -14,6 +14,7 @@ from app.services.writing import (
     get_writing_context,
     get_writing_draft,
     get_writing_owner_key,
+    has_scored_writing_attempt,
     save_writing_attempt,
     save_writing_draft,
     writing_task_key,
@@ -207,6 +208,8 @@ def _normalise_feedback(feedback: dict | None, raw_text: str = "") -> dict:
     if raw_text and not data.get("raw_text"):
         data["raw_text"] = raw_text
     data.setdefault("comment", data.get("raw_text", ""))
+    data["student_improved_version"] = str(data.get("student_improved_version") or "").strip()
+    data["ai_improved_version"] = str(data.get("ai_improved_version") or "").strip()
     data["missing_task_points"] = _as_text_list(data.get("missing_task_points"))
     data["organisation_advice"] = _as_text_list(data.get("organisation_advice"))
     data["grammar_corrections"] = _as_feedback_items(
@@ -322,6 +325,11 @@ def _build_writing_prompt(part: int, task_desc: str, answer: str) -> str:
         "Give scores from 0 to 5 for each category and an overall score from 0 to 5.\n"
         "Then give practical feedback a B2 student can immediately use. Be specific and quote only short "
         "student fragments when needed.\n\n"
+        "After the feedback, provide two complete improved answers:\n"
+        "- student_improved_version: improve the student's own draft while preserving their ideas, voice, "
+        "and structure as much as possible. Correct grammar, spelling, vocabulary, linking, and task coverage.\n"
+        "- ai_improved_version: write your own strong B2 First model answer for the same task. It may reorganise "
+        "the ideas and add a clear missing point if needed, but it must still stay at B2 level and within 140-190 words.\n\n"
         "TASK (what the student was asked to write):\n"
         f"\n{task_desc}\n\n"
         "STUDENT ANSWER:\n"
@@ -334,6 +342,8 @@ def _build_writing_prompt(part: int, task_desc: str, answer: str) -> str:
         '  "organisation": 0-5 number,\n'
         '  "language": 0-5 number,\n'
         '  "comment": "short summary paragraph",\n'
+        '  "student_improved_version": "complete improved version of the student answer",\n'
+        '  "ai_improved_version": "complete model answer written by the examiner",\n'
         '  "missing_task_points": ["task point or requirement the student missed"],\n'
         '  "grammar_corrections": [\n'
         '    {"original": "student fragment", "corrected": "corrected fragment", "explanation": "brief reason"}\n'
@@ -496,15 +506,18 @@ def writing():
                     })
                 fb = _normalise_feedback(fb)
                 fb.setdefault("overall", fb.get("overall", 0))
-                _record_writing_result(part, fb)
                 task = _task_snapshot(ctx, part, option_id)
+                task_key = writing_task_key(task)
                 owner_key, user_id = get_writing_owner_key()
+                stored_option_id = option_id if part == 2 else ""
+                if not has_scored_writing_attempt(owner_key, part, stored_option_id, task_key):
+                    _record_writing_result(part, fb)
                 save_writing_attempt(
                     owner_key,
                     user_id,
                     part,
-                    option_id if part == 2 else "",
-                    writing_task_key(task),
+                    stored_option_id,
+                    task_key,
                     task,
                     text,
                     fb,

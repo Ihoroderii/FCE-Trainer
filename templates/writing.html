@@ -16,6 +16,20 @@
     </div>
     <p class="writing-feedback-comment">{{ fb.comment or fb.raw_text }}</p>
 
+    {% if fb.student_improved_version %}
+    <section class="writing-feedback-section writing-version-box">
+      <h3>Your improved version</h3>
+      <p>{{ fb.student_improved_version }}</p>
+    </section>
+    {% endif %}
+
+    {% if fb.ai_improved_version %}
+    <section class="writing-feedback-section writing-version-box">
+      <h3>AI improved version</h3>
+      <p>{{ fb.ai_improved_version }}</p>
+    </section>
+    {% endif %}
+
     {% if fb.missing_task_points %}
     <section class="writing-feedback-section">
       <h3>Missing task points</h3>
@@ -150,12 +164,12 @@
           </div>
           <textarea id="writing-part1-text" class="writing-textarea" name="answer" data-part="1" data-option-id="" rows="12" placeholder="Write your essay here…" aria-label="Part 1 essay">{{ part1_answer }}</textarea>
           <div class="writing-actions">
-            <button type="submit" name="action" value="check" class="btn btn-check">Check with AI</button>
+            <button type="submit" name="action" value="check" class="btn btn-check" disabled>Check with AI</button>
           </div>
-          {{ render_feedback(part1_feedback) }}
         </form>
       </div>
     </div>
+    {{ render_feedback(part1_feedback) }}
   </section>
 
   <section id="writing-part2-panel" class="writing-panel{% if active_part == 2 %} writing-panel-active{% endif %}" role="tabpanel" aria-labelledby="writing-tab-2"{% if active_part != 2 %} hidden{% endif %}>
@@ -189,13 +203,13 @@
                 </div>
                 <textarea class="writing-textarea writing-part2-text" name="answer" data-part="2" data-option-id="{{ opt.id }}" data-option="{{ opt.id }}" rows="12" placeholder="Write your {{ opt.type|lower }} here…" aria-label="Part 2 {{ opt.type }}">{{ opt_answer }}</textarea>
                 <div class="writing-actions">
-                  <button type="submit" name="action" value="check" class="btn btn-check">Check with AI</button>
+                  <button type="submit" name="action" value="check" class="btn btn-check" disabled>Check with AI</button>
                 </div>
-                {% set fb = part2_feedback.get(opt.id) if part2_feedback else None %}
-                {{ render_feedback(fb) }}
               </form>
             </div>
           </div>
+          {% set fb = part2_feedback.get(opt.id) if part2_feedback else None %}
+          {{ render_feedback(fb) }}
         </div>
       </div>
       {% endfor %}
@@ -206,5 +220,5 @@
     <a href="{{ url_for('home.home') }}" class="btn btn-next">← Back to home</a>
   </div>
 </div>
-<script src="{{ url_for('static', filename='writing.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='writing.js') }}?v=3"></script>
 {% endblock %}

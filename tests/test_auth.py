@@ -1,6 +1,8 @@
 """Tests for authentication and route protection."""
 from __future__ import annotations
 
+import json
+
 
 class TestLoginRequired:
     """Test that protected routes redirect unauthenticated users."""
@@ -32,6 +34,31 @@ class TestHomeEndpoint:
     def test_home_accessible(self, client):
         resp = client.get("/")
         assert resp.status_code == 200
+
+    def test_home_shows_scale_profile_for_logged_in_user_with_stats(self, app, auth_client):
+        from app.db import db_connection
+
+        with auth_client.session_transaction() as sess:
+            user_id = sess["user_id"]
+
+        with app.app_context(), db_connection() as conn:
+            conn.execute(
+                "INSERT INTO check_history (part, score, total, user_id) VALUES (?, ?, ?, ?)",
+                (1, 8, 10, user_id),
+            )
+            conn.commit()
+
+        resp = auth_client.get("/")
+        assert resp.status_code == 200
+        assert b"Cambridge English Scale profile" in resp.data
+        assert b"CEFR Level" in resp.data
+        assert b"Certified Results" in resp.data
+        assert b"estimated overall scale score from available skills" in resp.data
+
+    def test_home_hides_scale_profile_without_saved_stats(self, auth_client):
+        resp = auth_client.get("/")
+        assert resp.status_code == 200
+        assert b"Cambridge English Scale profile" not in resp.data
 
 
 class TestRegistration:
@@ -151,10 +178,39 @@ class TestStatsProfile:
                     "INSERT INTO check_history (part, score, total, user_id) VALUES (?, ?, ?, ?)",
                     (101, 9, 10, uid),
                 )
-                conn.execute(
-                    "INSERT INTO check_history (part, score, total, user_id) VALUES (?, ?, ?, ?)",
-                    (201, 4, 5, uid),
-                )
+                first_writing_feedback = {
+                    "overall": 3,
+                    "content": 3,
+                    "communicative_achievement": 3,
+                    "organisation": 3,
+                    "language": 3,
+                }
+                latest_writing_feedback = {
+                    "overall": 4,
+                    "content": 4,
+                    "communicative_achievement": 4,
+                    "organisation": 4,
+                    "language": 4,
+                }
+                for feedback in (first_writing_feedback, latest_writing_feedback):
+                    conn.execute(
+                        """
+                        INSERT INTO writing_attempts
+                            (owner_key, user_id, part, option_id, task_key, task_json, answer, feedback_json, word_count)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            f"user:{uid}",
+                            uid,
+                            1,
+                            "",
+                            "essay-task-one",
+                            "{}",
+                            "Student answer",
+                            json.dumps(feedback),
+                            150,
+                        ),
+                    )
                 conn.commit()
 
         with client.session_transaction() as sess:
@@ -170,6 +226,7 @@ class TestStatsProfile:
         assert components["reading"]["score"] == 162
         assert components["listening"]["score"] == 183
         assert components["writing"]["score"] == 176
+        assert components["writing"]["attempts"] == 1
         assert components["speaking"]["score"] is None
         assert data["overall_score"] == 174
 

@@ -24,15 +24,27 @@
     return text.trim().split(/\s+/).filter(Boolean).length;
   }
 
+  function updateCheckButton(el, wordCount) {
+    var form = el && el.closest ? el.closest('form') : null;
+    var btn = form ? form.querySelector('button[name="action"][value="check"]') : null;
+    if (!btn) return;
+    var ready = wordCount >= wordMin;
+    btn.disabled = !ready;
+    btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    btn.title = ready ? '' : 'Write at least ' + wordMin + ' words before checking with AI.';
+  }
+
   function updateWordCount(el, countEl) {
-    if (!countEl) return;
     var text = (el && el.value) || '';
     var n = countWords(text);
-    countEl.textContent = n + ' words (' + wordMin + '\u2013' + wordMax + ')';
-    countEl.classList.remove('writing-count-ok', 'writing-count-low', 'writing-count-high');
-    if (n >= wordMin && n <= wordMax) countEl.classList.add('writing-count-ok');
-    else if (n > 0 && n < wordMin) countEl.classList.add('writing-count-low');
-    else if (n > wordMax) countEl.classList.add('writing-count-high');
+    if (countEl) {
+      countEl.textContent = n + ' words (' + wordMin + '\u2013' + wordMax + ')';
+      countEl.classList.remove('writing-count-ok', 'writing-count-low', 'writing-count-high');
+      if (n >= wordMin && n <= wordMax) countEl.classList.add('writing-count-ok');
+      else if (n > 0 && n < wordMin) countEl.classList.add('writing-count-low');
+      else if (n > wordMax) countEl.classList.add('writing-count-high');
+    }
+    updateCheckButton(el, n);
   }
 
   function statusForTextarea(textarea) {

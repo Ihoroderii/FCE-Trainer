@@ -3,6 +3,14 @@
 {% block content %}
 <div class="home-page">
 
+  {# ── Full scale profile (logged-in with saved stats only) ── #}
+  {% if user_id and has_scale_profile and scale_profile %}
+  {% set scale_section_id = 'home-scale-profile' %}
+  {% set scale_root_id = 'home-cambridge-scale-profile' %}
+  {% set scale_extra_class = 'home-scale-profile-full' %}
+  {% include "_cambridge_scale_profile.html" %}
+  {% endif %}
+
   {# ── Floating stats sidebar (logged-in only) ── #}
   {% if user_id and has_attempts %}
   <aside class="home-sidebar-stats" id="home-sidebar-stats">

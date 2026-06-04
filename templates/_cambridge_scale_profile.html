@@ -1,0 +1,79 @@
+{% set scale_section_id = scale_section_id|default('scale-profile') %}
+{% set scale_root_id = scale_root_id|default('cambridge-scale-profile') %}
+{% set scale_extra_class = scale_extra_class|default('') %}
+<section id="{{ scale_section_id }}" class="stats-panel stats-panel--scale {{ scale_extra_class }}">
+  <div class="stats-scale-title-row">
+    <div>
+      <h2 class="stats-panel-title">Cambridge English Scale profile</h2>
+      <p class="stats-panel-desc">{{ scale_profile.note }}</p>
+    </div>
+  </div>
+
+  <div class="stats-scale-summary">
+    {% if scale_profile.overall_score %}
+    <span class="stats-scale-overall">{{ scale_profile.overall_score }}</span>
+    <span class="stats-scale-level">{{ scale_profile.overall_cefr }}</span>
+    <span class="stats-scale-summary-text">estimated overall scale score from available skills</span>
+    {% else %}
+    <span class="stats-scale-summary-text">No saved practice results yet.</span>
+    {% endif %}
+  </div>
+
+  <div class="cambridge-scale-scroll">
+    <div class="cambridge-scale-profile" id="{{ scale_root_id }}">
+      <div class="cambridge-scale-header" aria-hidden="true">
+        <div>CEFR Level</div>
+        <div>Cambridge English Scale</div>
+        <div>Certified Results</div>
+        {% for c in scale_profile.components %}
+        <div>{{ c.label }}</div>
+        {% endfor %}
+      </div>
+      <div class="cambridge-scale-body">
+        <div class="scale-guide-line" style="--top: 0%"></div>
+        <div class="scale-guide-line" style="--top: 14.2857%"></div>
+        <div class="scale-guide-line" style="--top: 42.8571%"></div>
+        <div class="scale-guide-line" style="--top: 71.4286%"></div>
+
+        <div class="cefr-scale-col">
+          <span class="cefr-scale-label cefr-scale-label--c1">C1</span>
+          <span class="cefr-scale-label cefr-scale-label--b2">B2</span>
+          <span class="cefr-scale-label cefr-scale-label--b1">B1</span>
+          <span class="cefr-scale-label cefr-scale-label--a2">A2</span>
+        </div>
+
+        <div class="scale-ruler-col" aria-label="Cambridge English Scale from 120 to 190">
+          {% for score in [190, 180, 170, 160, 150, 140, 130, 120] %}
+          {% set tick_top = ((scale_profile.scale_max - score) * 100 / (scale_profile.scale_max - scale_profile.scale_min))|round(3) %}
+          <span class="scale-ruler-tick" style="--top: {{ tick_top }}%"><span>{{ score }}</span></span>
+          {% endfor %}
+        </div>
+
+        <div class="certified-results-col" aria-label="Certified result bands">
+          <span class="cert-band cert-band--a">Grade A</span>
+          <span class="cert-band cert-band--b">Grade B</span>
+          <span class="cert-band cert-band--c">Grade C</span>
+          <span class="cert-band cert-band--b1">Level B1</span>
+        </div>
+
+        {% for c in scale_profile.components %}
+        {% set marker_top = ((scale_profile.scale_max - c.score) * 100 / (scale_profile.scale_max - scale_profile.scale_min))|round(3) if c.score is not none else 50 %}
+        <div class="stats-scale-skill {{ 'has-data' if c.available else 'is-empty' }}" data-key="{{ c.key }}" style="--marker-top: {{ marker_top }}%">
+          <div class="stats-scale-track"></div>
+          <div class="stats-scale-marker" role="img" aria-label="{{ c.label }} score {{ c.score if c.score else 'not available' }}">
+            <span class="stats-scale-marker-score">{{ c.score if c.score else '' }}</span>
+          </div>
+          <div class="stats-scale-empty">No data</div>
+          <div class="stats-scale-skill-meta">
+            {% if c.available %}
+            {{ c.percent }}% · {{ c.attempts }} attempt{{ 's' if c.attempts != 1 else '' }}
+            {% else %}
+            Practice data not saved yet
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>

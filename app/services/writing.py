@@ -126,6 +126,37 @@ def _json_dumps(value: dict) -> str:
     return json.dumps(value or {}, sort_keys=True, ensure_ascii=True)
 
 
+def _has_score_feedback(feedback_json: str) -> bool:
+    try:
+        feedback = json.loads(feedback_json or "{}")
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(feedback, dict):
+        return False
+    return any(key in feedback for key in ("content", "communicative_achievement", "organisation", "language"))
+
+
+def _task_text_from_snapshot(task_snapshot: dict) -> str:
+    task = task_snapshot or {}
+    if task.get("part") == 1:
+        points = "\n".join(f"- {point}" for point in task.get("points") or [])
+        return "\n\n".join(
+            part for part in (
+                str(task.get("question") or "").strip(),
+                f"Points to cover:\n{points}" if points else "",
+                str(task.get("notes") or "").strip(),
+            ) if part
+        )
+    if task.get("part") == 2:
+        return "\n\n".join(
+            part for part in (
+                str(task.get("task") or "").strip(),
+                str(task.get("prompt") or "").strip(),
+            ) if part
+        )
+    return json.dumps(task, sort_keys=True, ensure_ascii=False)
+
+
 def save_writing_draft(
     owner_key: str,
     user_id: int | None,
@@ -171,6 +202,20 @@ def get_writing_draft(owner_key: str, part: int, option_id: str, task_key: str) 
     return dict(row) if row else None
 
 
+def has_scored_writing_attempt(owner_key: str, part: int, option_id: str, task_key: str) -> bool:
+    option_id = (option_id or "").strip().lower()
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT feedback_json
+            FROM writing_attempts
+            WHERE owner_key = ? AND part = ? AND option_id = ? AND task_key = ?
+            """,
+            (owner_key, part, option_id, task_key),
+        ).fetchall()
+    return any(_has_score_feedback(row["feedback_json"]) for row in rows)
+
+
 def save_writing_attempt(
     owner_key: str,
     user_id: int | None,
@@ -185,12 +230,18 @@ def save_writing_attempt(
     """Store a checked writing attempt with the answer and feedback shown to the student."""
     answer = (answer or "")[:30000]
     option_id = (option_id or "").strip().lower()
+    task_text = _task_text_from_snapshot(task_snapshot)[:30000]
+    student_answer = answer
+    student_improved_version = str((feedback or {}).get("student_improved_version") or "")[:30000]
+    ai_improved_version = str((feedback or {}).get("ai_improved_version") or "")[:30000]
     with db_connection() as conn:
         cur = conn.execute(
             """
             INSERT INTO writing_attempts
-                (owner_key, user_id, part, option_id, task_key, task_json, answer, feedback_json, word_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (owner_key, user_id, part, option_id, task_key, task_json, task_text,
+                 answer, student_answer, student_improved_version, ai_improved_version,
+                 feedback_json, word_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 owner_key,
@@ -199,7 +250,11 @@ def save_writing_attempt(
                 option_id,
                 task_key,
                 _json_dumps(task_snapshot),
+                task_text,
                 answer,
+                student_answer,
+                student_improved_version,
+                ai_improved_version,
                 _json_dumps(feedback),
                 max(0, int(word_count or 0)),
             ),
