@@ -6,7 +6,7 @@
   <meta name="csrf-token" content="{{ csrf_token() }}" />
   <title>FCE Exam Trainer</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=4" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=8" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -16,7 +16,7 @@
     })();
   </script>
 </head>
-<body data-current-part="{{ current_part }}"{% if mock_mode %} data-mock-mode="1" data-mock-remaining="{{ mock_time_remaining }}"{% endif %}>
+<body data-current-part="{{ current_part }}"{% if current_live_lesson_code %} data-live-lesson-code="{{ current_live_lesson_code }}" data-live-lesson-role="{{ current_live_lesson_role }}"{% endif %}{% if mock_mode %} data-mock-mode="1" data-mock-remaining="{{ mock_time_remaining }}"{% endif %}>
   <header class="header">
     <div class="header-inner">
       <a href="{{ url_for('home.home') }}" class="logo logo-link">
@@ -47,6 +47,8 @@
       </div>
     </div>
   </header>
+
+  {% include "_live_lesson_banner.html" %}
 
   <main class="main">
     <div class="task-card">
@@ -82,6 +84,9 @@
   </nav>
 
   <script src="{{ url_for('static', filename='main.js') }}?v=4"></script>
+  {% if current_live_lesson_role == "student" %}
+  <script src="{{ url_for('static', filename='live_lesson.js') }}?v=1"></script>
+  {% endif %}
   {% if last_reward and last_reward.xp_gained %}
   <div class="xp-toast" id="xp-toast" data-reward="{{ last_reward | tojson | e }}">
     <div class="xp-toast-body">

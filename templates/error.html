@@ -1,0 +1,12 @@
+{% extends "base_minimal.html" %}
+{% block title %}{{ code }} — FCE Exam Trainer{% endblock %}
+{% block content %}
+<div class="error-page">
+  <div class="error-card">
+    <div class="error-code">{{ code }}</div>
+    <h1 class="error-title">{{ title }}</h1>
+    <p class="error-desc">{{ message }}</p>
+    <a href="{{ url_for('home.home') }}" class="btn btn-primary error-home-btn">Go to home page</a>
+  </div>
+</div>
+{% endblock %}

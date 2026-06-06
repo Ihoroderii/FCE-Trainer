@@ -11,7 +11,7 @@
   <meta property="og:type" content="website" />
   <title>{% block title %}FCE Exam Trainer{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=4" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v=8" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -21,7 +21,7 @@
     })();
   </script>
 </head>
-<body class="minimal-layout">
+<body class="minimal-layout"{% if current_live_lesson_code %} data-live-lesson-code="{{ current_live_lesson_code }}" data-live-lesson-role="{{ current_live_lesson_role }}"{% endif %}>
   <header class="header header-minimal">
     <div class="header-inner">
       <a href="{{ url_for('home.home') }}" class="logo logo-link">
@@ -36,6 +36,7 @@
       <div class="header-actions">
         {% if current_user_id %}
         <span class="header-user">{{ current_user_name or current_user_email }}</span>
+        <a href="{{ url_for('lessons.lessons_page') }}" class="header-auth-link" title="Live lessons">Live</a>
         <a href="/settings" class="header-auth-link" title="Settings">⚙️</a>
         <a href="{{ url_for('home.logout') }}" class="header-auth-link" title="Log out">Log out</a>
         {% else %}
@@ -49,6 +50,8 @@
       </div>
     </div>
   </header>
+
+  {% include "_live_lesson_banner.html" %}
 
   <main class="main main-minimal">
     {% block content %}{% endblock %}
@@ -64,5 +67,8 @@
     });
   })();
   </script>
+  {% if current_live_lesson_role == "student" %}
+  <script src="{{ url_for('static', filename='live_lesson.js') }}?v=1"></script>
+  {% endif %}
 </body>
 </html>

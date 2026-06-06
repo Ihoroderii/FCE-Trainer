@@ -5,6 +5,9 @@
   var totalSec = parseInt(page.getAttribute('data-total-minutes') || '80', 10) * 60;
   var wordMin = parseInt(page.getAttribute('data-word-min') || '140', 10);
   var wordMax = parseInt(page.getAttribute('data-word-max') || '190', 10);
+  var autosaveUrl = page.getAttribute('data-autosave-url') || '';
+  var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
   function fmtTime(s) {
     var h = Math.floor(s / 3600);
@@ -21,15 +24,124 @@
     return text.trim().split(/\s+/).filter(Boolean).length;
   }
 
+  function updateCheckButton(el, wordCount) {
+    var form = el && el.closest ? el.closest('form') : null;
+    var btn = form ? form.querySelector('button[name="action"][value="check"]') : null;
+    if (!btn) return;
+    var ready = wordCount >= wordMin;
+    btn.disabled = !ready;
+    btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    btn.title = ready ? '' : 'Write at least ' + wordMin + ' words before checking with AI.';
+  }
+
   function updateWordCount(el, countEl) {
-    if (!countEl) return;
     var text = (el && el.value) || '';
     var n = countWords(text);
-    countEl.textContent = n + ' words (' + wordMin + '\u2013' + wordMax + ')';
-    countEl.classList.remove('writing-count-ok', 'writing-count-low', 'writing-count-high');
-    if (n >= wordMin && n <= wordMax) countEl.classList.add('writing-count-ok');
-    else if (n > 0 && n < wordMin) countEl.classList.add('writing-count-low');
-    else if (n > wordMax) countEl.classList.add('writing-count-high');
+    if (countEl) {
+      countEl.textContent = n + ' words (' + wordMin + '\u2013' + wordMax + ')';
+      countEl.classList.remove('writing-count-ok', 'writing-count-low', 'writing-count-high');
+      if (n >= wordMin && n <= wordMax) countEl.classList.add('writing-count-ok');
+      else if (n > 0 && n < wordMin) countEl.classList.add('writing-count-low');
+      else if (n > wordMax) countEl.classList.add('writing-count-high');
+    }
+    updateCheckButton(el, n);
+  }
+
+  function statusForTextarea(textarea) {
+    var form = textarea && textarea.closest ? textarea.closest('form') : null;
+    return form ? form.querySelector('[data-draft-status]') : null;
+  }
+
+  function setDraftStatus(textarea, text, state) {
+    var statusEl = statusForTextarea(textarea);
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.classList.remove(
+      'writing-draft-status-saving',
+      'writing-draft-status-saved',
+      'writing-draft-status-error',
+      'writing-draft-status-dirty'
+    );
+    if (state) statusEl.classList.add('writing-draft-status-' + state);
+  }
+
+  function formatSavedTime() {
+    var now = new Date();
+    var h = String(now.getHours()).padStart(2, '0');
+    var m = String(now.getMinutes()).padStart(2, '0');
+    return h + ':' + m;
+  }
+
+  function saveDraft(textarea, immediate) {
+    if (!autosaveUrl || !textarea) return;
+    var answer = textarea.value || '';
+    if (!immediate && answer === textarea._writingLastSaved) return;
+    if (textarea._writingSaving) {
+      textarea._writingPendingSave = true;
+      return;
+    }
+    textarea._writingSaving = true;
+    textarea._writingPendingSave = false;
+    setDraftStatus(textarea, 'Saving…', 'saving');
+    var part = parseInt(textarea.getAttribute('data-part') || '0', 10);
+    var optionId = textarea.getAttribute('data-option-id') || '';
+    fetch(autosaveUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      body: JSON.stringify({
+        part: part,
+        option_id: optionId,
+        answer: answer
+      }),
+      keepalive: !!immediate && answer.length < 30000
+    }).then(function(resp) {
+      if (!resp.ok) throw new Error('Draft save failed');
+      return resp.json();
+    }).then(function(data) {
+      if (!data || data.ok !== true) throw new Error('Draft save failed');
+      textarea._writingLastSaved = answer;
+      setDraftStatus(textarea, 'Saved ' + formatSavedTime(), 'saved');
+    }).catch(function() {
+      setDraftStatus(textarea, 'Autosave failed', 'error');
+    }).finally(function() {
+      textarea._writingSaving = false;
+      if (textarea._writingPendingSave || textarea.value !== textarea._writingLastSaved) {
+        textarea._writingPendingSave = false;
+        scheduleDraftSave(textarea);
+      }
+    });
+  }
+
+  function scheduleDraftSave(textarea) {
+    if (!autosaveUrl || !textarea) return;
+    if (textarea._writingDraftTimer) clearTimeout(textarea._writingDraftTimer);
+    if (textarea.value !== textarea._writingLastSaved) {
+      setDraftStatus(textarea, 'Unsaved changes', 'dirty');
+    }
+    textarea._writingDraftTimer = setTimeout(function() {
+      saveDraft(textarea, false);
+    }, 1200);
+  }
+
+  function registerAutosave(textarea) {
+    if (!autosaveUrl || !textarea) return;
+    textarea._writingLastSaved = textarea.value || '';
+    setDraftStatus(textarea, textarea.value ? 'Draft saved' : 'Autosave ready', textarea.value ? 'saved' : '');
+    textarea.addEventListener('input', function() {
+      scheduleDraftSave(textarea);
+    });
+    textarea.addEventListener('paste', function() {
+      setTimeout(function() { scheduleDraftSave(textarea); }, 0);
+    });
+    var form = textarea.closest ? textarea.closest('form') : null;
+    if (form) {
+      form.addEventListener('submit', function() {
+        saveDraft(textarea, true);
+      });
+    }
   }
 
   function createWritingResizer(layoutId, resizerId, cssVarName, storageKey) {
@@ -137,6 +249,23 @@
     ta.addEventListener('paste', function() { setTimeout(function() { updateWordCount(ta, countEl); }, 0); });
     updateWordCount(ta, countEl);
   });
+
+  page.querySelectorAll('.writing-textarea').forEach(function(ta) {
+    registerAutosave(ta);
+  });
+
+  if (autosaveUrl) {
+    setInterval(function() {
+      page.querySelectorAll('.writing-textarea').forEach(function(ta) {
+        saveDraft(ta, false);
+      });
+    }, 5000);
+    window.addEventListener('beforeunload', function() {
+      page.querySelectorAll('.writing-textarea').forEach(function(ta) {
+        saveDraft(ta, true);
+      });
+    });
+  }
 
   // Timer
   var timerEl = document.getElementById('writing-timer');

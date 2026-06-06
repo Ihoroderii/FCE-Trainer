@@ -75,6 +75,47 @@ def verify_email_password(email: str, password: str) -> dict | None:
     return {"id": user["id"], "email": user["email"] or "", "name": user["name"] or ""}
 
 
+def update_password(user_id: int, new_password: str) -> None:
+    """Hash and store a new password for the given user."""
+    password_hash = generate_password_hash(new_password.strip(), method="scrypt")
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (password_hash, user_id),
+        )
+        conn.commit()
+
+
+def user_can_change_password(user_id: int | None) -> bool:
+    """Return True when the user has a local email/password login."""
+    if not user_id:
+        return False
+    with db_connection() as conn:
+        cur = conn.execute(
+            "SELECT google_id, password_hash FROM users WHERE id = ?",
+            (user_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return False
+    return (row["google_id"] or "").startswith(EMAIL_PREFIX) and bool(row["password_hash"])
+
+
+def verify_user_password(user_id: int | None, password: str) -> bool:
+    """Return True when the supplied password matches a local account."""
+    if not user_id or not password:
+        return False
+    with db_connection() as conn:
+        cur = conn.execute(
+            "SELECT password_hash FROM users WHERE id = ?",
+            (user_id,),
+        )
+        row = cur.fetchone()
+    if not row or not row["password_hash"]:
+        return False
+    return check_password_hash(row["password_hash"], password)
+
+
 def get_user_by_id(user_id: int | None) -> dict | None:
     """Return user row (id, email, name) or None."""
     if not user_id:

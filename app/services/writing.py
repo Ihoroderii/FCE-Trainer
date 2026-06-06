@@ -1,9 +1,13 @@
-"""Writing section: essay prompts and Part 2 options."""
+"""Writing section: essay prompts, Part 2 options, drafts, and attempts."""
+import hashlib
+import json
 import random
+import secrets
 
 from flask import session
 
 from app.config import WRITING_MIN_WORDS, WRITING_MAX_WORDS, WRITING_TOTAL_MINUTES
+from app.db import db_connection
 
 WRITING_ESSAY_PROMPTS = [
     {
@@ -95,3 +99,165 @@ def get_writing_context(reset=False):
         "word_max": WRITING_MAX_WORDS,
         "total_minutes": WRITING_TOTAL_MINUTES,
     }
+
+
+def get_writing_owner_key() -> tuple[str, int | None]:
+    """Return a stable owner for logged-in users or the current anonymous session."""
+    user_id = session.get("user_id")
+    if user_id:
+        try:
+            return f"user:{int(user_id)}", int(user_id)
+        except (TypeError, ValueError):
+            pass
+    client_id = session.get("writing_client_id")
+    if not client_id:
+        client_id = secrets.token_urlsafe(24)
+        session["writing_client_id"] = client_id
+    return f"session:{client_id}", None
+
+
+def writing_task_key(task_snapshot: dict) -> str:
+    """Create a stable key so drafts are tied to the task the student is answering."""
+    payload = json.dumps(task_snapshot or {}, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
+
+
+def _json_dumps(value: dict) -> str:
+    return json.dumps(value or {}, sort_keys=True, ensure_ascii=True)
+
+
+def _has_score_feedback(feedback_json: str) -> bool:
+    try:
+        feedback = json.loads(feedback_json or "{}")
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(feedback, dict):
+        return False
+    return any(key in feedback for key in ("content", "communicative_achievement", "organisation", "language"))
+
+
+def _task_text_from_snapshot(task_snapshot: dict) -> str:
+    task = task_snapshot or {}
+    if task.get("part") == 1:
+        points = "\n".join(f"- {point}" for point in task.get("points") or [])
+        return "\n\n".join(
+            part for part in (
+                str(task.get("question") or "").strip(),
+                f"Points to cover:\n{points}" if points else "",
+                str(task.get("notes") or "").strip(),
+            ) if part
+        )
+    if task.get("part") == 2:
+        return "\n\n".join(
+            part for part in (
+                str(task.get("task") or "").strip(),
+                str(task.get("prompt") or "").strip(),
+            ) if part
+        )
+    return json.dumps(task, sort_keys=True, ensure_ascii=False)
+
+
+def save_writing_draft(
+    owner_key: str,
+    user_id: int | None,
+    part: int,
+    option_id: str,
+    task_key: str,
+    task_snapshot: dict,
+    answer: str,
+) -> dict | None:
+    """Upsert the current in-progress writing answer."""
+    answer = (answer or "")[:30000]
+    option_id = (option_id or "").strip().lower()
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO writing_drafts
+                (owner_key, user_id, part, option_id, task_key, task_json, answer, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(owner_key, part, option_id, task_key) DO UPDATE SET
+                user_id = excluded.user_id,
+                task_json = excluded.task_json,
+                answer = excluded.answer,
+                updated_at = datetime('now')
+            """,
+            (owner_key, user_id, part, option_id, task_key, _json_dumps(task_snapshot), answer),
+        )
+        conn.commit()
+    return get_writing_draft(owner_key, part, option_id, task_key)
+
+
+def get_writing_draft(owner_key: str, part: int, option_id: str, task_key: str) -> dict | None:
+    option_id = (option_id or "").strip().lower()
+    with db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, owner_key, user_id, part, option_id, task_key, task_json, answer, updated_at
+            FROM writing_drafts
+            WHERE owner_key = ? AND part = ? AND option_id = ? AND task_key = ?
+            LIMIT 1
+            """,
+            (owner_key, part, option_id, task_key),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def has_scored_writing_attempt(owner_key: str, part: int, option_id: str, task_key: str) -> bool:
+    option_id = (option_id or "").strip().lower()
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT feedback_json
+            FROM writing_attempts
+            WHERE owner_key = ? AND part = ? AND option_id = ? AND task_key = ?
+            """,
+            (owner_key, part, option_id, task_key),
+        ).fetchall()
+    return any(_has_score_feedback(row["feedback_json"]) for row in rows)
+
+
+def save_writing_attempt(
+    owner_key: str,
+    user_id: int | None,
+    part: int,
+    option_id: str,
+    task_key: str,
+    task_snapshot: dict,
+    answer: str,
+    feedback: dict,
+    word_count: int,
+) -> int:
+    """Store a checked writing attempt with the answer and feedback shown to the student."""
+    answer = (answer or "")[:30000]
+    option_id = (option_id or "").strip().lower()
+    task_text = _task_text_from_snapshot(task_snapshot)[:30000]
+    student_answer = answer
+    student_improved_version = str((feedback or {}).get("student_improved_version") or "")[:30000]
+    ai_improved_version = str((feedback or {}).get("ai_improved_version") or "")[:30000]
+    with db_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO writing_attempts
+                (owner_key, user_id, part, option_id, task_key, task_json, task_text,
+                 answer, student_answer, student_improved_version, ai_improved_version,
+                 feedback_json, word_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                owner_key,
+                user_id,
+                part,
+                option_id,
+                task_key,
+                _json_dumps(task_snapshot),
+                task_text,
+                answer,
+                student_answer,
+                student_improved_version,
+                ai_improved_version,
+                _json_dumps(feedback),
+                max(0, int(word_count or 0)),
+            ),
+        )
+        conn.commit()
+        return int(cur.lastrowid)

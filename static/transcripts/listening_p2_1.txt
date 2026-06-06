@@ -1,0 +1,24 @@
+FCE Listening — Part 2  (task #1)
+
+[narrator] You will hear a man giving a talk about the future of electric cars. For questions 1 to 10, complete the sentences with a word or short phrase.
+[male1] Good evening everyone. I’ve been asked to talk about the future of electric cars, and I’ll focus on three things: batteries, charging, and what all this means for ordinary drivers.
+
+First, batteries. People often ask me, ‘When will electric cars be as easy as petrol cars?’ The biggest change is happening inside the battery pack. Over the next few years, most new models will move to cheaper battery materials, especially iron-based ones. They’re a bit heavier, but they last well and cost less. At the same time, car makers are working hard on recycling. In fact, several factories are already able to recover over ninety per cent of the valuable metals from old batteries. That matters because it reduces the need for mining and keeps prices more stable.
+
+Second, charging. This is the part that affects daily life the most. The simplest future is actually not super-fast charging on the motorway, but slow charging at home or at work. Many drivers will plug in overnight, and their car will automatically charge when electricity is cheapest. That’s called smart charging, and it helps the whole power system. For longer trips, rapid chargers are improving too. The latest ones can add around two hundred kilometres of range in about fifteen minutes, as long as the car can accept that speed.
+
+Now, what about the electricity grid? Some people worry it can’t cope, but the real issue is timing. If everyone charged at 6 p.m., it would be a problem. With smart charging, and with solar and wind growing, the grid can manage much better. In some countries, electric cars will even send power back to homes during peak hours. That’s known as vehicle-to-grid.
+
+Finally, the driver experience. Electric cars will become quieter and more connected, but the biggest change may be maintenance: fewer moving parts means fewer visits to the garage. I don’t think petrol cars will disappear overnight, but in city centres, the direction is clear. More places will introduce clean-air zones, and electric cars will fit those rules best. So, the future isn’t just about new technology; it’s also about new habits.
+
+--- Sentences ---
+1. The speaker says his talk will focus on batteries, charging and what it means for ____.  →  ordinary drivers
+2. He predicts many new electric cars will use ____ battery materials.  →  iron-based
+3. Some recycling factories can recover over ____ of valuable metals from old batteries.  →  ninety per cent
+4. The speaker says the simplest future involves slow charging at home or at ____.  →  work
+5. With smart charging, cars charge when electricity is ____.  →  cheapest
+6. Rapid chargers can add about two hundred kilometres of range in around ____.  →  fifteen minutes
+7. He says the main grid problem would be if everyone charged at ____.  →  6 p.m.
+8. Cars sending power back to homes is known as ____.  →  vehicle-to-grid
+9. Because they have fewer moving parts, electric cars should need less ____.  →  maintenance
+10. He expects more city centres to introduce ____.  →  clean-air zones

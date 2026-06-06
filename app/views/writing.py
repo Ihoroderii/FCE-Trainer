@@ -3,15 +3,22 @@ from __future__ import annotations
 
 import collections
 import io
-import json
-import re
 import secrets
 
-from flask import Blueprint, Response, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, url_for
 
 from app.ai import ai_available, chat_create
-from app.config import WRITING_MIN_WORDS, WRITING_MAX_WORDS
-from app.services.writing import get_writing_context
+from app.config import WRITING_HISTORY_PARTS
+from app.services.stats import record_check_result
+from app.services.writing import (
+    get_writing_context,
+    get_writing_draft,
+    get_writing_owner_key,
+    has_scored_writing_attempt,
+    save_writing_attempt,
+    save_writing_draft,
+    writing_task_key,
+)
 from app.utils import extract_json_object
 
 bp = Blueprint("writing", __name__)
@@ -168,9 +175,142 @@ def _parse_feedback(raw: str):
         return None
     data = extract_json_object(raw)
     if data:
-        data.setdefault("raw_text", raw)
-        return data
-    return {"raw_text": raw}
+        return _normalise_feedback(data, raw)
+    return _normalise_feedback({"raw_text": raw, "comment": raw}, raw)
+
+
+def _as_text_list(value) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _as_feedback_items(value, keys: tuple[str, ...]) -> list[dict]:
+    items = []
+    if not isinstance(value, list):
+        return items
+    for item in value:
+        if isinstance(item, dict):
+            normalised = {key: str(item.get(key) or "").strip() for key in keys}
+        else:
+            normalised = {keys[0]: str(item).strip()}
+            for key in keys[1:]:
+                normalised[key] = ""
+        if any(normalised.values()):
+            items.append(normalised)
+    return items
+
+
+def _normalise_feedback(feedback: dict | None, raw_text: str = "") -> dict:
+    data = dict(feedback or {})
+    if raw_text and not data.get("raw_text"):
+        data["raw_text"] = raw_text
+    data.setdefault("comment", data.get("raw_text", ""))
+    data["student_improved_version"] = str(data.get("student_improved_version") or "").strip()
+    data["ai_improved_version"] = str(data.get("ai_improved_version") or "").strip()
+    data["missing_task_points"] = _as_text_list(data.get("missing_task_points"))
+    data["organisation_advice"] = _as_text_list(data.get("organisation_advice"))
+    data["grammar_corrections"] = _as_feedback_items(
+        data.get("grammar_corrections"),
+        ("original", "corrected", "explanation"),
+    )
+    data["better_sentence_examples"] = _as_feedback_items(
+        data.get("better_sentence_examples"),
+        ("original", "improved", "reason"),
+    )
+    data["vocabulary_upgrades"] = _as_feedback_items(
+        data.get("vocabulary_upgrades"),
+        ("original", "upgraded", "reason"),
+    )
+    rewrite = data.get("rewrite_suggestion")
+    if isinstance(rewrite, dict):
+        data["rewrite_suggestion"] = {
+            "original": str(rewrite.get("original") or "").strip(),
+            "improved": str(rewrite.get("improved") or "").strip(),
+            "reason": str(rewrite.get("reason") or "").strip(),
+        }
+    else:
+        data["rewrite_suggestion"] = {"original": "", "improved": "", "reason": ""}
+    return data
+
+
+def _word_count(text: str) -> int:
+    return len((text or "").split())
+
+
+def _get_part2_option(ctx: dict, option_id: str) -> dict | None:
+    option_id = (option_id or "").strip().lower()
+    return next((opt for opt in ctx["part2_options"] if opt["id"] == option_id), None)
+
+
+def _task_snapshot(ctx: dict, part: int, option_id: str = "") -> dict:
+    if part == 1:
+        essay = ctx["essay_prompt"]
+        return {
+            "part": 1,
+            "type": "Essay",
+            "question": essay.get("question", ""),
+            "points": list(essay.get("points") or []),
+            "notes": essay.get("notes", ""),
+        }
+    opt = _get_part2_option(ctx, option_id)
+    if not opt:
+        return {"part": 2, "option_id": (option_id or "").strip().lower()}
+    return {
+        "part": 2,
+        "option_id": opt["id"],
+        "type": opt.get("type", ""),
+        "task": opt.get("task", ""),
+        "prompt": opt.get("prompt", ""),
+    }
+
+
+def _task_description(ctx: dict, part: int, option_id: str = "") -> str:
+    if part == 1:
+        essay = ctx["essay_prompt"]
+        return (
+            f"{essay['question']}\n\nPoints to cover:\n"
+            + "\n".join(f"- {p}" for p in essay["points"])
+            + f"\n\n{essay.get('notes', '')}"
+        )
+    opt = _get_part2_option(ctx, option_id)
+    if not opt:
+        return ""
+    return f"{opt['task']}\n\n{opt['prompt']}"
+
+
+def _drafts_for_current_tasks(ctx: dict) -> dict:
+    owner_key, _user_id = get_writing_owner_key()
+    part1_snapshot = _task_snapshot(ctx, 1)
+    drafts = {
+        "part1": get_writing_draft(owner_key, 1, "", writing_task_key(part1_snapshot)),
+        "part2": {},
+    }
+    for opt in ctx["part2_options"]:
+        snapshot = _task_snapshot(ctx, 2, opt["id"])
+        drafts["part2"][opt["id"]] = get_writing_draft(owner_key, 2, opt["id"], writing_task_key(snapshot))
+    return drafts
+
+
+def _record_writing_result(part: int, feedback: dict) -> None:
+    """Persist AI writing feedback as a saved practice score."""
+    if part not in WRITING_HISTORY_PARTS:
+        return
+    if not any(key in feedback for key in ("content", "communicative_achievement", "organisation", "language", "comment")):
+        return
+    try:
+        score = float(feedback.get("overall", 0))
+    except (TypeError, ValueError):
+        return
+    score = max(0, min(5, round(score)))
+    record_check_result({
+        "part": WRITING_HISTORY_PARTS[part],
+        "score": score,
+        "total": 5,
+        "details": [],
+    })
 
 
 def _build_writing_prompt(part: int, task_desc: str, answer: str) -> str:
@@ -183,20 +323,58 @@ def _build_writing_prompt(part: int, task_desc: str, answer: str) -> str:
         "3) Organisation\n"
         "4) Language\n\n"
         "Give scores from 0 to 5 for each category and an overall score from 0 to 5.\n"
-        "Then give short, concrete advice on how to improve.\n\n"
+        "Then give practical feedback a B2 student can immediately use. Be specific and quote only short "
+        "student fragments when needed.\n\n"
+        "After the feedback, provide two complete improved answers:\n"
+        "- student_improved_version: improve the student's own draft while preserving their ideas, voice, "
+        "and structure as much as possible. Correct grammar, spelling, vocabulary, linking, and task coverage.\n"
+        "- ai_improved_version: write your own strong B2 First model answer for the same task. It may reorganise "
+        "the ideas and add a clear missing point if needed, but it must still stay at B2 level and within 140-190 words.\n\n"
         "TASK (what the student was asked to write):\n"
         f"\n{task_desc}\n\n"
         "STUDENT ANSWER:\n"
         f"\n{answer}\n\n"
         "Respond ONLY in strict JSON with this shape:\n"
         "{\n"
-        '  \"overall\": 0-5 number,\n'
-        '  \"content\": 0-5 number,\n'
-        '  \"communicative_achievement\": 0-5 number,\n'
-        '  \"organisation\": 0-5 number,\n'
-        '  \"language\": 0-5 number,\n'
-        '  \"comment\": \"short paragraph with feedback\"\n'
+        '  "overall": 0-5 number,\n'
+        '  "content": 0-5 number,\n'
+        '  "communicative_achievement": 0-5 number,\n'
+        '  "organisation": 0-5 number,\n'
+        '  "language": 0-5 number,\n'
+        '  "comment": "short summary paragraph",\n'
+        '  "student_improved_version": "complete improved version of the student answer",\n'
+        '  "ai_improved_version": "complete model answer written by the examiner",\n'
+        '  "missing_task_points": ["task point or requirement the student missed"],\n'
+        '  "grammar_corrections": [\n'
+        '    {"original": "student fragment", "corrected": "corrected fragment", "explanation": "brief reason"}\n'
+        "  ],\n"
+        '  "better_sentence_examples": [\n'
+        '    {"original": "student sentence", "improved": "better B2 sentence", "reason": "why it is better"}\n'
+        "  ],\n"
+        '  "vocabulary_upgrades": [\n'
+        '    {"original": "simple word or phrase", "upgraded": "more precise B2 phrase", "reason": "when to use it"}\n'
+        "  ],\n"
+        '  "organisation_advice": ["concrete paragraphing or linking advice"],\n'
+        '  "rewrite_suggestion": {\n'
+        '    "original": "one weak paragraph or sentence from the answer",\n'
+        '    "improved": "rewritten improved version",\n'
+        '    "reason": "what changed and why"\n'
+        "  }\n"
         "}\n"
+    )
+
+
+def _save_draft_for_answer(ctx: dict, part: int, option_id: str, answer: str) -> dict | None:
+    task = _task_snapshot(ctx, part, option_id)
+    owner_key, user_id = get_writing_owner_key()
+    return save_writing_draft(
+        owner_key=owner_key,
+        user_id=user_id,
+        part=part,
+        option_id=option_id if part == 2 else "",
+        task_key=writing_task_key(task),
+        task_snapshot=task,
+        answer=answer,
     )
 
 
@@ -211,12 +389,34 @@ def task_image(token):
     return Response(png, mimetype="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
+@bp.post("/api/writing/draft")
+def save_writing_draft_api():
+    ctx = get_writing_context()
+    payload = request.get_json(silent=True) or {}
+    part = payload.get("part")
+    try:
+        part = int(part)
+    except (TypeError, ValueError):
+        part = 0
+    if part not in (1, 2):
+        return jsonify({"ok": False, "error": "Invalid writing part."}), 400
+    option_id = (payload.get("option_id") or "").strip().lower()
+    if part == 2 and not _get_part2_option(ctx, option_id):
+        return jsonify({"ok": False, "error": "Invalid writing option."}), 400
+    answer = str(payload.get("answer") or "")
+    draft = _save_draft_for_answer(ctx, part, option_id, answer)
+    return jsonify({"ok": True, "updated_at": draft["updated_at"] if draft else ""})
+
+
 @bp.route("/writing", methods=["GET", "POST"])
 def writing():
     ctx = get_writing_context()
     ctx["active_part"] = 1
+    ctx["active_option_id"] = ""
     ctx["part1_feedback"] = None
     ctx["part2_feedback"] = {}
+    ctx["writing_error"] = ""
+    ctx["ai_feedback_available"] = ai_available
 
     if request.method == "POST":
         action = request.form.get("action") or ""
@@ -234,37 +434,100 @@ def writing():
 
         part = request.form.get("part", type=int)
         text = (request.form.get("answer") or "").strip()
+        option_id = (request.form.get("option_id") or "").strip().lower()
         ctx["active_part"] = part if part in (1, 2) else 1
-        if action == "check" and text and ai_available and part in (1, 2):
-            if len(text.split()) < 20:
-                fb = {
-                    "raw_text": "Your answer is too short to evaluate. Please write more before checking.",
+        ctx["active_option_id"] = option_id
+        if part in (1, 2):
+            _save_draft_for_answer(ctx, part, option_id, text)
+        if action == "check" and part in (1, 2):
+            if part == 2 and not _get_part2_option(ctx, option_id):
+                ctx["writing_error"] = "Choose a valid Part 2 task before checking."
+            elif not text:
+                ctx["writing_error"] = "Write your answer before checking."
+            elif not ai_available:
+                fb = _normalise_feedback({
+                    "raw_text": "AI feedback is unavailable. Configure API key.",
+                    "comment": "AI feedback is unavailable. Configure API key.",
                     "overall": 0,
-                }
-            else:
+                })
                 if part == 1:
-                    essay = ctx["essay_prompt"]
-                    task_desc = (
-                        f"{essay['question']}\n\nPoints to cover:\n"
-                        + "\n".join(f"- {p}" for p in essay["points"])
-                    )
+                    ctx["part1_feedback"] = fb
                 else:
-                    opt_id = (request.form.get("option_id") or "").strip().lower()
-                    opt = next((o for o in ctx["part2_options"] if o["id"] == opt_id), None)
-                    task_desc = ""
-                    if opt:
-                        task_desc = f"{opt['task']}\n\n{opt['prompt']}"
-                prompt = _build_writing_prompt(part, task_desc, text)
-                comp = chat_create([{"role": "user", "content": prompt}], temperature=0.4)
-                content = (comp.choices[0].message.content or "").strip()
-                fb = _parse_feedback(content) or {"raw_text": content}
-            fb.setdefault("overall", fb.get("overall", 0))
-            if part == 1:
-                ctx["part1_feedback"] = fb
+                    ctx["part2_feedback"][option_id] = fb
+                ctx["writing_error"] = "AI feedback is unavailable. Configure API key."
+                task = _task_snapshot(ctx, part, option_id)
+                owner_key, user_id = get_writing_owner_key()
+                save_writing_attempt(
+                    owner_key,
+                    user_id,
+                    part,
+                    option_id if part == 2 else "",
+                    writing_task_key(task),
+                    task,
+                    text,
+                    fb,
+                    _word_count(text),
+                )
+            elif _word_count(text) < 20:
+                fb = _normalise_feedback({
+                    "raw_text": "Your answer is too short to evaluate. Please write more before checking.",
+                    "comment": "Your answer is too short to evaluate. Please write more before checking.",
+                    "overall": 0,
+                })
+                task = _task_snapshot(ctx, part, option_id)
+                owner_key, user_id = get_writing_owner_key()
+                save_writing_attempt(
+                    owner_key,
+                    user_id,
+                    part,
+                    option_id if part == 2 else "",
+                    writing_task_key(task),
+                    task,
+                    text,
+                    fb,
+                    _word_count(text),
+                )
+                if part == 1:
+                    ctx["part1_feedback"] = fb
+                else:
+                    ctx["part2_feedback"][option_id] = fb
             else:
-                opt_id = (request.form.get("option_id") or "").strip().lower()
-                if opt_id:
-                    ctx["part2_feedback"][opt_id] = fb
+                task_desc = _task_description(ctx, part, option_id)
+                prompt = _build_writing_prompt(part, task_desc, text)
+                try:
+                    comp = chat_create([{"role": "user", "content": prompt}], temperature=0.4)
+                    content = (comp.choices[0].message.content or "").strip()
+                    fb = _parse_feedback(content) or {"raw_text": content}
+                except Exception:
+                    fb = _normalise_feedback({
+                        "raw_text": "Sorry, the AI is temporarily unavailable. Please try again in a moment.",
+                        "comment": "Sorry, the AI is temporarily unavailable. Please try again in a moment.",
+                        "overall": 0,
+                    })
+                fb = _normalise_feedback(fb)
+                fb.setdefault("overall", fb.get("overall", 0))
+                task = _task_snapshot(ctx, part, option_id)
+                task_key = writing_task_key(task)
+                owner_key, user_id = get_writing_owner_key()
+                stored_option_id = option_id if part == 2 else ""
+                if not has_scored_writing_attempt(owner_key, part, stored_option_id, task_key):
+                    _record_writing_result(part, fb)
+                save_writing_attempt(
+                    owner_key,
+                    user_id,
+                    part,
+                    stored_option_id,
+                    task_key,
+                    task,
+                    text,
+                    fb,
+                    _word_count(text),
+                )
+                if part == 1:
+                    ctx["part1_feedback"] = fb
+                else:
+                    ctx["part2_feedback"][option_id] = fb
 
     ctx["task_token"] = _ensure_task_image(ctx["essay_prompt"])
+    ctx["writing_drafts"] = _drafts_for_current_tasks(ctx)
     return render_template("writing.html", **ctx)

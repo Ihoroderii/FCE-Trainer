@@ -530,6 +530,175 @@ def _migrate_part2_collocations_table(conn):
     """)
 
 
+def _ensure_live_lesson_tables() -> None:
+    with db_connection() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS lesson_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                teacher_user_id INTEGER NOT NULL REFERENCES users(id),
+                title TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                closed_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_lesson_sessions_teacher
+                ON lesson_sessions(teacher_user_id, status);
+            CREATE TABLE IF NOT EXISTS lesson_participants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lesson_id INTEGER NOT NULL REFERENCES lesson_sessions(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                role TEXT NOT NULL DEFAULT 'student',
+                joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+                left_at TEXT,
+                UNIQUE(lesson_id, user_id, role)
+            );
+            CREATE INDEX IF NOT EXISTS idx_lesson_participants_lesson
+                ON lesson_participants(lesson_id, role, last_seen_at);
+            CREATE TABLE IF NOT EXISTS live_exercise_state (
+                lesson_id INTEGER NOT NULL REFERENCES lesson_sessions(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                state_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (lesson_id, user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_live_state_lesson
+                ON live_exercise_state(lesson_id, updated_at);
+            CREATE TABLE IF NOT EXISTS lesson_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lesson_id INTEGER NOT NULL REFERENCES lesson_sessions(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                event_type TEXT NOT NULL,
+                part INTEGER,
+                score INTEGER,
+                total INTEGER,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_lesson_events_lesson_created
+                ON lesson_events(lesson_id, created_at);
+        """)
+        conn.commit()
+
+
+def _ensure_writing_tables() -> None:
+    with db_connection() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS writing_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_key TEXT NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                part INTEGER NOT NULL,
+                option_id TEXT NOT NULL DEFAULT '',
+                task_key TEXT NOT NULL DEFAULT '',
+                task_json TEXT NOT NULL DEFAULT '{}',
+                answer TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(owner_key, part, option_id, task_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_writing_drafts_owner
+                ON writing_drafts(owner_key, updated_at);
+            CREATE TABLE IF NOT EXISTS writing_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_key TEXT NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                part INTEGER NOT NULL,
+                option_id TEXT NOT NULL DEFAULT '',
+                task_key TEXT NOT NULL DEFAULT '',
+                task_json TEXT NOT NULL DEFAULT '{}',
+                task_text TEXT NOT NULL DEFAULT '',
+                answer TEXT NOT NULL DEFAULT '',
+                student_answer TEXT NOT NULL DEFAULT '',
+                student_improved_version TEXT NOT NULL DEFAULT '',
+                ai_improved_version TEXT NOT NULL DEFAULT '',
+                feedback_json TEXT NOT NULL DEFAULT '{}',
+                word_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_writing_attempts_owner
+                ON writing_attempts(owner_key, created_at);
+        """)
+        cur = conn.execute("PRAGMA table_info(writing_attempts)")
+        cols = {r["name"] for r in cur.fetchall()}
+        for name in (
+            "task_text",
+            "student_answer",
+            "student_improved_version",
+            "ai_improved_version",
+        ):
+            if name not in cols:
+                conn.execute(f"ALTER TABLE writing_attempts ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
+        _backfill_writing_attempt_columns(conn)
+        conn.commit()
+
+
+def _writing_task_text_from_snapshot(task_snapshot: dict) -> str:
+    task = task_snapshot or {}
+    if task.get("part") == 1:
+        points = "\n".join(f"- {point}" for point in task.get("points") or [])
+        return "\n\n".join(
+            part for part in (
+                str(task.get("question") or "").strip(),
+                f"Points to cover:\n{points}" if points else "",
+                str(task.get("notes") or "").strip(),
+            ) if part
+        )
+    if task.get("part") == 2:
+        return "\n\n".join(
+            part for part in (
+                str(task.get("task") or "").strip(),
+                str(task.get("prompt") or "").strip(),
+            ) if part
+        )
+    return json.dumps(task, sort_keys=True, ensure_ascii=False)
+
+
+def _backfill_writing_attempt_columns(conn) -> None:
+    rows = conn.execute("""
+        SELECT id, task_json, answer, feedback_json, task_text, student_answer,
+               student_improved_version, ai_improved_version
+        FROM writing_attempts
+        WHERE task_text = ''
+           OR student_answer = ''
+           OR (student_improved_version = '' AND feedback_json LIKE '%student_improved_version%')
+           OR (ai_improved_version = '' AND feedback_json LIKE '%ai_improved_version%')
+    """).fetchall()
+    for row in rows:
+        try:
+            task_snapshot = json.loads(row["task_json"] or "{}")
+            if not isinstance(task_snapshot, dict):
+                task_snapshot = {}
+        except json.JSONDecodeError:
+            task_snapshot = {}
+        try:
+            feedback = json.loads(row["feedback_json"] or "{}")
+            if not isinstance(feedback, dict):
+                feedback = {}
+        except json.JSONDecodeError:
+            feedback = {}
+        conn.execute(
+            """
+            UPDATE writing_attempts
+            SET task_text = ?,
+                student_answer = ?,
+                student_improved_version = ?,
+                ai_improved_version = ?
+            WHERE id = ?
+            """,
+            (
+                (row["task_text"] or _writing_task_text_from_snapshot(task_snapshot))[:30000],
+                (row["student_answer"] or row["answer"] or "")[:30000],
+                (
+                    row["student_improved_version"]
+                    or str(feedback.get("student_improved_version") or "")
+                )[:30000],
+                (row["ai_improved_version"] or str(feedback.get("ai_improved_version") or ""))[:30000],
+                row["id"],
+            ),
+        )
+
+
 def seed_db() -> None:
     from data import (
         UOE_SEED_TASKS,
@@ -997,5 +1166,60 @@ def record_get_phrase_show(task_id: int) -> None:
         conn.execute(
             "INSERT INTO get_phrase_task_shows (task_id, shown_at) VALUES (?, datetime('now'))",
             (task_id,),
+        )
+        conn.commit()
+
+
+# --- Password reset tokens ---
+
+def _ensure_password_reset_tokens_table() -> None:
+    with db_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                token      TEXT    NOT NULL UNIQUE,
+                expires_at TEXT    NOT NULL,
+                used       INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens(token)"
+        )
+        conn.commit()
+
+
+def create_reset_token(user_id: int, token: str, ttl_minutes: int = 60) -> None:
+    with db_connection() as conn:
+        conn.execute(
+            "DELETE FROM password_reset_tokens WHERE user_id = ? AND used = 0",
+            (user_id,),
+        )
+        conn.execute(
+            """INSERT INTO password_reset_tokens (user_id, token, expires_at)
+               VALUES (?, ?, datetime('now', ? || ' minutes'))""",
+            (user_id, token, str(ttl_minutes)),
+        )
+        conn.commit()
+
+
+def get_valid_reset_token(token: str) -> dict | None:
+    """Return token row if token is valid and unexpired; else None."""
+    with db_connection() as conn:
+        cur = conn.execute(
+            """SELECT id, user_id FROM password_reset_tokens
+               WHERE token = ? AND used = 0 AND expires_at > datetime('now')""",
+            (token,),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def consume_reset_token(token: str) -> None:
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE password_reset_tokens SET used = 1 WHERE token = ?",
+            (token,),
         )
         conn.commit()
