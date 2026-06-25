@@ -7,8 +7,9 @@ from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 from flask import Flask, redirect, request, session, url_for
 from flask_wtf.csrf import CSRFProtect
 
-from app.config import PARTS_RANGE
+from app.config import DB_PATH, PARTS_RANGE
 from app.db import init_db, seed_db, _ensure_uoe_grammar_topic_column, _ensure_check_history_user_id, _ensure_users_password_column, _ensure_gamification_tables, _ensure_check_history_created_index, _ensure_spaced_repetition_table, _ensure_orphaned_stats_claimed, _ensure_vocab_notebook_table, _ensure_vocab_word_forms_column, _ensure_part3_word_repetition_table, _ensure_part2_word_repetition_tables, _ensure_user_settings_table, _ensure_listening_tables, _ensure_password_reset_tokens_table, _ensure_live_lesson_tables, _ensure_writing_tables
+from portable_state_sync import restore_portable_state_if_needed
 from app.rag.store import ensure_rag_tables
 from app.views.home import bp as home_bp
 from app.views.use_of_english import bp as uoe_bp
@@ -151,6 +152,14 @@ def create_app(config=None):
         }
 
     with app.app_context():
+        restored = restore_portable_state_if_needed(db_path=DB_PATH)
+        if restored["db_restored"] or restored["listening_files"] or restored["transcript_files"]:
+            logger.info(
+                "Restored portable state (db=%s, listening_files=%s, transcript_files=%s)",
+                "yes" if restored["db_restored"] else "no",
+                restored["listening_files"],
+                restored["transcript_files"],
+            )
         logger.debug("Initialising database and running migrations…")
         init_db()
         _ensure_uoe_grammar_topic_column()

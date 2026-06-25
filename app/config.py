@@ -1,9 +1,11 @@
 """Application constants and config (no Flask/app instance)."""
+import os
 from pathlib import Path
 
 # Paths
 APP_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = APP_ROOT / "fce_trainer.db"
+_db_path_env = (os.environ.get("DB_PATH") or "").strip()
+DB_PATH = Path(_db_path_env).expanduser() if _db_path_env else APP_ROOT / "fce_trainer.db"
 
 # Use of English / Reading
 LAST_N_SHOWS = 100

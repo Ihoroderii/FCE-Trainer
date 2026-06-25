@@ -40,6 +40,38 @@ python app.py
 
 Open **http://localhost:3000**. All pages are rendered by the server; “Check answers” and “Next” use form POST/GET.
 
+## Move to another computer
+
+Your code can live in git, but secrets should not:
+
+- keep `.env` local
+- keep API keys and SMTP passwords out of git
+
+Your saved app state can now be committed safely as a tracked snapshot:
+
+```bash
+python3 scripts/sync_portable_state.py
+```
+
+That command copies the important runtime data into `portable_state/`:
+
+- `fce_trainer.db`
+- generated listening audio
+- generated transcripts
+
+Commit `portable_state/` together with your code. On another computer:
+
+1. Clone the repo.
+2. Create `.env` from `.env.example` and add your keys.
+3. Install dependencies.
+4. Start the app.
+
+If the live runtime files are missing, the app restores them automatically from `portable_state/`. You can also do it manually:
+
+```bash
+python3 scripts/restore_portable_state.py
+```
+
 ## Project layout (Python only)
 
 - **app.py** — Flask app: routes, session, DB (SQLite), OpenAI for Part 4, HTML builders for each part, answer checking.

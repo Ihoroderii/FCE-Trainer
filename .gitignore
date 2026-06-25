@@ -2,5 +2,7 @@ node_modules/
 .venv/
 .env
 *.db
+!portable_state/
+!portable_state/*.db
 __pycache__/
 proctor/config.json
