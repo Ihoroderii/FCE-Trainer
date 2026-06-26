@@ -1,12 +1,17 @@
 """WSGI entry point. Use: gunicorn wsgi:app or flask run (FLASK_APP=wsgi:app)."""
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv()
+
+_PROJECT_ROOT = Path(__file__).resolve().parent
+load_dotenv(_PROJECT_ROOT / ".env")
 
 from app import create_app
 
 app = create_app()
+# PythonAnywhere and some other WSGI hosts look for ``application`` by default.
+application = app
 
 if __name__ == "__main__":
     from app.ai import ai_available

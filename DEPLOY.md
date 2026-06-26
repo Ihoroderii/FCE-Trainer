@@ -58,7 +58,7 @@ This app runs as a Flask app with SQLite. Below are free hosting options. Pick o
 ## Option 2: PythonAnywhere (free tier, SQLite persists)
 
 **Pros:** Persistent disk — SQLite and user data survive restarts.  
-**Cons:** Manual deploy (git pull), free tier has limits (one app, subdomain only).
+**Cons:** Manual deploy (git pull), free tier has limits (one app, subdomain only), and outbound internet is restricted on free accounts.
 
 ### Steps
 
@@ -69,58 +69,69 @@ This app runs as a Flask app with SQLite. Below are free hosting options. Pick o
 3. **Clone your repo and set up the app:**
    ```bash
    cd ~
-   git clone https://github.com/YOUR_USERNAME/fce_treining.git
-   cd fce_treining
+   git clone https://github.com/YOUR_USERNAME/FCE-Trainer.git
+   cd FCE-Trainer
    python3 -m venv venv
    source venv/bin/activate
    pip install -r requirements.txt
    ```
+   If free-account network restrictions block `git clone`, upload the project zip in the **Files** tab and unpack it in your home directory instead.
 
 4. **Create a `.env` file** (so the app can read env vars):
    ```bash
+   cp .env.example .env
    nano .env
    ```
-   Add at least:
+   Set at least:
    ```
    SECRET_KEY=your-64-char-hex-from-secrets.token_hex(32)
-   GOOGLE_AI_API_KEY=your-key
+   FLASK_ENV=production
    ```
-   Or use Groq/OpenAI. Save (Ctrl+O, Enter, Ctrl+X).
+   Add AI / SMTP / Google OAuth keys only if your PythonAnywhere account can reach those services. The core Flask + SQLite app works without them. Save (Ctrl+O, Enter, Ctrl+X).
 
 5. **Web tab:**  
    - **Add a new web app** → **Manual configuration** → Python 3.10 (or latest).  
    - Under **Code**, set:
-     - **Source code:** `/home/YOUR_USERNAME/fce_treining`
-     - **Working directory:** `/home/YOUR_USERNAME/fce_treining`
+     - **Source code:** `/home/YOUR_USERNAME/FCE-Trainer`
+     - **Working directory:** `/home/YOUR_USERNAME/FCE-Trainer`
 
 6. **WSGI file:** Click the WSGI configuration file link. Replace its contents with:
    ```python
-   import sys
-   path = '/home/YOUR_USERNAME/fce_treining'
-   if path not in sys.path:
-       sys.path.insert(0, path)
    import os
+   import sys
+   from pathlib import Path
+
+   PROJECT_HOME = Path("/home/YOUR_USERNAME/FCE-Trainer")
+   if str(PROJECT_HOME) not in sys.path:
+       sys.path.insert(0, str(PROJECT_HOME))
+   os.chdir(PROJECT_HOME)
+
    from dotenv import load_dotenv
-   load_dotenv(os.path.join(path, '.env'))
-   from app import create_app
-   app = create_app()
+   load_dotenv(PROJECT_HOME / ".env")
+
+   from wsgi import application
    ```
-   Replace `YOUR_USERNAME` with your PythonAnywhere username. Save.
+   The same template is included in this repo as `pythonanywhere_wsgi.py`. Replace `YOUR_USERNAME` with your PythonAnywhere username. Save.
 
 7. **Set virtualenv:** In the Web app page, **Virtualenv** section, set:
-   `/home/YOUR_USERNAME/fce_treining/venv`
+   `/home/YOUR_USERNAME/FCE-Trainer/venv`
 
-8. **Static files (optional but recommended):**  
-   URL: `/static/`  
-   Directory: `/home/YOUR_USERNAME/fce_treining/static`
+8. **Static files:** Do **not** add a `/static/` mapping for this project. The Flask app serves its assets from the site root (`/styles.css`, `/main.js`, etc.), so a PythonAnywhere `/static/` rule is unnecessary and misleading.
 
 9. **Reload the web app.** Your app will be at `https://YOUR_USERNAME.pythonanywhere.com`.
 
 10. **To update later:** In Bash:
     ```bash
-    cd ~/fce_treining && git pull && source venv/bin/activate && pip install -r requirements.txt
+    cd ~/FCE-Trainer
+    git pull
+    source venv/bin/activate
+    pip install -r requirements.txt
     ```
     Then reload the web app from the Web tab.
+
+11. **What to expect on a free account:**
+    - Core Flask pages, auth, and SQLite persistence should work.
+    - AI-generated tasks, external TTS, password reset email, and Google OAuth may fail if PythonAnywhere free cannot reach the required third-party services.
 
 ---
 

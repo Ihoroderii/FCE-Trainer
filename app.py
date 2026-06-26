@@ -3,8 +3,11 @@ FCE Exam Trainer — Entry point (thin shim).
 Run with: python app.py  or  python wsgi.py  or  gunicorn wsgi:app
 The application is built from the app package (create_app).
 """
+from pathlib import Path
+
 from dotenv import load_dotenv
-load_dotenv()
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from app import create_app
 
