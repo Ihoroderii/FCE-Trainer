@@ -5,11 +5,14 @@ Run from project root: python scripts/db_viewer.py
 Then open http://127.0.0.1:5001 in your browser.
 """
 import sqlite3
+import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-DB_PATH = PROJECT_ROOT / "fce_trainer.db"
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.config import DB_PATH
 
 # Minimal Flask app for the viewer only
 from flask import Flask, render_template_string, request

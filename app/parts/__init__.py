@@ -1,7 +1,6 @@
 """Part registry: CHECKERS, task config, generate config, error messages, and re-exports."""
 from flask import session
 
-from app.config import PARTS_RANGE, PART_QUESTION_COUNTS
 from app.db import get_task_by_id_for_part, get_tasks_by_ids
 
 from . import part1, part2, part3, part4, part5, part6, part7

@@ -1,7 +1,6 @@
 """Listening exam blueprint — /listening?part=N."""
 from __future__ import annotations
 
-import json
 import logging
 
 from flask import Blueprint, Response, redirect, render_template, request, session, url_for

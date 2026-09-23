@@ -14,6 +14,24 @@ from pathlib import Path
 
 logger = logging.getLogger("fce_trainer")
 
+
+def edge_proxy() -> str | None:
+    """Outbound HTTP proxy for edge-tts, taken from the environment.
+
+    Hosts such as PythonAnywhere route outbound traffic through a proxy and only
+    allow listed destinations. edge-tts opens a websocket to
+    speech.platform.bing.com; without an explicit proxy it attempts a direct
+    connection and dies with "Network is unreachable". aiohttp's trust_env alone
+    does not cover ws_connect, so the proxy is passed through explicitly.
+    """
+    for name in ("https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY",
+                 "all_proxy", "ALL_PROXY"):
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return value
+    return None
+
+
 # ── Voice maps per engine ────────────────────────────────────────────────────
 
 EDGE_VOICES = {
@@ -90,7 +108,7 @@ def _get_silence_bytes() -> bytes:
         import edge_tts
         loop = asyncio.new_event_loop()
         ssml = '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-GB"><break time="1500ms"/></speak>'
-        communicate = edge_tts.Communicate(ssml, EDGE_VOICES["narrator"])
+        communicate = edge_tts.Communicate(ssml, EDGE_VOICES["narrator"], proxy=edge_proxy())
         loop.run_until_complete(communicate.save(str(silence_file)))
         loop.close()
         _SILENCE_BYTES = silence_file.read_bytes()
@@ -156,7 +174,7 @@ async def _edge_tts_multi(segments: list[dict], output_path: Path):
             continue
         tmp = output_path.parent / f"_tmp_seg_{output_path.stem}_{i}.mp3"
         # Send plain text — edge-tts Communicate() treats first arg as plain text
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(text, voice, proxy=edge_proxy())
         await communicate.save(str(tmp))
         temp_files.append(tmp)
     if not temp_files:
@@ -171,14 +189,32 @@ async def _edge_tts_multi(segments: list[dict], output_path: Path):
                 pass
 
 
+def _edge_failure_reason(exc: BaseException) -> str:
+    """Turn a networking exception into one actionable line.
+
+    aiohttp failures here produce ~70 lines of framework traceback whose first
+    line is the only useful part, so the full trace is logged at DEBUG instead
+    of flooding the error log.
+    """
+    text = str(exc)
+    if "Network is unreachable" in text or "Connect call failed" in text:
+        return ("cannot reach the TTS service (no route — on a locked-down host "
+                "set https_proxy so outbound traffic goes through the proxy)")
+    if "Cannot connect to host" in text:
+        host = text.split("Cannot connect to host", 1)[1].split(":", 1)[0].strip()
+        return f"cannot connect to {host}"
+    return f"{type(exc).__name__}: {text[:180]}"
+
+
 def generate_audio_edge(segments: list[dict], output_path: Path) -> bool:
     try:
         loop = asyncio.new_event_loop()
         result = loop.run_until_complete(_edge_tts_multi(segments, output_path))
         loop.close()
         return result
-    except Exception:
-        logger.exception("edge-tts audio generation failed")
+    except Exception as exc:
+        logger.warning("edge-tts audio generation failed: %s", _edge_failure_reason(exc))
+        logger.debug("edge-tts failure detail", exc_info=True)
         return False
 
 
@@ -218,7 +254,7 @@ def generate_audio_openai(segments: list[dict], output_path: Path) -> bool:
                 except Exception:
                     pass
     except Exception:
-        logger.exception("OpenAI TTS audio generation failed")
+        logger.exception("TTS audio generation failed")
         return False
 
 
@@ -250,7 +286,7 @@ def _edge_tts_single(text: str, voice: str, output_path: Path) -> bool:
     try:
         import edge_tts
         loop = asyncio.new_event_loop()
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(text, voice, proxy=edge_proxy())
         loop.run_until_complete(communicate.save(str(output_path)))
         loop.close()
         return output_path.exists() and output_path.stat().st_size > 100

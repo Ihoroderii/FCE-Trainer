@@ -1,0 +1,23 @@
+TTS Engine: elevenlabs
+
+[000] [narrator] Part 1. You will hear people talking in eight different situations. For questions 1 to 8, choose the best answer, A, B or C.
+[001] [narrator] Extract 1. You hear a woman leaving a voicemail for a colleague about a social media post.
+[002] [female1] Hi Dan, it’s Marta. I’ve scheduled the café’s post for noon, but I’m not totally happy with the photo—it looks a bit dark on my phone. Could you quickly check it on your laptop and swap it if needed? Thanks.
+[003] [narrator] Extract 2. You hear two friends talking about a video they shared online.
+[004] [male1] I can’t believe your clip got so many views overnight. Are you going to make another one?
+[005] [female1] Maybe, but I’m not chasing numbers. I’m more worried people will think I’m making fun of the teacher, which wasn’t the point at all. I might add a caption to explain.
+[006] [narrator] Extract 3. You hear a man giving a short announcement at a community centre.
+[007] [male1] Just a quick reminder: if you’re filming during tonight’s dance show, please keep your phone screens low and don’t upload anything until the end. Some parents have asked us to avoid children appearing online in real time.
+[008] [narrator] Extract 4. You hear a radio presenter interviewing a chef about online reviews.
+[009] [narrator] Extract four.
+[010] [female1] People think a bad review ruins your week, but honestly, the silent customers worry me more. If someone complains online, at least we can reply and fix it. When nobody posts anything, I don’t know what to improve.
+[011] [narrator] Extract 5. You hear two colleagues discussing a company’s social media account.
+[012] [female1] Did you see the reply we got on the company account? Someone asked about delivery times.
+[013] [male2] Yeah, and we shouldn’t answer from your personal profile again. It looks unprofessional, even if you’re trying to be helpful. Next time, use the official login and keep it short.
+[014] [narrator] Extract 6. You hear a student talking to a tutor about studying with social media distractions.
+[015] [male1] I tried deleting the apps, but I just reinstalled them when I got bored. Now I set my phone to grayscale and put it in another room for an hour. It sounds silly, but it actually stops me checking it every two minutes.
+[016] [narrator] Extract 7. You hear a woman speaking in a short online tutorial about privacy settings.
+[017] [female1] Before you post that story, check who can view it. A lot of people think ‘followers’ means friends, but it can include strangers you accepted months ago. I recommend creating a close-friends list and sharing personal stuff only there.
+[018] [narrator] Extract 8. You hear two family members talking about a photo from a party.
+[019] [male1] Mum, why did you tag me in that party photo? I look half asleep.
+[020] [female2] Oh, I didn’t think you’d mind. I can take the tag off, or even delete it if you want. Next time just tell me—your boss doesn’t need to see you holding a slice of cake!

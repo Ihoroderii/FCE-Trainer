@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
-from app.db import db_connection
+from app.rag.db import rag_connection
 
 logger = logging.getLogger("fce_trainer")
 
@@ -27,18 +26,38 @@ CREATE TABLE IF NOT EXISTS rag_examples (
     prompt_text   TEXT NOT NULL,          -- full example task (the actual exam prompt/task)
     metadata_json TEXT NOT NULL DEFAULT '{}',  -- any extra metadata (target_reader, purpose, word_limit, etc.)
     embedding     BLOB,                   -- serialised float32 vector (numpy .tobytes())
+    embedding_model TEXT NOT NULL DEFAULT '',  -- which model produced `embedding`
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_rag_paper_part ON rag_examples(paper, part);
 CREATE INDEX IF NOT EXISTS idx_rag_task_type  ON rag_examples(task_type);
+
+-- Query embeddings are cached because generation topics come from a small fixed
+-- set of strings, so the same query vector is reused many times. This keeps
+-- retrieval off the embedding provider at runtime (important on a host with a
+-- tiny CPU quota or a rate-limited free tier).
+CREATE TABLE IF NOT EXISTS rag_query_cache (
+    query_hash TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    embedding  BLOB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (query_hash, model)
+);
 """
 
 
 def ensure_rag_tables() -> None:
-    """Create RAG tables if they don't exist."""
-    with db_connection() as conn:
+    """Create RAG tables if they don't exist and apply lightweight migrations."""
+    with rag_connection() as conn:
         conn.executescript(RAG_SCHEMA)
+        # Vectors from different models have different widths and must not be
+        # compared, so every row records the model that produced it.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(rag_examples)")}
+        if "embedding_model" not in columns:
+            conn.execute(
+                "ALTER TABLE rag_examples ADD COLUMN embedding_model TEXT NOT NULL DEFAULT ''"
+            )
         conn.commit()
 
 
@@ -65,7 +84,7 @@ def add_example(
 
     meta_json = json.dumps(metadata or {})
 
-    with db_connection() as conn:
+    with rag_connection() as conn:
         cur = conn.execute(
             """INSERT INTO rag_examples
                (paper, part, task_type, topic, level, search_text, prompt_text, metadata_json)
@@ -80,7 +99,7 @@ def add_example(
 
 
 def get_example(example_id: int) -> dict | None:
-    with db_connection() as conn:
+    with rag_connection() as conn:
         row = conn.execute("SELECT * FROM rag_examples WHERE id = ?", (example_id,)).fetchone()
     return _row_to_dict(row) if row else None
 
@@ -99,13 +118,13 @@ def list_examples(paper: str | None = None, part: int | None = None, task_type: 
         params.append(task_type.lower())
 
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    with db_connection() as conn:
+    with rag_connection() as conn:
         rows = conn.execute(f"SELECT * FROM rag_examples{where} ORDER BY id", params).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
 def delete_example(example_id: int) -> bool:
-    with db_connection() as conn:
+    with rag_connection() as conn:
         conn.execute("DELETE FROM rag_examples WHERE id = ?", (example_id,))
         conn.commit()
         return conn.total_changes > 0
@@ -120,7 +139,7 @@ def count_examples(paper: str | None = None, part: int | None = None) -> int:
         clauses.append("part = ?")
         params.append(part)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    with db_connection() as conn:
+    with rag_connection() as conn:
         row = conn.execute(f"SELECT COUNT(*) as cnt FROM rag_examples{where}", params).fetchone()
     return row["cnt"] if row else 0
 

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Quick script to inspect the FCE trainer SQLite database. Run: python inspect_db.py"""
 import sqlite3
-from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "fce_trainer.db"
+from app.config import DB_PATH
 
 def main():
     conn = sqlite3.connect(DB_PATH)

@@ -1,0 +1,23 @@
+TTS Engine: elevenlabs
+
+[000] [narrator] Part 1. You will hear people talking in eight different situations. For questions 1 to 8, choose the best answer, A, B or C.
+[001] [narrator] Extract 1. You hear a man leaving a voicemail about weekend plans.
+[002] [male1] Hi, Jess, it’s Tom. I’m still up for that hike on Saturday, but I’ve checked the route and the last bus back leaves at six. If we start too late, we’ll be stuck paying for a taxi.
+[003] [narrator] Extract 2. You hear two friends talking after a cycling trip.
+[004] [female1] My legs are dead, but it was worth it. That new path along the river is so smooth.
+[005] [male2] True, though I didn’t love all those families stepping into the lane. Next time, I’d rather go early before it gets crowded.
+[006] [narrator] Extract 3. You hear an announcement at an outdoor centre.
+[007] [narrator] Attention all visitors.
+[008] [female1] The climbing wall will close in ten minutes for a safety check, and it’ll reopen at three o’clock. If you’ve booked the two-thirty session, please come to reception to swap your time or receive a refund.
+[009] [narrator] Extract 4. You hear a woman talking to a colleague about a running club.
+[010] [female1] I tried that running club you mentioned. Everyone was friendly, but they set off at a pace I couldn’t keep, and I spent the whole time worrying I was slowing them down. I might go again once I’ve trained a bit.
+[011] [narrator] Extract 5. You hear a conversation in a shop that rents outdoor equipment.
+[012] [male1] Hi, I booked two kayaks online for Sunday, but my friend’s shoulder is still injured.
+[013] [female2] No problem—you can switch one kayak to a paddleboard, or move the booking to next weekend. Just let me know by tomorrow evening so you don’t lose the deposit.
+[014] [narrator] Extract 6. You hear a man giving a short radio review of a local park.
+[015] [male1] If you’re after somewhere to get outside without driving for hours, Greenfield Park is ideal. The new boardwalk over the marshes is brilliant for photos, although the café is overpriced. Take a flask and you’ll be fine.
+[016] [narrator] Extract 7. You hear two people discussing a camping trip.
+[017] [female1] I can’t believe it rained all night. My sleeping bag got damp and I hardly slept.
+[018] [male2] Yeah, but the morning was amazing—mist on the lake and not a single other tent around. Next time we’ll bring a better groundsheet and it’ll be perfect.
+[019] [narrator] Extract 8. You hear a woman speaking at the start of a guided walk.
+[020] [female1] Before we set off, just a quick reminder: the path gets steep near the top, so keep a steady pace and don’t overtake on the narrow sections. If you need a break, tell me rather than stopping suddenly. We’ll be back by five.

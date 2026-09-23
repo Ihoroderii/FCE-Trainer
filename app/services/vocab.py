@@ -6,7 +6,6 @@ import io
 import logging
 import re
 import zipfile
-from datetime import datetime
 from urllib.parse import quote
 
 import requests

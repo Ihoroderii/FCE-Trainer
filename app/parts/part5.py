@@ -2,11 +2,10 @@
 import json
 import logging
 import random
-import re
 
 from flask import session
 
-from app.ai import chat_create, ai_available
+from app.ai import chat_create, ai_available, provider_label
 from app.ai.prompts import get_task_prompt_part5
 from app.ai.explanations import fetch_explanations_part5
 from app.config import LETTERS, MAX_EXPLANATION_LEN
@@ -42,7 +41,7 @@ def generate_part5_with_openai(level="b2"):
             conn.commit()
         return get_part5_task_by_id(tid)
     except Exception:
-        logger.exception("OpenAI Part 5 error")
+        logger.exception("%s Part 5 error", provider_label())
         return None
 
 

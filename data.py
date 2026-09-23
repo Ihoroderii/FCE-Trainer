@@ -180,30 +180,10 @@ PART_7_DATA = [
     },
 ]
 
-READING_DATA = [
-    [
-        {"sentence": "The _____ of the new shopping centre has been delayed. COMPLETE", "key": "COMPLETE", "answer": "completion", "gapNum": 1},
-        {"sentence": "She looked at him _____ when he told the joke. SUSPECT", "key": "SUSPECT", "answer": "suspiciously", "gapNum": 2},
-        {"sentence": "It was _____ of you to leave the door unlocked. RESPONSIBLE", "key": "RESPONSIBLE", "answer": "irresponsible", "gapNum": 3},
-        {"sentence": "We need to make a _____ soon. DECIDE", "key": "DECIDE", "answer": "decision", "gapNum": 4},
-        {"sentence": "The _____ of the product has improved. RELIABLE", "key": "RELIABLE", "answer": "reliability", "gapNum": 5},
-    ],
-    [
-        {"sentence": "He's a very _____ person — he never gets angry. PATIENCE", "key": "PATIENCE", "answer": "patient", "gapNum": 1},
-        {"sentence": "There was a _____ change in the weather. SUDDEN", "key": "SUDDEN", "answer": "sudden", "gapNum": 2},
-        {"sentence": "I find it _____ to believe he said that. POSSIBLE", "key": "POSSIBLE", "answer": "impossible", "gapNum": 3},
-        {"sentence": "She spoke so _____ that I couldn't hear her. QUIET", "key": "QUIET", "answer": "quietly", "gapNum": 4},
-        {"sentence": "The _____ of the building took three years. CONSTRUCT", "key": "CONSTRUCT", "answer": "construction", "gapNum": 5},
-    ],
-    [
-        {"sentence": "We had an _____ discussion about the project. PRODUCE", "key": "PRODUCE", "answer": "productive", "gapNum": 1},
-        {"sentence": "His _____ to help was very kind. WILLING", "key": "WILLING", "answer": "willingness", "gapNum": 2},
-        {"sentence": "The situation is becoming increasingly _____. DANGER", "key": "DANGER", "answer": "dangerous", "gapNum": 3},
-        {"sentence": "She accepted the criticism _____. GRACIOUS", "key": "GRACIOUS", "answer": "graciously", "gapNum": 4},
-        {"sentence": "We need to reduce our _____ on fossil fuels. DEPEND", "key": "DEPEND", "answer": "dependence", "gapNum": 5},
-    ],
-]
-
+# NOTE: READING_DATA was previously defined twice in this module; the first
+# definition (a word-formation set) was silently overridden by the second and is
+# removed. This name is not referenced anywhere else in the app — Part 5 data is
+# served from PART_5_DATA.
 READING_DATA = [
     {
         "title": "The benefits of learning a musical instrument",

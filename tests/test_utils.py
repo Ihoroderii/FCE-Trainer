@@ -1,7 +1,6 @@
 """Tests for app.utils — shared helpers."""
 from __future__ import annotations
 
-import json
 
 from app.utils import (
     answers_match,
@@ -9,7 +8,6 @@ from app.utils import (
     extract_json_array,
     extract_json_object,
     format_explanation_list,
-    login_required,
     norm,
     validate_get_phrase_data,
     validate_part1_data,

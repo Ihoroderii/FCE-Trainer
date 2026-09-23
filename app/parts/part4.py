@@ -1,10 +1,9 @@
 """Part 4: Key word transformation — 6 items from UOE DB or OpenAI."""
 import difflib
-import json
 import logging
 import re
 
-from app.ai import chat_create, ai_available
+from app.ai import chat_create, ai_available, provider_label
 from app.ai.prompts import get_task_prompt_part4
 from app.ai.explanations import fetch_explanations_part4
 from app.config import PART4_TASKS_PER_SET
@@ -123,7 +122,7 @@ def _generate_tasks_with_openai(count: int, level: str = "b2plus", recent_gramma
                         topics_used_in_batch.add(grammar_topic.lower())
                 conn.commit()
         except Exception:
-            logger.exception("OpenAI Part 4 batch error")
+            logger.exception("%s Part 4 batch error", provider_label())
             break
     return result
 
