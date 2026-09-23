@@ -30,18 +30,26 @@ def prompts_logging_enabled() -> bool:
 def describe_examples(examples: list[dict]) -> list[str]:
     """One short line per retrieved example, for logs.
 
-    Kept terse (id, part, topic, page) so the log stays readable; the full text
-    is available via ``python -m scripts.preview_prompt``.
+    Includes how it was found (semantic similarity vs keyword fallback) and the
+    score, so a log reader can tell a real match from a degraded fallback.
     """
     described = []
     for index, example in enumerate(examples, 1):
         meta = example.get("metadata") or {}
         page = meta.get("source_page")
+        mode = example.get("retrieval")
+        score = example.get("score")
+        detail = ""
+        if mode == "embedding" and score is not None:
+            detail = f" similarity={score}"
+        elif mode == "keyword" and score is not None:
+            detail = f" keyword_overlap={score}"
         described.append(
             f"#{index} id={example.get('id')} part={example.get('part')} "
             f"topic={example.get('topic')!r}"
             + (f" source_page={page}" if page else "")
             + f" chars={len(example.get('prompt_text') or '')}"
+            + detail
         )
     return described
 

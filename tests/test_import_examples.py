@@ -7,9 +7,11 @@ from __future__ import annotations
 import pytest
 
 from scripts.import_examples import (
+    IMAGE_SUFFIXES,
     _order_reading,
     _validate_item,
     chunk_pages,
+    collect_images,
     dedupe,
     first_page_number,
     is_probably_scanned,
@@ -23,6 +25,31 @@ from scripts.import_examples import (
     split_page_text,
     structure_heuristic,
 )
+
+
+# ── image (screenshot) import ────────────────────────────────────────────────
+
+def test_collect_images_single_file(tmp_path):
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(b"x")
+    assert collect_images(shot) == [shot]
+
+
+def test_collect_images_directory_is_sorted_and_filtered(tmp_path):
+    for name in ("b.png", "a.png", "notes.txt", "c.jpg"):
+        (tmp_path / name).write_bytes(b"x")
+    found = [p.name for p in collect_images(tmp_path)]
+    assert found == ["a.png", "b.png", "c.jpg"]
+
+
+def test_collect_images_rejects_an_empty_directory(tmp_path):
+    with pytest.raises(SystemExit):
+        collect_images(tmp_path)
+
+
+def test_image_suffixes_cover_common_screenshot_formats():
+    for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+        assert suffix in IMAGE_SUFFIXES
 
 
 # ── off-paper rejection ──────────────────────────────────────────────────────
@@ -100,6 +127,40 @@ def test_a_reading_text_with_one_heading_is_not_rejected():
             "Bicycles remain popular today and are (1) A seen B viewed C regarded D held "
             "as a green alternative to cars.")
     assert part_format_problem(5, text) is None
+
+
+# ── textbook drill detection ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize("drill", [
+    "1 Complete each sentence with one word from the box.\ndo make have take give\n"
+    "1 ..take.. one of these pills three times a day.",
+    "Complete each sentence with an adverb from box A and a word from box B.",
+    "3 Complete each sentence with a passive form of the verb in brackets.",
+    "Rewrite the following sentences using the word given.",
+    "Match the words to their definitions.",
+])
+def test_textbook_drills_are_rejected(drill):
+    """Language-focus exercises are the wrong shape to be exam style references."""
+    assert part_format_problem(1, drill) is not None
+
+
+def test_real_part1_cloze_is_not_mistaken_for_a_drill():
+    text = ("Coming second: pleasure or pain?\n"
+            "Every ambitious athlete hopes to (0) their dream of winning a gold medal. "
+            "A team of psychologists recently (1)_____ some research on the emotional "
+            "responses of those finishing second.\n"
+            "0 A fulfil B finish C complete D succeed\n"
+            "1 A made B did C took D gave")
+    assert part_format_problem(1, text) is None
+
+
+def test_word_formation_instructions_are_not_a_drill():
+    """Part 3 has its own instruction wording and must survive."""
+    text = ("For questions 1-8, read the text below. Use the word given in capitals at the "
+            "end of some of the lines to form a word that fits in the gap.\n"
+            "The (1)_____ of the centre has been delayed. COMPLETE\n"
+            "She looked at him (2)_____ when he told the joke. SUSPECT")
+    assert part_format_problem(3, text) is None
 
 
 def test_validate_item_rejects_off_paper_content():

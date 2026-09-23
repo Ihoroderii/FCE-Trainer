@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import random
+import re
 from typing import Any
 
 from app.rag.db import rag_connection
@@ -178,14 +179,41 @@ def _retrieve_by_embedding(query_text: str, candidates: list[dict], k: int) -> l
 
     scored.sort(key=lambda x: x[0], reverse=True)
     results = []
-    for _, c in scored[:k]:
-        results.append(_clean_candidate(c))
+    for score, c in scored[:k]:
+        clean = _clean_candidate(c)
+        clean["retrieval"] = "embedding"
+        clean["score"] = round(float(score), 4)
+        results.append(clean)
 
     logger.debug(
         "RAG embedding retrieval: %d candidates, top %d (query cache %s)",
         len(scored), len(results), "hit" if cache_hit else "miss",
     )
     return results
+
+
+# Words too common to indicate topical similarity. Without this, a natural
+# language topic like "a sculptor's block of stone" scores 0 against every
+# example (its words are all "a"/"of"/"the"), the sort becomes a no-op, and the
+# fallback silently returns the same first rows in database order every time.
+_STOPWORDS = {
+    "a", "an", "the", "of", "and", "or", "in", "on", "at", "to", "for", "with",
+    "about", "that", "this", "these", "those", "is", "are", "was", "were", "be",
+    "been", "being", "it", "its", "as", "by", "from", "into", "your", "you",
+    "my", "me", "i", "he", "she", "they", "we", "them", "his", "her", "their",
+    "our", "who", "what", "when", "where", "how", "why", "not", "but", "very",
+}
+
+
+def _content_words(text: str) -> set[str]:
+    """Lowercased words that carry topic meaning (stopwords and short words out).
+
+    Apostrophes are treated as separators so "sculptor's" matches "sculptor".
+    """
+    return {
+        w for w in re.findall(r"[a-z]+", (text or "").lower())
+        if w not in _STOPWORDS and len(w) > 2
+    }
 
 
 def _retrieve_by_keywords(topic: str, candidates: list[dict], k: int) -> list[dict]:
@@ -195,17 +223,27 @@ def _retrieve_by_keywords(topic: str, candidates: list[dict], k: int) -> list[di
     if topic_words:
         scored = []
         for c in candidates:
-            c_words = set(c.get("topic", "").lower().split()) | set(c.get("search_text", "").lower().split())
-            overlap = len(topic_words & c_words)
-            scored.append((overlap, c))
+            c_words = _content_words(c.get("topic", "")) | _content_words(c.get("search_text", ""))
+            scored.append((len(topic_words & c_words), c))
         scored.sort(key=lambda x: x[0], reverse=True)
-        candidates_sorted = [c for _, c in scored]
+        if scored and scored[0][0] == 0:
+            logger.warning(
+                "RAG: no keyword overlap for topic %r — falling back to arbitrary "
+                "order. Retrieval quality is degraded until embeddings work.", topic,
+            )
     else:
-        candidates_sorted = candidates[:]
-        random.shuffle(candidates_sorted)
+        scored = [(0, c) for c in candidates]
+        random.shuffle(scored)
 
-    results = [_clean_candidate(c) for c in candidates_sorted[:k]]
-    logger.debug("RAG keyword retrieval: %d candidates, returning %d", len(candidates_sorted), len(results))
+    results = []
+    for overlap, c in scored[:k]:
+        clean = _clean_candidate(c)
+        clean["retrieval"] = "keyword"
+        clean["score"] = overlap
+        results.append(clean)
+
+    logger.debug("RAG keyword retrieval: %d candidates, returning %d",
+                 len(scored), len(results))
     return results
 
 

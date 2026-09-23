@@ -162,8 +162,9 @@ and task text — it still returns references, but semantic matches are missed.
 
 ### Importing your own material
 
-`scripts/import_examples.py` turns a PDF/DOCX/TXT book into corpus entries. It
-runs in three reviewable stages so nothing enters the corpus unchecked:
+`scripts/import_examples.py` turns a PDF/DOCX/TXT book — or a folder of
+screenshots — into corpus entries. It runs in three reviewable stages so
+nothing enters the corpus unchecked:
 
 ```bash
 # 1. PDF -> text with page markers (scanned PDFs are OCR'd automatically)
@@ -184,6 +185,21 @@ python -m scripts.import_examples run materials/fce_student_book.pdf --commit
 
 Notes:
 
+- **Screenshots work too.** Point `extract` at a folder of images (`.png`,
+  `.jpg`, `.webp`, …) and each is OCR'd with macOS Vision:
+  ```bash
+  python -m scripts.import_examples extract ~/Desktop --out materials/screenshots.txt
+  python -m scripts.import_examples structure --text materials/screenshots.txt
+  ```
+  Each page records its source image name, so entries stay traceable.
+- **Audit before loading.** `structure` output often includes textbook grammar
+  and vocabulary drills ("from the box", "verb in brackets") and, occasionally,
+  Listening/Writing tasks mislabelled with a part number. `audit` finds both:
+  ```bash
+  python -m scripts.import_examples audit materials/screenshots.examples.json --drop
+  ```
+  It auto-rejects only unambiguous cases; softer format warnings are reported for
+  you to judge, since 3-option clozes and cropped pages are perfectly valid.
 - **Scanned books work.** Many FCE books are page images with no text layer.
   `extract` detects that and falls back to OCR using the **macOS Vision**
   framework (the same engine as Preview's Live Text) — local, free, no API key.

@@ -170,6 +170,48 @@ def test_get_rag_examples_text_is_safe_without_examples(rag_db, no_embeddings):
     assert get_rag_examples_text(part=1, topic="anything") == ""
 
 
+# ── how results were found (semantic vs fallback) ────────────────────────────
+
+def test_embedding_results_are_labelled_with_a_similarity_score(rag_db, monkeypatch):
+    """A log reader must be able to tell a real semantic match from a fallback."""
+    _add_with_vector(2, "travel", np.ones(4, dtype=np.float32))
+    monkeypatch.setattr(retrieval, "active_model_name", lambda: "test-model")
+    monkeypatch.setattr(retrieval, "get_embedding", lambda text: np.ones(4, dtype=np.float32))
+
+    results = retrieval.retrieve_examples(paper="use_of_english", part=2,
+                                          topic="travel", task_type="open_cloze", k=1)
+    assert results[0]["retrieval"] == "embedding"
+    assert results[0]["score"] == pytest.approx(1.0, abs=1e-4)
+
+
+def test_keyword_results_are_labelled_as_such(rag_db, no_embeddings):
+    _add(topic="space exploration", prompt_text="Space text " + "x" * 200)
+    results = retrieval.retrieve_examples(paper="use_of_english", part=2,
+                                          topic="space exploration", k=1)
+    assert results[0]["retrieval"] == "keyword"
+    assert results[0]["score"] >= 1
+
+
+def test_keyword_scoring_ignores_stopwords():
+    """'a sculptor's block of stone' must match on sculptor/block/stone, not 'a'/'of'."""
+    words = retrieval._content_words("a sculptor's block of stone")
+    assert "sculptor" in words
+    assert "block" in words
+    assert "stone" in words
+    assert "a" not in words and "of" not in words and "the" not in words
+
+
+def test_describe_examples_reports_the_score_and_mode(rag_db, no_embeddings):
+    from app.rag.helpers import describe_examples
+
+    _add(topic="space exploration", prompt_text="Space text " + "x" * 200)
+    results = retrieval.retrieve_examples(paper="use_of_english", part=2,
+                                          topic="space exploration", k=1)
+    line = describe_examples(results)[0]
+    assert "keyword_overlap=" in line
+    assert "id=" in line
+
+
 # ── query embedding cache ────────────────────────────────────────────────────
 
 def _add_with_vector(part, topic, vector):

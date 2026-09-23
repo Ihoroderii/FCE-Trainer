@@ -346,6 +346,34 @@ def load_pages(text_path: Path) -> list[str]:
     return split_page_text(text)
 
 
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp", ".heic"}
+
+
+def extract_images(sources: list[Path]) -> list[str]:
+    """OCR standalone image files (screenshots), one image per page."""
+    if not ocr_available():
+        sys.exit("OCR needs macOS:  pip install pymupdf pyobjc-framework-Vision")
+    pages = []
+    for path in sources:
+        try:
+            pages.append(_ocr_image_bytes(path.read_bytes()))
+        except Exception as exc:
+            print(f"  ! {path.name}: {exc}", file=sys.stderr)
+            pages.append("")
+    return pages
+
+
+def collect_images(source: Path) -> list[Path]:
+    """Accept a single image, or a directory of images (sorted by name)."""
+    if source.is_dir():
+        found = [p for p in sorted(source.iterdir())
+                 if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES]
+        if not found:
+            sys.exit(f"No images ({', '.join(sorted(IMAGE_SUFFIXES))}) found in {source}")
+        return found
+    return [source]
+
+
 def cmd_extract(args) -> int:
     source = Path(args.source).expanduser()
     if not source.exists():
@@ -354,7 +382,20 @@ def cmd_extract(args) -> int:
     suffix = source.suffix.lower()
     ocr_used = False
 
-    if suffix == ".pdf":
+    if source.is_dir() or suffix in IMAGE_SUFFIXES:
+        images = collect_images(source)
+        print(f"OCR-ing {len(images)} image(s) with macOS Vision…")
+        written = extract_images(images)
+        total = len(written)
+        start, end = parse_page_range(args.pages, total)
+        selected = written[start - 1:end]
+        ocr_used = True
+        # Record which file each page came from so source_page stays traceable.
+        selected = [
+            f"[source image: {images[start - 1 + offset].name}]\n{body}"
+            for offset, body in enumerate(selected)
+        ]
+    elif suffix == ".pdf":
         written = extract_pdf(source)
         total = len(written)
         start, end = parse_page_range(args.pages, total)
@@ -507,12 +548,16 @@ def normalise_example(item: dict, *, source_label: str, default_page: int) -> di
 # labels Listening/Speaking/Writing exercises with a Reading & Use of English
 # part number, and those must never become style references for generation.
 _OFF_PAPER_RE = re.compile(
-    r"You(?:'ll| will)?\s+hear|You\s+hear|"
+    # Listening instructions, not any mention of hearing: a reading passage can
+    # legitimately contain "everything you hear on the radio", so require the
+    # instruction's own wording at the start of a line.
+    r"^\s*You(?:'ll| will)?\s+hear\b|"
+    r"You\s+hear\s+(?:a|an|two|three|four|five|six|seven|eight|some|the)\b|"
     r"Work\s+in\s+pairs|Work\s+with\s+a\s+partner|"
     r"Write\s+your\s+(?:essay|review|email|article|letter|report|story)|"
     r"There\s+are\s+two\s+parts\s+to\s+this|"
     r"Speaking\s+Part",
-    re.IGNORECASE,
+    re.IGNORECASE | re.MULTILINE,
 )
 
 # A question row of four options, e.g. "A advance B lift C rise D boost".
@@ -530,6 +575,18 @@ _WRITING_HEADING_RE = re.compile(
     r"benefits?|drawbacks?|advantages?|disadvantages?)|"
     r"Recommendations?|Reasons?|Background)\s*$",
     re.IGNORECASE | re.MULTILINE,
+)
+
+
+# Textbook exercise instructions. These appear in the Language focus / vocabulary
+# sections of a student book, never in the exam itself, so they are the wrong
+# shape to use as a style reference for generating exam tasks.
+_EXERCISE_DRILL_RE = re.compile(
+    r"from the box|Complete each sentence with|verb in brackets|"
+    r"Rewrite the (?:following )?sentences|Put the words in the correct order|"
+    r"Match the (?:words|sentences|phrases)|Fill in the (?:gaps|blanks) with|"
+    r"Choose the correct (?:word|form|option) to complete",
+    re.IGNORECASE,
 )
 
 
@@ -560,6 +617,9 @@ def part_format_problem(part: int, text: str) -> str | None:
         return f"belongs to another paper ({off_paper.group(0)[:28]!r})"
     if _looks_like_writing_task(text):
         return "looks like a Writing plan (report/essay headings, no options)"
+    drill = _EXERCISE_DRILL_RE.search(text)
+    if drill:
+        return f"textbook grammar/vocabulary drill ({drill.group(0)[:30]!r})"
     return None
 
 
@@ -1088,7 +1148,9 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_extract = sub.add_parser("extract", help="PDF/DOCX/TXT -> text with page markers")
-    p_extract.add_argument("source", help="Path to the book (.pdf, .docx, .txt, .md)")
+    p_extract.add_argument("source",
+                           help="Path to the book (.pdf, .docx, .txt, .md), a single "
+                                "screenshot image, or a folder of images (all OCR'd)")
     p_extract.add_argument("--pages", help="Page range, e.g. '12-40' or '7'")
     p_extract.add_argument("--out", help="Output .txt path (default materials/<stem>.txt)")
     p_extract.add_argument("--ocr", action="store_true",

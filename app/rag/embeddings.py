@@ -163,15 +163,30 @@ def _openai_embed(texts: list[str]) -> list[np.ndarray] | None:
 def _google_batch_size() -> int:
     """How many texts to send per Gemini batch request.
 
-    The free tier rate-limits by request, and a single large batch can trip a
-    429, so batches stay modest and are paced.
+    The free tier rate-limits by request, and its batch endpoint is throttled
+    harder than the single-text one. Set ``RAG_GOOGLE_BATCH_SIZE=0`` to skip
+    batching entirely and use one request per text.
     """
     raw = (os.environ.get("RAG_GOOGLE_BATCH_SIZE") or "25").strip()
     try:
         size = int(raw)
     except ValueError:
         return 25
-    return size if size > 0 else 25
+    return size if size >= 0 else 25
+
+
+def _google_batch_delay() -> float:
+    """Seconds to wait between batch requests.
+
+    The free tier rate-limits by request, so a burst of batches trips 429 even
+    when the daily quota is fine. Pacing is cheaper than retrying.
+    """
+    raw = (os.environ.get("RAG_GOOGLE_BATCH_DELAY") or "1").strip()
+    try:
+        delay = float(raw)
+    except ValueError:
+        return 1.0
+    return delay if delay >= 0 else 1.0
 
 
 def _google_embed(texts: list[str]) -> list[np.ndarray] | None:
@@ -234,15 +249,38 @@ def _google_embed(texts: list[str]) -> list[np.ndarray] | None:
             return _request(texts, batch=False)
 
         batch_size = _google_batch_size()
+        delay = _google_batch_delay()
+        if batch_size == 0:
+            return _google_embed_individually(texts, _request, delay)
         out: list[np.ndarray] = []
-        for start in range(0, len(texts), batch_size):
-            if start:
-                time.sleep(1)  # pace requests to stay under the per-minute limit
-            out.extend(_request(texts[start:start + batch_size], batch=True))
-        return out
+        try:
+            for start in range(0, len(texts), batch_size):
+                if start and delay:
+                    time.sleep(delay)  # pace requests to stay under the per-minute limit
+                out.extend(_request(texts[start:start + batch_size], batch=True))
+            return out
+        except Exception:
+            # The batch endpoint is rate-limited far more aggressively than the
+            # single-text one on the free tier. One request per text is slower
+            # but reliable, so fall back rather than lose the whole rebuild.
+            logger.warning(
+                "RAG: Gemini batch embedding unavailable; falling back to one "
+                "request per text for %d item(s)", len(texts),
+            )
+            return _google_embed_individually(texts, _request, delay)
     except Exception:
         logger.exception("RAG: Gemini embedding request failed")
         return None
+
+
+def _google_embed_individually(texts: list[str], request_fn, delay: float) -> list[np.ndarray]:
+    """Embed one text per request, paced, for when batching is rate-limited."""
+    vectors: list[np.ndarray] = []
+    for index, text in enumerate(texts):
+        if index:
+            time.sleep(max(delay, 0.3))
+        vectors.append(request_fn([text], batch=False)[0])
+    return vectors
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
