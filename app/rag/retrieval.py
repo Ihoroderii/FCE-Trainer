@@ -1,21 +1,26 @@
 """RAG retrieval — find similar examples for a generation request.
 
 Two strategies:
-1. Embedding similarity (if OpenAI key available and examples have embeddings)
+1. Embedding similarity (when an embedding backend is available)
 2. Keyword/metadata fallback (always works, no API needed)
 
-Both first filter by paper+part metadata, then rank by relevance.
+Both first filter by paper+part metadata, then rank by relevance. Query vectors
+are cached, so repeated generations for the same topic do not call the embedding
+provider again.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 from typing import Any
 
-from app.db import db_connection
+from app.rag.db import rag_connection
 from app.rag.embeddings import (
+    active_model_name,
     bytes_to_embedding,
     cosine_similarity,
+    embedding_to_bytes,
     get_embedding,
 )
 
@@ -93,18 +98,67 @@ def _fetch_candidates(paper: str, part: int, task_type: str = "") -> list[dict]:
         params.append(task_type.lower())
 
     where = " AND ".join(clauses)
-    with db_connection() as conn:
+    with rag_connection() as conn:
         rows = conn.execute(
             f"SELECT id, paper, part, task_type, topic, search_text, prompt_text, "
-            f"metadata_json, embedding FROM rag_examples WHERE {where}",
+            f"metadata_json, embedding, embedding_model FROM rag_examples WHERE {where}",
             params,
         ).fetchall()
     return [dict(r) for r in rows]
 
 
+def _cached_query_embedding(model: str, query_text: str):
+    """Look up a previously computed query vector (None on a miss or any error)."""
+    try:
+        with rag_connection() as conn:
+            row = conn.execute(
+                "SELECT embedding FROM rag_query_cache WHERE query_hash = ? AND model = ?",
+                (_query_hash(query_text), model),
+            ).fetchone()
+    except Exception:
+        # Caching is an optimisation; a missing or broken cache must not stop
+        # retrieval, so fall through and compute the vector normally.
+        logger.debug("RAG: query cache unavailable", exc_info=True)
+        return None
+    return bytes_to_embedding(row["embedding"]) if row else None
+
+
+def _store_query_embedding(model: str, query_text: str, vector) -> None:
+    """Remember a query vector so the provider is not called again for it."""
+    try:
+        with rag_connection() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO rag_query_cache (query_hash, model, embedding) "
+                "VALUES (?, ?, ?)",
+                (_query_hash(query_text), model, embedding_to_bytes(vector)),
+            )
+            conn.commit()
+    except Exception:
+        # Caching is an optimisation; never fail a retrieval over it.
+        logger.debug("RAG: could not cache query embedding", exc_info=True)
+
+
+def _query_hash(query_text: str) -> str:
+    return hashlib.sha256(query_text.encode("utf-8")).hexdigest()
+
+
 def _retrieve_by_embedding(query_text: str, candidates: list[dict], k: int) -> list[dict]:
-    """Rank candidates by cosine similarity to query embedding."""
-    query_vec = get_embedding(query_text)
+    """Rank candidates by cosine similarity to the query embedding.
+
+    Only vectors produced by the currently active model are compared, since a
+    different backend yields a different vector width and the scores would be
+    meaningless.
+    """
+    active_model = active_model_name()
+
+    query_vec = None
+    if active_model:
+        query_vec = _cached_query_embedding(active_model, query_text)
+    cache_hit = query_vec is not None
+    if query_vec is None:
+        query_vec = get_embedding(query_text)
+        if query_vec is not None and active_model:
+            _store_query_embedding(active_model, query_text, query_vec)
     if query_vec is None:
         return []
 
@@ -112,9 +166,12 @@ def _retrieve_by_embedding(query_text: str, candidates: list[dict], k: int) -> l
     for c in candidates:
         if not c.get("embedding"):
             continue
+        if active_model and c.get("embedding_model") != active_model:
+            continue
         c_vec = bytes_to_embedding(c["embedding"])
-        score = cosine_similarity(query_vec, c_vec)
-        scored.append((score, c))
+        if c_vec.shape != query_vec.shape:
+            continue
+        scored.append((cosine_similarity(query_vec, c_vec), c))
 
     if not scored:
         return []
@@ -124,7 +181,10 @@ def _retrieve_by_embedding(query_text: str, candidates: list[dict], k: int) -> l
     for _, c in scored[:k]:
         results.append(_clean_candidate(c))
 
-    logger.debug("RAG embedding retrieval: %d candidates, returning top %d", len(scored), len(results))
+    logger.debug(
+        "RAG embedding retrieval: %d candidates, top %d (query cache %s)",
+        len(scored), len(results), "hit" if cache_hit else "miss",
+    )
     return results
 
 

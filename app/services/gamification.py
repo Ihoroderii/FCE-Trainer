@@ -1,7 +1,7 @@
 """Gamification engine — XP, levels, streaks, combos, achievements."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from flask import session
 
@@ -10,7 +10,6 @@ from app.config import (
     COMBO_BONUSES,
     COMBO_THRESHOLDS,
     LEVELS,
-    PARTS_RANGE,
     XP_PER_CORRECT,
     XP_PERFECT_BONUS,
     XP_STREAK_MULTIPLIER,
@@ -186,7 +185,7 @@ def award_xp(user_id: int, score: int, total: int, part: int) -> dict:
         # Combo bonus (consecutive correct = score here since it's per-set)
         combo = score  # consecutive correct in this set
         combo_xp = 0
-        for threshold, bonus in zip(COMBO_THRESHOLDS, COMBO_BONUSES):
+        for threshold, bonus in zip(COMBO_THRESHOLDS, COMBO_BONUSES, strict=True):
             if combo >= threshold:
                 combo_xp = bonus
         xp_gained += combo_xp

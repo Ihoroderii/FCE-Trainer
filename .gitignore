@@ -6,3 +6,13 @@ node_modules/
 !portable_state/*.db
 __pycache__/
 proctor/config.json
+
+# RAG corpus: imported study material may be copyrighted and must never be
+# committed (see app/rag/db.py). Both the database and the raw sources stay local.
+rag_examples.db
+materials/
+
+# Runtime logs (LOG_FILE), including rotated copies
+logs/
+*.log
+!example_use_rag.log

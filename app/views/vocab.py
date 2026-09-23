@@ -1,7 +1,7 @@
 """Vocabulary notebook & collocations routes — save, list, delete, export."""
 import logging
 
-from flask import Blueprint, jsonify, make_response, redirect, render_template, request, session, url_for
+from flask import Blueprint, jsonify, make_response, render_template, request, session
 
 from app.services.vocab import (
     delete_word,

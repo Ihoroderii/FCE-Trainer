@@ -1,7 +1,7 @@
 """Tests for database operations."""
 from __future__ import annotations
 
-from app.db import db_connection, get_task_by_id_for_part, init_db
+from app.db import db_connection, get_task_by_id_for_part
 
 
 class TestMigrations:

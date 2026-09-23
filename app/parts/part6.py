@@ -6,7 +6,7 @@ import re
 
 from flask import session
 
-from app.ai import chat_create, ai_available
+from app.ai import chat_create, ai_available, provider_label
 from app.ai.prompts import get_task_prompt_part6
 from app.ai.explanations import fetch_explanations_part6
 from app.config import MAX_EXPLANATION_LEN
@@ -58,7 +58,7 @@ def generate_part6_with_openai(level="b2"):
             conn.commit()
         return get_part6_task_by_id(tid)
     except Exception:
-        logger.exception("OpenAI Part 6 error")
+        logger.exception("%s Part 6 error", provider_label())
         return None
 
 

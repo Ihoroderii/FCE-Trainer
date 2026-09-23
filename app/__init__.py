@@ -21,14 +21,50 @@ from app.views.listening import bp as listening_bp
 from app.views.lessons import bp as lessons_bp
 
 _debug_mode = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
-_log_level = logging.DEBUG if _debug_mode else logging.INFO
-logging.basicConfig(level=_log_level, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger("fce_trainer")
-if _debug_mode:
-    logger.debug("Debug mode ON — verbose logging enabled")
 
 # Project root (parent of the app package) — templates/ and static/ live here
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+
+def _configure_logging() -> str:
+    """Set up logging and return the level actually applied.
+
+    Hosts like PythonAnywhere truncate their captured stderr (the "error log")
+    on every reload, so ``LOG_FILE`` optionally mirrors everything into a
+    rotating file inside the project. Rotation matters: free tiers have a small
+    disk quota, so the log is capped rather than allowed to grow forever.
+    """
+    level_name = (os.environ.get("LOG_LEVEL") or "").strip().upper()
+    if level_name not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+        level_name = "DEBUG" if _debug_mode else "INFO"
+    level = getattr(logging, level_name)
+
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    log_file = (os.environ.get("LOG_FILE") or "").strip()
+    if log_file:
+        try:
+            from logging.handlers import RotatingFileHandler
+            path = Path(log_file).expanduser()
+            if not path.is_absolute():
+                path = _PROJECT_ROOT / path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handlers.append(RotatingFileHandler(
+                path, maxBytes=1_000_000, backupCount=3, encoding="utf-8",
+            ))
+        except OSError:
+            # A read-only filesystem must not stop the app from starting.
+            pass
+
+    logging.basicConfig(level=level, format=_LOG_FORMAT, handlers=handlers, force=True)
+    return level_name
+
+
+_LOG_LEVEL_NAME = _configure_logging()
+logger = logging.getLogger("fce_trainer")
+if _debug_mode:
+    logger.debug("Debug mode ON — verbose logging enabled")
 
 
 def create_app(config=None):
@@ -183,9 +219,11 @@ def create_app(config=None):
         logger.debug("Database ready")
 
     from app.ai import ai_available, _provider
-    logger.info("FCE-Trainer starting (debug=%s, AI=%s, provider=%s)",
+    logger.info("FCE-Trainer starting (debug=%s, AI=%s, provider=%s, log_level=%s, log_file=%s)",
                 _debug_mode,
                 "enabled" if ai_available else "disabled",
-                _provider or "none")
+                _provider or "none",
+                _LOG_LEVEL_NAME,
+                (os.environ.get("LOG_FILE") or "").strip() or "stderr only")
 
     return app

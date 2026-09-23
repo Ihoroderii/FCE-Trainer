@@ -1,9 +1,13 @@
 """Utilities for syncing tracked portable app state."""
 from __future__ import annotations
 
+import logging
 import os
 import shutil
+import sqlite3
 from pathlib import Path
+
+logger = logging.getLogger("fce_trainer")
 
 APP_ROOT = Path(__file__).resolve().parent
 PORTABLE_STATE_DIR = APP_ROOT / "portable_state"
@@ -54,15 +58,54 @@ def _replace_tree(source_dir: Path, target_dir: Path) -> int:
     return _copy_tree(source_dir, target_dir, overwrite=True)
 
 
+def _prune_licensed_rag_from_snapshot() -> int:
+    """Delete RAG example rows from the tracked snapshot copy.
+
+    The RAG corpus normally lives in its own gitignored database (see
+    ``app/rag/db.py``). If someone points ``RAG_DB_PATH`` at the main database,
+    this guarantees imported (potentially copyrighted) example text still never
+    reaches the committed ``portable_state`` snapshot. Returns rows removed.
+    """
+    if not PORTABLE_DB_PATH.exists():
+        return 0
+    conn = None
+    try:
+        conn = sqlite3.connect(PORTABLE_DB_PATH)
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='rag_examples'"
+        ).fetchone()
+        if not has_table:
+            return 0
+        removed = conn.execute("SELECT COUNT(*) FROM rag_examples").fetchone()[0]
+        if removed:
+            conn.execute("DELETE FROM rag_examples")
+            conn.commit()
+            conn.execute("VACUUM")
+            logger.warning(
+                "portable_state snapshot: removed %d RAG example(s) before commit "
+                "(licensed material must not be published).",
+                removed,
+            )
+        return removed
+    except sqlite3.Error:
+        logger.warning("Could not prune rag_examples from portable_state snapshot", exc_info=True)
+        return 0
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def sync_portable_state(db_path: Path | None = None) -> dict[str, int | bool]:
     """Copy current runtime state into the tracked portable snapshot."""
     copied_db = _copy_file(runtime_db_path(db_path), PORTABLE_DB_PATH)
     listening_files = _replace_tree(RUNTIME_LISTENING_DIR, PORTABLE_LISTENING_DIR)
     transcript_files = _replace_tree(RUNTIME_TRANSCRIPTS_DIR, PORTABLE_TRANSCRIPTS_DIR)
+    rag_pruned = _prune_licensed_rag_from_snapshot() if copied_db else 0
     return {
         "db_copied": copied_db,
         "listening_files": listening_files,
         "transcript_files": transcript_files,
+        "rag_examples_pruned": rag_pruned,
     }
 
 

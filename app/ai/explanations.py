@@ -1,8 +1,7 @@
-"""OpenAI-powered answer explanations per part."""
-import json
+"""AI-generated answer explanations per part (any configured provider)."""
 import logging
 
-from app.ai import chat_create, ai_available
+from app.ai import chat_create, ai_available, provider_label
 from app.ai.prompts import (
     get_explanation_prompt_part1,
     get_explanation_prompt_part2,
@@ -31,7 +30,7 @@ def fetch_explanations_part1(item, details):
     if not item or not item.get("gaps") or len(details) < 8:
         logger.debug("Part 1 explanations skipped: missing item or details")
         return []
-    logger.info("Fetching Part 1 explanations from OpenAI...")
+    logger.info("Fetching Part 1 explanations from %s...", provider_label())
     passage = (item.get("text") or "").strip()
     lines = []
     for i in range(8):
@@ -52,12 +51,12 @@ def fetch_explanations_part1(item, details):
         content = (comp.choices[0].message.content or "").strip()
         arr = _extract_json_array(content)
         if isinstance(arr, list) and len(arr) >= 8:
-            logger.info("Part 1 explanations received from OpenAI (%d items)", len(arr))
+            logger.info("Part 1 explanations received from %s (%d items)", provider_label(), len(arr))
             return [str(arr[i]).strip() for i in range(8)]
         logger.warning("Part 1 explanations: could not parse 8 items from response (got %s)", type(arr).__name__ if arr is not None else "None")
         return []
     except Exception:
-        logger.exception("OpenAI explanations Part 1 error")
+        logger.exception("%s explanations Part 1 error", provider_label())
         return []
 
 
@@ -79,7 +78,7 @@ def fetch_explanations_part2(item, details):
             return [str(arr[i]).strip() for i in range(8)]
         return []
     except Exception:
-        logger.exception("OpenAI explanations Part 2 error")
+        logger.exception("%s explanations Part 2 error", provider_label())
         return []
 
 
@@ -121,7 +120,7 @@ def fetch_explanations_part3(task, details):
             })
         return result
     except Exception:
-        logger.exception("OpenAI explanations Part 3 error")
+        logger.exception("%s explanations Part 3 error", provider_label())
         return []
 
 
@@ -144,7 +143,7 @@ def fetch_explanations_part4(tasks, details):
             return [str(arr[i]).strip() for i in range(len(tasks))]
         return []
     except Exception:
-        logger.exception("OpenAI explanations Part 4 error")
+        logger.exception("%s explanations Part 4 error", provider_label())
         return []
 
 
@@ -171,7 +170,7 @@ def fetch_explanations_part5(item, details):
             return [str(arr[i]).strip() for i in range(6)]
         return []
     except Exception:
-        logger.exception("OpenAI explanations Part 5 error")
+        logger.exception("%s explanations Part 5 error", provider_label())
         return []
 
 
@@ -204,7 +203,7 @@ def fetch_explanations_part6(item, details):
             return [str(arr[i]).strip() for i in range(6)]
         return []
     except Exception:
-        logger.exception("OpenAI explanations Part 6 error")
+        logger.exception("%s explanations Part 6 error", provider_label())
         return []
 
 
@@ -227,7 +226,7 @@ def fetch_explanations_part7(item, details):
             return [str(arr[i]).strip() for i in range(10)]
         return []
     except Exception:
-        logger.exception("OpenAI explanations Part 7 error")
+        logger.exception("%s explanations Part 7 error", provider_label())
         return []
 
 
@@ -253,5 +252,5 @@ def fetch_explanations_get_phrases(task, details):
             return [{"explanation": str(arr[i]).strip()[:MAX_EXPLANATION_LEN]} for i in range(8)]
         return []
     except Exception:
-        logger.exception("OpenAI explanations Get phrases error")
+        logger.exception("%s explanations Get phrases error", provider_label())
         return []

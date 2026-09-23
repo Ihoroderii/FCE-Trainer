@@ -12,3 +12,14 @@ numpy==2.4.4
 gunicorn==25.3.0
 Pillow==12.2.0
 pytest==9.0.2
+
+# --- Optional: RAG corpus tooling (see README) -------------------------------
+# Book import: scripts/import_examples.py
+pypdf
+python-docx
+# # Free local embeddings (recommended; no API key, works offline). ~130MB model
+# # download on first use. Without it, retrieval falls back to keyword matching.
+# fastembed
+# # OCR for scanned PDFs. macOS only (uses the built-in Vision framework).
+# pymupdf
+# pyobjc-framework-Vision

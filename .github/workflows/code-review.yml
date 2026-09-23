@@ -55,7 +55,14 @@ jobs:
       - name: App import check
         run: |
           . .venv/bin/activate
-          python -c "from app import app; print('OK')"
+          python -c "from app import create_app; create_app(); print('OK')"
         env:
           SECRET_KEY: test-secret-for-ci
           OPENAI_API_KEY: skip
+
+      - name: Tests
+        run: |
+          . .venv/bin/activate
+          pytest -q
+        env:
+          SECRET_KEY: test-secret-for-ci

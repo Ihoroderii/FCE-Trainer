@@ -17,7 +17,6 @@ from app.ai.prompts.listening_generation import (
     LISTENING_PART3_TOPICS,
     LISTENING_PART4_TOPICS,
 )
-from app.config import LISTENING_QUESTION_COUNTS
 from app.db import (
     db_connection,
     get_listening_task,

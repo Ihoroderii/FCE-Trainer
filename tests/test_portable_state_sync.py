@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import portable_state_sync as state_sync
@@ -35,10 +36,41 @@ def test_sync_portable_state_copies_db_and_assets(tmp_path, monkeypatch):
 
     result = state_sync.sync_portable_state()
 
-    assert result == {"db_copied": True, "listening_files": 1, "transcript_files": 1}
+    assert result == {
+        "db_copied": True,
+        "listening_files": 1,
+        "transcript_files": 1,
+        "rag_examples_pruned": 0,
+    }
     assert state_sync.PORTABLE_DB_PATH.read_bytes() == b"runtime-db"
     assert (state_sync.PORTABLE_LISTENING_DIR / "sample.mp3").read_bytes() == b"mp3-bytes"
     assert (state_sync.PORTABLE_TRANSCRIPTS_DIR / "sample.txt").read_text(encoding="utf-8") == "hello transcript"
+
+
+def test_sync_prunes_rag_examples_from_tracked_snapshot(tmp_path, monkeypatch):
+    """Imported (possibly copyrighted) RAG text must never reach the committed snapshot."""
+    runtime_root = tmp_path / "runtime"
+    portable_root = tmp_path / "portable"
+    runtime_db = _configure_paths(monkeypatch, runtime_root, portable_root)
+
+    runtime_db.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(runtime_db)
+    conn.execute("CREATE TABLE rag_examples (id INTEGER PRIMARY KEY, prompt_text TEXT)")
+    conn.execute("INSERT INTO rag_examples (prompt_text) VALUES ('licensed exam passage')")
+    conn.commit()
+    conn.close()
+
+    result = state_sync.sync_portable_state()
+
+    assert result["db_copied"] is True
+    assert result["rag_examples_pruned"] == 1
+
+    snapshot = sqlite3.connect(state_sync.PORTABLE_DB_PATH)
+    try:
+        remaining = snapshot.execute("SELECT COUNT(*) FROM rag_examples").fetchone()[0]
+    finally:
+        snapshot.close()
+    assert remaining == 0
 
 
 def test_restore_portable_state_if_needed_restores_missing_runtime_files(tmp_path, monkeypatch):

@@ -6,7 +6,7 @@ import re
 
 from flask import session
 
-from app.ai import chat_create, ai_available
+from app.ai import chat_create, ai_available, provider_label
 from app.ai.prompts import get_task_prompt_part1
 from app.ai.explanations import fetch_explanations_part1
 from app.config import LETTERS
@@ -14,7 +14,6 @@ from app.db import (
     db_connection,
     get_part1_task_by_id,
     _generic_get_or_create,
-    record_show_for_part,
 )
 from app.parts.topics import PART1_TOPICS
 from app.rag.helpers import get_rag_examples_text
@@ -50,7 +49,7 @@ def generate_part1_with_openai(level="b2"):
             conn.commit()
         return get_part1_task_by_id(tid)
     except Exception:
-        logger.exception("OpenAI Part 1 error")
+        logger.exception("%s Part 1 error", provider_label())
         return None
 
 

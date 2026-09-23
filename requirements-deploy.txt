@@ -1,0 +1,23 @@
+# Production/runtime dependencies for a hosted deploy (e.g. PythonAnywhere).
+#
+# Differences from requirements.txt:
+#   * no pytest / gunicorn — the host provides (or does not need) its own server
+#   * compiled packages use ranges so pip can pick a version with a wheel for
+#     whatever Python the host runs (hard pins fail when no wheel exists)
+#   * deliberately excludes the optional RAG tooling (fastembed, pymupdf,
+#     pyobjc-framework-Vision): large and/or macOS-only. On a host without a
+#     local embedding model, set RAG_EMBEDDING_BACKEND=google so retrieval uses
+#     the free Gemini embedding API instead of falling back to keyword matching.
+
+Flask>=3.1,<4
+Flask-WTF>=1.2,<2
+Flask-Limiter>=3.5,<5
+Flask-Dance>=7.0,<8
+openai>=1.40
+python-dotenv>=1.0
+requests>=2.31
+tenacity>=8.2
+numpy>=1.26
+Pillow>=10.0
+deep-translator>=1.11
+edge-tts>=6.1

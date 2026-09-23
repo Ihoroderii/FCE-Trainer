@@ -15,7 +15,8 @@ def main() -> int:
         "portable_state synced: "
         f"db={'yes' if result['db_copied'] else 'no'}, "
         f"listening_files={result['listening_files']}, "
-        f"transcript_files={result['transcript_files']}"
+        f"transcript_files={result['transcript_files']}, "
+        f"rag_examples_pruned={result.get('rag_examples_pruned', 0)}"
     )
     return 0
 

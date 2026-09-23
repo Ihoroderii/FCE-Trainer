@@ -53,6 +53,3 @@ def auth_client(app):
         sess["user_email"] = "test@example.com"
         sess["user_name"] = "Test User"
     return client
-
-
-@pytest.fixture()

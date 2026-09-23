@@ -2,7 +2,7 @@
 import logging
 import secrets
 
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from app.config import CHECK_RESULT_CACHE_MAX, PARTS_RANGE, PART_QUESTION_COUNTS
 from app.db import get_task_by_id_for_part, get_tasks_by_ids

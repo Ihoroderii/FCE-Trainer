@@ -5,7 +5,7 @@ import re
 
 from flask import session
 
-from app.ai import chat_create, ai_available
+from app.ai import chat_create, ai_available, provider_label
 from app.ai.prompts import get_task_prompt_get_phrases
 from app.ai.explanations import fetch_explanations_get_phrases
 from app.config import GET_PHRASE_PART, MAX_EXPLANATION_LEN
@@ -41,7 +41,7 @@ def generate_get_phrase_with_openai(level="b2"):
             return get_get_phrase_task_by_id(tid)
         except Exception:
             if attempt == 2:
-                logger.exception("OpenAI Get phrases error")
+                logger.exception("%s Get phrases error", provider_label())
             continue
     return None
 

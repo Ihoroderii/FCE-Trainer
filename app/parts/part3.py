@@ -6,7 +6,7 @@ import re
 
 from flask import session
 
-from app.ai import chat_create, ai_available
+from app.ai import chat_create, ai_available, provider_label
 from app.ai.prompts import get_task_prompt_part3
 from app.ai.explanations import fetch_explanations_part3
 from app.config import MAX_EXPLANATION_LEN, MAX_WORD_FAMILY_LEN
@@ -61,7 +61,7 @@ def generate_part3_with_openai(level="b2"):
             return get_part3_task_by_id(tid)
         except Exception:
             if attempt == 2:
-                logger.exception("OpenAI Part 3 error")
+                logger.exception("%s Part 3 error", provider_label())
             continue
     return None
 
